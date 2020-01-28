@@ -148,5 +148,6 @@ void plots() {
   make_plots("pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
   make_plots("phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 10, mc_file_names, 0., 800.);
   make_plots("alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 10, mc_file_names, 0., 300.);
-  //make_plots("pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names );
+  make_plots("pL", "delta_pL", "reco #deltap_{L} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
+  make_plots("pn", "pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
 }
