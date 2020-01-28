@@ -927,6 +927,10 @@ void compute_stvs( const TVector3& p3mu, const TVector3& p3p, float& delta_pT,
 }
 
 void AnalysisEvent::compute_observables() {
+
+  // First compute the MC truth observables (if this is a signal MC event)
+  this->compute_mc_truth_observables();
+
   // If this event didn't pass all the selection cuts, don't bother computing
   // reconstructed observables
   if ( !sel_CCNp0pi_ ) return;
@@ -949,10 +953,6 @@ void AnalysisEvent::compute_observables() {
   // Compute reco STVs
   compute_stvs( p3mu, p3p, delta_pT_, delta_phiT_,
     delta_alphaT_, delta_pL_, pn_ );
-
-  // Now that we've done reco, let's also compute the MC truth
-  // observables (if they're available)
-  this->compute_mc_truth_observables();
 }
 
 void AnalysisEvent::compute_mc_truth_observables() {
@@ -1012,5 +1012,3 @@ void analyzer(const std::string& in_file_name,
   std::vector<std::string> genie_files = { genie_file_name };
   analyze( in_files, output_filename, genie_files );
 }
-
-
