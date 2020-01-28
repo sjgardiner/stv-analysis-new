@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE project [
+<!ENTITY release "v08_00_00_34">
+<!ENTITY name "dump_genie_v08_00_00_34">
+<!ENTITY user "gardiner">
+<!ENTITY myoutdir "/pnfs/uboone/scratch/users/gardiner/stv_genie_dump/">
+<!ENTITY myworkdir "/pnfs/uboone/scratch/users/gardiner/">
+<!ENTITY njobs "20">
+<!ENTITY codedir "/pnfs/uboone/persistent/users/gardiner/stvs">
+]>
+
+<project name="&name;">
+
+  <!-- group -->
+  <group>uboone</group>
+
+  <!-- Maximum number of events per job -->
+  <numevents>1000000</numevents>
+
+  <!-- Number of grid jobs to use -->
+  <numjobs>&njobs;</numjobs>
+
+  <!-- batchOS -->
+  <os>SL6,SL7</os>
+
+  <resource>DEDICATED,OPPORTUNISTIC,OFFSITE</resource>
+
+  <!-- Larsoft information -->
+  <larsoft>
+      <tag>&release;</tag>
+      <qual>e17:prof</qual>
+      <local>&codedir;/patched_nutools.tar</local>
+  </larsoft>
+
+  <stage name="dump_nue">
+    <ana>1</ana>
+    <!-- <inputdef>prodgenie_bnb_nu_uboone_overlay_mcc9.1_run1_reco2</inputdef> -->
+    <inputdef>prodgenie_bnb_intrinsic_nue_uboone_overlay_mcc9.1_run1_reco2</inputdef>
+    <fcl>&codedir;/dump_genie_job.fcl</fcl>
+    <schema>root</schema>
+    <outdir>&myoutdir;/dump_nue</outdir>
+    <workdir>&myworkdir;</workdir>
+    <memory>2000</memory>
+    <jobsub>--expected-lifetime=8h</jobsub>
+  </stage>
+
+</project>
