@@ -1,193 +1,119 @@
 // Adapted from MigrationMatrices.cpp from Afro
 
-std::string variable;
-std::string variable_addition;
-std::string variable_title;
-std::string xmax;
-std::string ymax;
-int FONTSTYLE = 62; // Arial
+// ROOT integer code for Arial font
+constexpr int FONT_STYLE = 62; // Arial
 
+// When bins have zero content, set them to this very small value so that the
+// colz style will still paint them
+constexpr double REALLY_SMALL = 1e-11;
 
-void resolution() {
+void make_resolution_plot( const std::string& stv_file_name,
+  const std::string& branch, const std::string& variable_name,
+  int num_bins, double x_min, double x_max)
+{
+  // Assume that the user supplied the name of the reco observable
+  // in the branch variable. Prepend "mc_" to it and assume that
+  // the corresponding MC truth quantity is stored there.
+  // TODO: revisit this as needed
+  std::string mc_branch = "mc_" + branch;
 
-  // Give names to resolution plots according to variables
-  vector<TString> PlotNames;
-  PlotNames.push_back( "delta_pT_plot2D" );
-        PlotNames.push_back( "delta_phiT_plot2D" );
-        PlotNames.push_back( "delta_alphaT_plot2D" );
-        PlotNames.push_back( "p_mu_truth_vs_mcs_plot2D" );
-  PlotNames.push_back( "p_p_truth_vs_mcs_plot2D" );
+  std::string plot_title = "Resolution; MC Truth " + variable_name
+    + "^{truth}; Reconstructed " + variable_name + "^{reco}";
 
+  TFile stv_file( stv_file_name.c_str(), "read" );
+  TTree* stv_tree = nullptr;
+  stv_file.GetObject( "stv_tree", stv_tree );
 
-  // Name of samples for each plot
-  vector<TString> NameOfSamples;;
-  NameOfSamples.push_back( "SampleName" );
+  // Round all numbers to this precision when rendering them on plots
+  gStyle->SetPaintTextFormat( "4.2f" );
 
-  const int num_N2DPlots = PlotNames.size();
-  const int num_NSamples = NameOfSamples.size();
+  TCanvas* c1 = new TCanvas;
+  c1->SetBottomMargin( 0.15 );
+  c1->SetLeftMargin( 0.13 );
+  c1->cd();
 
-  cout << "Number of 2D-plots: " << num_N2DPlots << endl;
-        cout << "Number of samples: " << num_NSamples << endl;
+  // Define a 2D histogram to hold the information for the resolution plot. Use
+  // the same binning for reco and truth variables (the y and x axes,
+  // respectively)
+  std::string hist_name = mc_branch + "_vs_" + branch;
+  TH2D* hist = new TH2D( hist_name.c_str(), plot_title.c_str(), num_bins,
+    x_min, x_max, num_bins, x_min, x_max );
 
-  TCanvas *PlotCanvas[1][5] = {};
-  TFile * FileSample[1] = {};
-  TH1D* h_1DPlots[1][5] = {};
+  std::string plot_invocation = mc_branch + ':' + branch + ">> " + hist_name;
+  stv_tree->Draw( plot_invocation.c_str(), "is_mc && mc_is_signal"
+    " && sel_CCNp0pi && genie_ok", "colz" );
 
-  std::string output_file_name = "plots_resolution.root";
-  TFile *output_file = new TFile( output_file_name.c_str(), "recreate" );
+  hist->SetDirectory( nullptr );
 
-  // Open files that contain samples
-  for ( int which_sample = 0; which_sample < num_NSamples; which_sample++ ) {
-    FileSample[which_sample] = TFile::Open( "numu_overlay_stv.root" );
+  // Histogram style options
+  hist->GetXaxis()->SetTitleFont( FONT_STYLE);
+  hist->GetYaxis()->SetTitleFont( FONT_STYLE );
+  hist->GetXaxis()->SetTitleSize( 0.05 );
+  hist->GetYaxis()->SetTitleSize( 0.05 );
+  hist->GetXaxis()->SetLabelFont( FONT_STYLE );
+  hist->GetYaxis()->SetLabelFont( FONT_STYLE );
+  hist->GetZaxis()->SetLabelFont( FONT_STYLE );
+  hist->GetZaxis()->SetLabelSize( 0.03 );
+  hist->GetXaxis()->CenterTitle();
+  hist->GetYaxis()->CenterTitle();
+  hist->GetXaxis()->SetTitleOffset( 1.2 );
+  hist->GetYaxis()->SetTitleOffset( 1.1 );
+  hist->SetStats( false );
+  hist->SetMarkerSize( 1.8 ); // text size
+  hist->SetMarkerColor( kWhite ); // text color
+
+  // Normalize bins
+  int num_bins_x = hist->GetXaxis()->GetNbins();
+  int num_bins_y = hist->GetYaxis()->GetNbins();
+
+  // Loop over the x bins. Include the underflow (index zero) and overflow
+  // (index num_bins_x + 1) bins.
+  for ( int bx = 0; bx <= num_bins_x + 1; ++bx ) {
+
+    // For the current x bin, compute the sum of all y bins.
+    double y_sum = 0.;
+    for ( int by = 0; by <= num_bins_y + 1; ++by ) {
+      y_sum += hist->GetBinContent( bx, by );
+    }
+
+    // Normalize each of the y bins so that the sum over y is unity.
+    for ( int by = 0; by <= num_bins_y + 1; ++by ) {
+
+      // To avoid dividing by zero, set the bins contents and
+      // errors to zero if the sum of the y bins is not positive.
+      if ( y_sum <= 0. ) {
+        hist->SetBinContent( bx, by, REALLY_SMALL );
+        hist->SetBinError( bx, by, REALLY_SMALL );
+      }
+      else {
+        // Otherwise, normalize in the usual way
+        double bc = hist->GetBinContent( bx, by );
+        double berr = hist->GetBinError( bx, by );
+
+        double content = std::max( bc / y_sum, REALLY_SMALL );
+
+        // Apply the correct normalization to the bin error
+        double error = std::sqrt( std::pow(berr / y_sum, 2)
+          + std::pow(bc * std::sqrt(y_sum) / std::pow(y_sum, 2), 2) );
+
+        // Update the content and error of the current bin appropriately
+        hist->SetBinContent( bx, by, content );
+        hist->SetBinError( bx, by, error );
+      }
+    }
   }
 
-  for ( int which_sample = 0; which_sample < num_NSamples; which_sample++ ) {
+  // TODO: revisit this
+  // Set the overflow bin in x and y to a negative value. This will force
+  // drawing of all bins with zero content in the "colz" style.
+  //c1->SetFrameFillColor(TColor::GetColorPalette(0));
+  //hist->SetBinContent( num_bins_x, num_bins_y, -1e-5 );
 
-    for ( int which_plot = 0; which_plot < num_N2DPlots; which_plot++ ) {
+  // Note: adding option "E" to this also displays error in each bin
+  hist->Draw("text colz");
 
+}
 
-      if ( which_plot == 0 ) {
-        variable = "delta_pT";
-                                variable_addition = "";
-        variable_title = "#delta_{p_{T}}";
-        xmax = "2";
-        ymax = "2";
-      }
-
-                     if ( which_plot == 1 ) {
-                                variable = "delta_phiT";
-                                variable_addition = "";
-                                variable_title = "#delta_{#phi_{T}}";
-        xmax = "3.141592654";
-                                ymax = xmax;
-                        }
-
-                     if ( which_plot == 2 ) {
-                                variable = "delta_alphaT";
-                                variable_addition = "";
-                                variable_title = "#delta_{#alpha_{T}}";
-                                xmax = "3.141592654";
-                                ymax = xmax;
-                        }
-
-                     if ( which_plot == 3 ) {
-                                variable = "p3_mu.Mag()";
-                                variable_addition = "";
-                                variable_title = "p_{#mu_{mcs}}";
-                                xmax = "2";
-                                ymax = "2";
-                        }
-
-                     if ( which_plot == 4 ) {
-                                variable = "p3_lead_p.Mag()";
-                                variable_addition = "";
-                                variable_title = "p_{p_{range}}";
-                                xmax = "2";
-                                ymax = "2";
-                        }
-
-      // Create canvas
-      PlotCanvas[which_sample][which_plot] = new TCanvas( PlotNames[which_plot] + NameOfSamples[which_sample], PlotNames[which_plot] + NameOfSamples[which_sample] );
-
-      PlotCanvas[which_sample][which_plot]->SetBottomMargin(0.15);
-                        PlotCanvas[which_sample][which_plot]->SetLeftMargin(0.13);
-
-      PlotCanvas[which_sample][which_plot]->cd(); // change directory to that canvas
-
-      // Create TTree
-                  TTree *stv_tree = (TTree*)FileSample[which_sample]->Get("stv_tree");
-                  gROOT->cd(); // change directory to that TTree
-
-      // Decide what to put into TH1D
-                  stv_tree->Draw( ( std::string("mc_") + variable.c_str() + std::string(":") + variable.c_str() + variable_addition.c_str() + std::string(">>h(10,0,") + xmax.c_str() + std::string(",10,0,") + ymax.c_str() + std::string(")") ).c_str(), "is_mc && mc_is_signal && sel_CCNp0pi && genie_ok", "colz" );
-
-                        gStyle->SetPaintTextFormat("4.2f"); // refers to "text" drawing option (numbers are rounded)
-
-
-      // Save it in two dimensional histogram array (matrix)
-      h_1DPlots[which_sample][which_plot] = (TH1D*)(gDirectory->Get("h") );
-
-      // Titles
-                        h_1DPlots[which_sample][which_plot]->SetTitle( ( std::string("Resolution;") + std::string("MC Truth ") + variable_title.c_str() + std::string("^{truth};") + std::string("Reconstructed ") + variable_title.c_str() + std::string("^{reco};") ).c_str() );
-//                        h_1DPlots[which_sample][which_plot]->GetXaxis()->SetTitle( ( std::string("mc_") + variable.c_str() ).c_str() );
-
-
-      // Rebin histogram
-//      h_1DPlots[which_sample][which_plot]->Rebin(20, "d");
-
-
-      // Aesthetics
-      h_1DPlots[which_sample][which_plot]->GetXaxis()->SetTitleFont( FONTSTYLE);
-      h_1DPlots[which_sample][which_plot]->GetYaxis()->SetTitleFont( FONTSTYLE );
-      h_1DPlots[which_sample][which_plot]->GetXaxis()->SetTitleSize( 0.05 );
-      h_1DPlots[which_sample][which_plot]->GetYaxis()->SetTitleSize( 0.05 );
-      h_1DPlots[which_sample][which_plot]->GetXaxis()->SetLabelFont( FONTSTYLE );
-      h_1DPlots[which_sample][which_plot]->GetYaxis()->SetLabelFont( FONTSTYLE );
-      h_1DPlots[which_sample][which_plot]->GetZaxis()->SetLabelFont( FONTSTYLE );
-      h_1DPlots[which_sample][which_plot]->GetZaxis()->SetLabelSize( 0.03 );
-                        h_1DPlots[which_sample][which_plot]->GetXaxis()->CenterTitle();
-                        h_1DPlots[which_sample][which_plot]->GetYaxis()->CenterTitle();
-
-      gStyle->SetOptStat(0);
-
-      h_1DPlots[which_sample][which_plot]->SetMarkerSize(1.8); // Size of text
-                        h_1DPlots[which_sample][which_plot]->SetMarkerColor(kWhite); // Color of text
-
-      // Adjust bins
-      int num_bin_x = h_1DPlots[which_sample][which_plot]->GetXaxis()->GetNbins(); // Get bins in x-dimension
-//      cout << "Number of x-axis bins: " << num_bin_x << endl;
-      int num_bin_y = h_1DPlots[which_sample][which_plot]->GetYaxis()->GetNbins(); // Get bins in y-dimension
-
-      for ( int which_bin_x = 0; which_bin_x < num_bin_x; which_bin_x++ ) {
-
-        int num_events_current_xy_bin = 0;
-
-        for ( int which_bin_y = 0; which_bin_y < num_bin_y; which_bin_y ++ ) {
-
-          num_events_current_xy_bin += h_1DPlots[which_sample][which_plot]->GetBinContent( which_bin_x + 1, which_bin_y + 1 );
-        }
-
-        for ( int which_bin_y = 0; which_bin_y < num_bin_y; which_bin_y++ ) {
-
-          if ( num_events_current_xy_bin > 0 ) {
-
-            // Volume normalise
-            double xy_normalisation = h_1DPlots[which_sample][which_plot]->GetBinContent( which_bin_x + 1, which_bin_y + 1 )/double( num_events_current_xy_bin );
-
-            // Set bin content to volume-normalised entry
-            h_1DPlots[which_sample][which_plot]->SetBinContent( which_bin_x + 1, which_bin_y + 1, xy_normalisation );
-
-            // Calculate error
-            double error = std::sqrt( TMath::Power(h_1DPlots[which_sample][which_plot]->GetBinError( which_bin_x + 1, which_bin_y + 1 )/double( num_events_current_xy_bin ),2.) + TMath::Power( h_1DPlots[which_sample][which_plot]->GetBinContent( which_bin_x + 1, which_bin_y + 1 ) * sqrt( num_events_current_xy_bin )/double( num_events_current_xy_bin*num_events_current_xy_bin),2.));
-            h_1DPlots[which_sample][which_plot]->SetBinError( which_bin_x + 1, which_bin_y + 1, error );
-          }
-
-          else {
-
-            h_1DPlots[which_sample][which_plot]->SetBinContent( which_bin_x + 1, which_bin_y + 1, 0. );
-            h_1DPlots[which_sample][which_plot]->SetBinError( which_bin_x + 1, which_bin_y + 1, 0. );
-
-          }
-
-        }
-
-      }
-
-
-      //h_1DPlots[which_sample][which_plot]->GetZaxis()->SetRangeUser( 0,2. );
-
-      // Write to output file resolution.root
-            output_file->cd();
-            h_1DPlots[which_sample][which_plot]->Draw("text colz"); // Option E in addition to that also writes error in box
-                        PlotCanvas[which_sample][which_plot]->Write();
-
-      //PlotCanvas[which_sample][which_plot]->SaveAs( "Plots/resolution/" + PlotNames[which_plot] + NameOfSamples[which_sample], PlotNames[which_plot] + NameOfSamples[which_sample] + ".pdf" );
-
-      PlotCanvas[which_sample][which_plot]->Close();
-
-    } // End of loop over plots
-
-  } // End of loop over samples
-
-} // End of void
-
+void resolution() {
+  make_resolution_plot( "numu_overlay_stv.root", "delta_pT", "#deltap_{T}", 10, 0., 2. );
+}
