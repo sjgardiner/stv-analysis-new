@@ -9,7 +9,7 @@ constexpr double REALLY_SMALL = 1e-11;
 
 void make_resolution_plot( const std::string& stv_file_name,
   const std::string& branch, const std::string& variable_name,
-  int num_bins, double x_min, double x_max)
+  const std::string& hist_name, int num_bins, double x_min, double x_max)
 {
   // Assume that the user supplied the name of the reco observable
   // in the branch variable. Prepend "mc_" to it and assume that
@@ -35,7 +35,6 @@ void make_resolution_plot( const std::string& stv_file_name,
   // Define a 2D histogram to hold the information for the resolution plot. Use
   // the same binning for reco and truth variables (the y and x axes,
   // respectively)
-  std::string hist_name = mc_branch + "_vs_" + branch;
   TH2D* hist = new TH2D( hist_name.c_str(), plot_title.c_str(), num_bins,
     x_min, x_max, num_bins, x_min, x_max );
 
@@ -115,5 +114,19 @@ void make_resolution_plot( const std::string& stv_file_name,
 }
 
 void resolution() {
-  make_resolution_plot( "numu_overlay_stv.root", "delta_pT", "#deltap_{T}", 10, 0., 2. );
+
+  make_resolution_plot( "numu_overlay_stv.root", "p3_mu.Mag()", "p_{#mu}", "pmu", 10, 0., 2. );
+  make_resolution_plot( "numu_overlay_stv.root", "p3_mu.CosTheta()", "cos#theta_{#mu}", "cthmu", 10, -1., 1. );
+  make_resolution_plot( "numu_overlay_stv.root", "p3_mu.Phi()", "#phi_{#mu}", "phimu", 10, 0., M_PI );
+
+  make_resolution_plot( "numu_overlay_stv.root", "p3_lead_p.Mag()", "p_{lead p}", "pp", 10, 0., 2. );
+  make_resolution_plot( "numu_overlay_stv.root", "p3_lead_p.CosTheta()", "cos#theta_{lead p}", "cthp", 10, -1., 1. );
+  make_resolution_plot( "numu_overlay_stv.root", "p3_lead_p.Phi()", "#phi_{lead_p}", "phip", 10, 0., M_PI );
+
+  make_resolution_plot( "numu_overlay_stv.root", "delta_pT", "#deltap_{T}", "pT", 10, 0., 2. );
+  make_resolution_plot( "numu_overlay_stv.root", "delta_phiT", "#delta#phi_{T}", "phiT", 10, 0., M_PI );
+  make_resolution_plot( "numu_overlay_stv.root", "delta_alphaT", "#delta#alpha_{T}", "alphaT", 10, 0., M_PI );
+  make_resolution_plot( "numu_overlay_stv.root", "delta_pL", "#deltap_{L}", "pL", 10, 0., 2. );
+  make_resolution_plot( "numu_overlay_stv.root", "pn", "p_{n}", "pn", 10, 0., 2. );
+
 }
