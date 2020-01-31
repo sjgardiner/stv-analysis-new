@@ -3,9 +3,14 @@ constexpr double E1DCNT_ON_DATA = 10384652.0;
 constexpr double POT_ON_DATA = 4.449e+19;
 constexpr double POT_OFF_DATA = (EXT_OFF_DATA / E1DCNT_ON_DATA) * POT_ON_DATA;
 
+// Cuts to use when filling histograms with selected events
 const std::string selection = "sel_CCNp0pi";
-//const std::string selection = "sel_CCNp0pi * spline_weight"
-// " * (std::isfinite(tuned_cv_weight) && tuned_cv_weight <= 100. ? tuned_cv_weight : 1)";
+
+// Weight to apply to MC events when filling histograms
+//const std::string mc_event_weight = "1.";
+//const std::string mc_event_weight = "spline_weight";
+const std::string mc_event_weight = "spline_weight * (std::isfinite("
+  "tuned_cv_weight) && tuned_cv_weight <= 100. ? tuned_cv_weight : 1)";
 
 std::string cat_to_label( int category ) {
   if ( category == 1 ) return "signal CCQE";
@@ -96,7 +101,8 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
       std::string temp_mc_hist_name = hist_name_prefix + "-temp_mc" + std::to_string(cat) + mc_file_name;
       TH1D* temp_mc_hist = new TH1D(temp_mc_hist_name.c_str(), ("; " + var_name + "; events / POT").c_str(),
         Nbins, xmin, xmax);
-      mc_ch.Draw( (branch + " >> " + temp_mc_hist_name).c_str(), (selection + " && category == " + std::to_string(cat)).c_str() );
+      mc_ch.Draw( (branch + " >> " + temp_mc_hist_name).c_str(), (mc_event_weight + "*(" + selection
+        + " && category == " + std::to_string(cat) + ')').c_str() );
 
       // Scale to the same exposure as the beam on data
       temp_mc_hist->Scale( POT_ON_DATA / mc_pot );
@@ -135,19 +141,19 @@ void plots() {
     "numu_overlay_stv.root" };
 
   // Lepton 3-momentum
-  make_plots("pmu", "p3_mu.Mag()", "reco p_{#mu} (GeV)", 0., 2., 10, mc_file_names, 0., 600.);
-  make_plots("cthmu", "p3_mu.CosTheta()", "reco cos#theta_{#mu}", -1., 1., 10, mc_file_names, 0., 650.);
-  make_plots("phimu", "p3_mu.Phi()", "reco #phi_{#mu}", 0., M_PI, 10, mc_file_names, 0., 120.);
+  make_plots("pmu", "p3_mu.Mag()", "reco p_{#mu} (GeV)", 0., 2., 40, mc_file_names, 0., 200.);
+  //make_plots("cthmu", "p3_mu.CosTheta()", "reco cos#theta_{#mu}", -1., 1., 10, mc_file_names, 0., 650.);
+  //make_plots("phimu", "p3_mu.Phi()", "reco #phi_{#mu}", 0., M_PI, 10, mc_file_names, 0., 120.);
 
-  // Leading proton 3-momentum
-  make_plots("pleadp", "p3_lead_p.Mag()", "reco p_{lead p} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
-  make_plots("cthleadp", "p3_lead_p.CosTheta()", "reco cos#theta_{lead p}", -1., 1., 10, mc_file_names, 0., 600.);
-  make_plots("phileadp", "p3_lead_p.Phi()", "reco #phi_{lead p}", 0., M_PI, 10, mc_file_names, 0., 110.);
+  ////// Leading proton 3-momentum
+  //make_plots("pleadp", "p3_lead_p.Mag()", "reco p_{lead p} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
+  //make_plots("cthleadp", "p3_lead_p.CosTheta()", "reco cos#theta_{lead p}", -1., 1., 10, mc_file_names, 0., 600.);
+  //make_plots("phileadp", "p3_lead_p.Phi()", "reco #phi_{lead p}", 0., M_PI, 10, mc_file_names, 0., 110.);
 
-  // STVs
-  make_plots("pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
-  make_plots("phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 10, mc_file_names, 0., 800.);
-  make_plots("alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 10, mc_file_names, 0., 300.);
-  make_plots("pL", "delta_pL", "reco #deltap_{L} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
-  make_plots("pn", "pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
+  ////// STVs
+  //make_plots("pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
+  //make_plots("phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 10, mc_file_names, 0., 800.);
+  //make_plots("alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 10, mc_file_names, 0., 300.);
+  //make_plots("pL", "delta_pL", "reco #deltap_{L} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
+  //make_plots("pn", "pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
 }
