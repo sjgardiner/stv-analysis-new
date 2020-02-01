@@ -931,28 +931,34 @@ void AnalysisEvent::compute_observables() {
   // First compute the MC truth observables (if this is a signal MC event)
   this->compute_mc_truth_observables();
 
-  // If this event didn't pass all the selection cuts, don't bother computing
-  // reconstructed observables
-  if ( !sel_CCNp0pi_ ) return;
-
-  // Set the reco 3-momentum of the muon candidate
-  const auto& muon = *this->get_muon_candidate();
+  // Abbreviate some of the calculations below by using these handy
+  // references to the muon and leading proton 3-momenta
   auto& p3mu = p3_mu_;
-  p3mu = TVector3( muon.track_dirx_, muon.track_diry_, muon.track_dirz_ );
-  p3mu = p3mu.Unit() * muon.track_mcs_mom_;
-
-  // Set the reco 3-momentum of the leading proton candidate
-  const auto& lead_p = *this->get_leading_p_candidate();
   auto& p3p = p3_lead_p_;
 
-  p3p = TVector3( lead_p.track_dirx_, lead_p.track_diry_,
-    lead_p.track_dirz_ );
+  // Set the reco 3-momentum of the muon candidate if we found one
+  const auto* muon = this->get_muon_candidate();
+  if ( muon ) {
+    p3mu = TVector3( muon->track_dirx_, muon->track_diry_, muon->track_dirz_ );
+    p3mu = p3mu.Unit() * muon->track_mcs_mom_;
+  }
 
-  p3p = p3p.Unit() * lead_p.track_range_mom_p_;
+  // Set the reco 3-momentum of the leading proton candidate if we found one
+  const auto* lead_p = this->get_leading_p_candidate();
+  if ( lead_p ) {
 
-  // Compute reco STVs
-  compute_stvs( p3mu, p3p, delta_pT_, delta_phiT_,
-    delta_alphaT_, delta_pL_, pn_ );
+    p3p = TVector3( lead_p->track_dirx_, lead_p->track_diry_,
+      lead_p->track_dirz_ );
+
+    p3p = p3p.Unit() * lead_p->track_range_mom_p_;
+  }
+
+  // Compute reco STVs if we have both a muon candidate
+  // and a leading proton candidate in the event
+  if ( muon && lead_p ) {
+    compute_stvs( p3mu, p3p, delta_pT_, delta_phiT_,
+      delta_alphaT_, delta_pL_, pn_ );
+  }
 }
 
 void AnalysisEvent::compute_mc_truth_observables() {
@@ -960,20 +966,19 @@ void AnalysisEvent::compute_mc_truth_observables() {
   // If this is not an MC event, then just return without doing anything
   if ( !is_mc_ ) return;
 
-  // If this is not a signal event, then don't bother computing MC truth
-  // observables
-  if ( !mc_is_signal_ ) return;
-
   // If we don't have a GHEP event to work with, also refuse to compute
   // these
   // TODO: revisit this after you can save more truth information directly in
   // NuCCanalyzer
   if ( !genie_ok_ ) return;
 
-  // Set the true 3-momentum of the final-state muon
-  mc_p3_mu_ = genie_event_->Summary()->Kine().FSLeptonP4().Vect();
+  // Set the true 3-momentum of the final-state muon if there is one
+  bool true_muon = ( mc_neutrino_is_numu_ && !mc_nu_ccnc_ );
+  if ( true_muon ) {
+    mc_p3_mu_ = genie_event_->Summary()->Kine().FSLeptonP4().Vect();
+  }
 
-  // Set the true 3-momentum of the leading proton
+  // Set the true 3-momentum of the leading proton (if there is one)
   float max_mom = LOW_FLOAT;
   TVector3 temp_p3;
   for ( int p = 0; p < genie_event_->GetEntries(); ++p ) {
@@ -989,20 +994,24 @@ void AnalysisEvent::compute_mc_truth_observables() {
     }
   }
 
-  // If we found a leading proton, then set the 3-momentum accordingly
-  if ( max_mom != LOW_FLOAT ) mc_p3_lead_p_ = temp_p3;
-  else {
-    // If we didn't, something is wrong. We already checked that this
-    // was a signal event. Complain and set the genie_ok flag to false
-    // as a workaround.
+  // If the event contains a leading proton, then set the 3-momentum
+  // accordingly
+  bool true_lead_p = ( max_mom != LOW_FLOAT );
+  if ( true_lead_p ) mc_p3_lead_p_ = temp_p3;
+  else if ( mc_is_signal_ ) {
+    // If it doesn't for a signal event, then something is wrong.
+    // Complain and set the genie_ok flag to false as a workaround.
     std::cout << "WARNING: Missing leading proton in GHEP event!\n";
     genie_ok_ = false;
     return;
   }
 
-  // Compute true STVs
-  compute_stvs( mc_p3_mu_, mc_p3_lead_p_, mc_delta_pT_, mc_delta_phiT_,
-    mc_delta_alphaT_, mc_delta_pL_, mc_pn_ );
+  // Compute true STVs if the event contains both a muon and a leading
+  // proton
+  if ( true_muon && true_lead_p ) {
+    compute_stvs( mc_p3_mu_, mc_p3_lead_p_, mc_delta_pT_, mc_delta_phiT_,
+      mc_delta_alphaT_, mc_delta_pL_, mc_pn_ );
+  }
 }
 
 void analyzer(const std::string& in_file_name,
