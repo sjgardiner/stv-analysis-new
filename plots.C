@@ -141,7 +141,7 @@ void plots() {
     "numu_overlay_stv.root" };
 
   // Lepton 3-momentum
-  make_plots("pmu", "p3_mu.Mag()", "reco p_{#mu} (GeV)", 0., 2., 40, mc_file_names, 0., 200.);
+  //make_plots("pmu", "p3_mu.Mag()", "reco p_{#mu} (GeV)", 0., 2., 40, mc_file_names, 0., 800.);
   //make_plots("cthmu", "p3_mu.CosTheta()", "reco cos#theta_{#mu}", -1., 1., 10, mc_file_names, 0., 650.);
   //make_plots("phimu", "p3_mu.Phi()", "reco #phi_{#mu}", 0., M_PI, 10, mc_file_names, 0., 120.);
 
@@ -151,9 +151,9 @@ void plots() {
   //make_plots("phileadp", "p3_lead_p.Phi()", "reco #phi_{lead p}", 0., M_PI, 10, mc_file_names, 0., 110.);
 
   ////// STVs
-  //make_plots("pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
-  //make_plots("phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 10, mc_file_names, 0., 800.);
-  //make_plots("alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 10, mc_file_names, 0., 300.);
-  //make_plots("pL", "delta_pL", "reco #deltap_{L} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
-  //make_plots("pn", "pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
+  make_plots("pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 2., 10, mc_file_names, 0., 800.);
+  make_plots("phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 10, mc_file_names, 0., 800.);
+  make_plots("alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 10, mc_file_names, 0., 300.);
+  make_plots("pL", "delta_pL", "reco #deltap_{L} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
+  make_plots("pn", "pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names, 0., 800. );
 }
