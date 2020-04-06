@@ -1,12 +1,13 @@
-// Analysis macro for use with Wouter's MCC9 numu CC selection
+// Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Run with genie -l
 //
-// 28 January 2020
+// Updated 6 April 2020
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -18,6 +19,7 @@
 
 // GENIE includes (v3 headers)
 #include "Framework/EventGen/EventRecord.h"
+#include "Framework/Ntuple/NtpMCEventRecord.h"
 #include "Framework/GHEP/GHepParticle.h"
 
 // Helper function that avoids NaNs when taking square roots of negative
@@ -49,7 +51,7 @@ constexpr float MUON_MOM_CUT = 0.150; // GeV/c
 constexpr float CHARGED_PI_MOM_CUT = 0.070; // GeV/c
 
 // Boundaries of the neutrino vertex fiducial volume (cm)
-// This is handled the same way for reco (in Wouter's analyzer)
+// This is handled the same way for reco (in the NuCCanalyzer)
 // and in MC (herein)
 double FV_X_MIN =   10.;
 double FV_X_MAX =  246.35;
@@ -99,7 +101,7 @@ enum EventCategory {
 };
 
 // Class to hold information from each entry in the Daughters TTree
-// from Wouter's NuCCAnalyzer module
+// from the NuCCanalyzer module
 class AnalysisDaughter {
 
   public:
@@ -119,6 +121,10 @@ class AnalysisDaughter {
 
     float track_length_ = BOGUS; // Length of the reco track
     float track_chi2_proton_ = BOGUS; // PID chi^2 score for proton track hypothesis
+
+    // Log-likelihood PID score for proton track hypothesis using all three planes
+    // See docDB #23008 and #23348
+    float track_3plane_proton_pid_ = BOGUS;
 
     // Reco momentum magnitude
     float track_mcs_mom_ = BOGUS; // MCS estimate of track momentum (GeV)
@@ -146,11 +152,17 @@ class AnalysisEvent {
     AnalysisEvent() {
       mc_nu_daughter_pdg_ = new std::vector<int>;
       mc_nu_daughter_energy_ = new std::vector<float>;
+      mc_nu_daughter_px_ = new std::vector<float>;
+      mc_nu_daughter_py_ = new std::vector<float>;
+      mc_nu_daughter_pz_ = new std::vector<float>;
     }
 
     ~AnalysisEvent() {
       if ( mc_nu_daughter_pdg_ ) delete mc_nu_daughter_pdg_;
       if ( mc_nu_daughter_energy_ ) delete mc_nu_daughter_energy_;
+      if ( mc_nu_daughter_px_ ) delete mc_nu_daughter_px_;
+      if ( mc_nu_daughter_py_ ) delete mc_nu_daughter_py_;
+      if ( mc_nu_daughter_pz_ ) delete mc_nu_daughter_pz_;
       if ( genie_event_ ) delete genie_event_;
     }
 
@@ -205,6 +217,9 @@ class AnalysisEvent {
     // Final-state particle PDG codes and energies (post-FSIs)
     std::vector<int>* mc_nu_daughter_pdg_ = nullptr;
     std::vector<float>* mc_nu_daughter_energy_ = nullptr;
+    std::vector<float>* mc_nu_daughter_px_ = nullptr;
+    std::vector<float>* mc_nu_daughter_py_ = nullptr;
+    std::vector<float>* mc_nu_daughter_pz_ = nullptr;
 
     // This vector stores information retrieved from the Daughters TTree for
     // this event
@@ -334,6 +349,7 @@ void set_daughter_branch_addresses(TTree& dtree, AnalysisDaughter& ad)
   dtree.SetBranchAddress("track_range_mom_mu", &ad.track_range_mom_mu_ );
   dtree.SetBranchAddress("track_mcs_mom", &ad.track_mcs_mom_ );
   dtree.SetBranchAddress("track_chi2_proton", &ad.track_chi2_proton_ );
+  dtree.SetBranchAddress("track_3plane_proton_pid", &ad.track_3plane_proton_pid_ );
 }
 
 // Helper function to set branch addresses for reading information
@@ -373,6 +389,9 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
     &ev.mc_nu_interaction_type_ );
   etree.SetBranchAddress("mc_nu_daughter_pdg", &ev.mc_nu_daughter_pdg_ );
   etree.SetBranchAddress("mc_nu_daughter_energy", &ev.mc_nu_daughter_energy_ );
+  etree.SetBranchAddress("mc_nu_daughter_px", &ev.mc_nu_daughter_px_ );
+  etree.SetBranchAddress("mc_nu_daughter_py", &ev.mc_nu_daughter_py_ );
+  etree.SetBranchAddress("mc_nu_daughter_pz", &ev.mc_nu_daughter_pz_ );
 
   etree.SetBranchAddress("event_weight", &ev.spline_weight_ );
 
