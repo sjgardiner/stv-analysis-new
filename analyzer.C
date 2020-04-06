@@ -100,6 +100,44 @@ enum EventCategory {
 
 };
 
+// Class to provide temporary storage for processing each entry in the gtree
+// TTree from the NuCCanalyzer module
+class AnalysisGenieBranches {
+  public:
+
+    AnalysisGenieBranches() {}
+
+    genie::NtpMCEventRecord* gmcrec_ = nullptr;
+    std::map< std::string, std::vector<double> >* weights_map_ = nullptr;
+};
+
+// Class to hold information from each entry in the gtree TTree
+// from the NuCCanalyzer module
+class AnalysisGenieRecord {
+
+  public:
+
+    AnalysisGenieRecord(const AnalysisGenieBranches& gb)
+      { this->init(gb); }
+
+    double cv_tune_weight_;
+    double spline_bugfix_weight_;
+
+    // TODO: add flux + GENIE + Geant4 systematic weights here
+    // TODO: add other stuff?
+
+  protected:
+
+    void init(const AnalysisGenieBranches& gb);
+};
+
+void AnalysisGenieRecord::init(const AnalysisGenieBranches& gb) {
+  // These weights are computed for only a single universe, so just take
+  // the single vector entry and store it
+  cv_tune_weight_ = gb.weights_map_->at( "TunedCentralValue_UBGenie" ).front();
+  spline_bugfix_weight_ = gb.weights_map_->at( "splines_general_Spline" ).front();
+}
+
 // Class to hold information from each entry in the Daughters TTree
 // from the NuCCanalyzer module
 class AnalysisDaughter {
@@ -163,11 +201,13 @@ class AnalysisEvent {
       if ( mc_nu_daughter_px_ ) delete mc_nu_daughter_px_;
       if ( mc_nu_daughter_py_ ) delete mc_nu_daughter_py_;
       if ( mc_nu_daughter_pz_ ) delete mc_nu_daughter_pz_;
-      if ( genie_event_ ) delete genie_event_;
     }
 
     inline void add_daughter( const AnalysisDaughter& ad )
       { daughters_.push_back( ad ); }
+
+    inline void add_genie_record( const AnalysisGenieRecord& gr )
+      { genie_records_.push_back( gr ); }
 
     EventCategory categorize_event();
     void apply_selection();
@@ -224,6 +264,10 @@ class AnalysisEvent {
     // This vector stores information retrieved from the Daughters TTree for
     // this event
     std::vector< AnalysisDaughter > daughters_;
+
+    // This vector stores information retrieved from the gtree TTree for
+    // this event
+    std::vector< AnalysisGenieRecord > genie_records_;
 
     // Signal definition requirements
     bool is_mc_ = false;
@@ -304,11 +348,6 @@ class AnalysisEvent {
     float mc_delta_pL_ = BOGUS;
     float mc_pn_ = BOGUS;
 
-    // Extra GENIE truth info
-    genie::EventRecord* genie_event_ = nullptr;
-    // Will be set to true if a matching GENIE event record was found
-    bool genie_ok_ = false;
-
     bool mc_vertex_inside_FV() {
       bool x_inside_FV = ( FV_X_MIN < mc_nu_vx_ ) && ( mc_nu_vx_ < FV_X_MAX );
       bool y_inside_FV = ( FV_Y_MIN < mc_nu_vy_ ) && ( mc_nu_vy_ < FV_Y_MAX );
@@ -327,6 +366,14 @@ class AnalysisEvent {
     }
 
 };
+
+// Helper function to set branch addresses for reading information
+// from the gtree TTree
+void set_gtree_branch_addresses(TTree& gtree, AnalysisGenieBranches& gb)
+{
+  gtree.SetBranchAddress("gmcrec", &gb.gmcrec_ );
+  gtree.SetBranchAddress("weights_map", &gb.weights_map_ );
+}
 
 // Helper function to set branch addresses for reading information
 // from the Daughters TTree
@@ -394,11 +441,6 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress("mc_nu_daughter_pz", &ev.mc_nu_daughter_pz_ );
 
   etree.SetBranchAddress("event_weight", &ev.spline_weight_ );
-
-  // Extra "friend" branches from the GENIE event TTree
-  etree.SetBranchAddress("cv_weight", &ev.tuned_cv_weight_ );
-  etree.SetBranchAddress("genie_ok", &ev.genie_ok_ );
-  etree.SetBranchAddress("evrec", &ev.genie_event_ );
 }
 
 // Helper function that creates a branch (or just sets a new address)
@@ -519,42 +561,25 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     &ev.mc_delta_pL_, create, "mc_delta_pL/F" );
   set_output_branch_address( out_tree, "mc_pn",
     &ev.mc_pn_, create, "mc_pn/F" );
-
-  // Flag indicating whether a GHEP event was available
-  // to retrieve the MC truth information
-  set_output_branch_address( out_tree, "genie_ok",
-    &ev.genie_ok_, create, "genie_ok/O" );
 }
 
 void analyze(const std::vector<std::string>& in_file_names,
-  const std::string& output_filename,
-  const std::vector<std::string>& genie_file_names)
+  const std::string& output_filename)
 {
-  // Get the Events, Daughters, and subruns TTrees
+  // Get the Events, Daughters, subruns, and gtree TTrees
   // Use TChain objects for simplicity in manipulating
   // multiple files
   TChain events_ch("NuCCanalyzer/Event");
   TChain daughters_ch("NuCCanalyzer/Daughters");
   TChain subruns_ch("NuCCanalyzer/subruns");
+  TChain gtree_ch("NuCCanalyzer/gtree");
 
   for ( const auto& f_name : in_file_names ) {
     events_ch.Add( f_name.c_str() );
     daughters_ch.Add( f_name.c_str() );
     subruns_ch.Add( f_name.c_str() );
+    gtree_ch.Add( f_name.c_str() );
   }
-
-  // Also set up a TChain for reading in the event weights for the MicroBooNE
-  // CV tune weight and the GHEP event records. The GENIE event records should
-  // appear in this TChain in exactly the same order as the events analyzed by
-  // NuCCanalyzer.
-  TChain genie_ch("stv_gtree");
-  for ( const auto& f_name : genie_file_names ) {
-    genie_ch.Add( f_name.c_str() );
-  }
-
-  // For simplicity, add the GENIE event record TTTree
-  // as a friend for the Event TTree
-  events_ch.AddFriend( &genie_ch );
 
   // Configure storage for the branch variables that we care
   // about. Start with the Event TTree
@@ -579,10 +604,21 @@ void analyze(const std::vector<std::string>& in_file_names,
   daughters_ch.SetBranchAddress("run", &daughters_run );
   daughters_ch.SetBranchAddress("subrun", &daughters_subrun );
 
+  // *** gtree TTree ***
+
+  // Reference numbers for the gtree TTree
+  unsigned int gtree_event, gtree_run, gtree_subrun;
+
+  // Reference indices are not saved for use in the analysis
+  gtree_ch.SetBranchAddress("event", &gtree_event );
+  gtree_ch.SetBranchAddress("run", &gtree_run );
+  gtree_ch.SetBranchAddress("subrun", &gtree_subrun );
+
   // Use separate entry counters for the different TTrees to keep
   // event, run, and subrun in sync
   int events_entry = 0;
   int daughters_entry = 0;
+  int gtree_entry = 0;
 
   // OUTPUT TTREE
   // Make an output TTree for plotting (one entry per event)
@@ -618,7 +654,7 @@ void analyze(const std::vector<std::string>& in_file_names,
   long event_counter = 0;
   while ( true ) {
 
-    if ( event_counter % 10000 == 0 ) {
+    if ( event_counter % 1000 == 0 ) {
       std::cout << "Processing event #" << event_counter << '\n';
     }
 
@@ -682,6 +718,37 @@ void analyze(const std::vector<std::string>& in_file_names,
       int daughter_local_entry = daughters_ch.LoadTree( daughters_entry );
 
       if ( daughter_local_entry < 0 ) break;
+    }
+
+    // Create temporary storage for the gtree TTree branch variables and
+    // set up the branch addresses
+    AnalysisGenieBranches temp_genie_branches;
+    set_gtree_branch_addresses( gtree_ch, temp_genie_branches );
+
+    while ( gtree_ch.GetEntry( gtree_entry ),
+      events_event == gtree_event && events_run == gtree_run
+        && events_subrun == gtree_subrun )
+    {
+      // Process the information from the current gtree entry and
+      // save the results we care about in an AnalysisGenieRecord object
+      AnalysisGenieRecord temp_genie_record( temp_genie_branches );
+
+      // Store the extended GENIE event / EventWeight information for later
+      // analysis
+      cur_event.add_genie_record( temp_genie_record );
+
+      // Avoid memory leaks by manually deleting the owned GENIE EventRecord object
+      // (necessary for dumb ROOT reasons)
+      delete temp_genie_branches.gmcrec_->event;
+
+      // Advance to the next GENIE event
+      ++gtree_entry;
+
+      // gtree_local_entry will be negative if we've
+      // reached the end of the gtree TChain
+      int gtree_local_entry = gtree_ch.LoadTree( gtree_entry );
+
+      if ( gtree_local_entry < 0 ) break;
     }
 
     // We've finished looping over all reco neutrino daughters. Now
@@ -985,30 +1052,48 @@ void AnalysisEvent::compute_mc_truth_observables() {
   // If this is not an MC event, then just return without doing anything
   if ( !is_mc_ ) return;
 
-  // If we don't have a GHEP event to work with, also refuse to compute
-  // these
-  // TODO: revisit this after you can save more truth information directly in
-  // NuCCanalyzer
-  if ( !genie_ok_ ) return;
+  size_t num_mc_daughters = mc_nu_daughter_pdg_->size();
 
   // Set the true 3-momentum of the final-state muon if there is one
   bool true_muon = ( mc_neutrino_is_numu_ && !mc_nu_ccnc_ );
   if ( true_muon ) {
-    mc_p3_mu_ = genie_event_->Summary()->Kine().FSLeptonP4().Vect();
+    // Loop over the MC neutrino daughters, find the muon, and get its
+    // true 3-momentum. Note that we assume there is only one muon in
+    // this loop.
+    bool found_muon = false;
+    for ( size_t d = 0u; d < num_mc_daughters; ++d ) {
+      int pdg = mc_nu_daughter_pdg_->at( d );
+      if ( pdg == MUON ) {
+        found_muon = true;
+        float px = mc_nu_daughter_px_->at( d );
+        float py = mc_nu_daughter_py_->at( d );
+        float pz = mc_nu_daughter_pz_->at( d );
+        mc_p3_mu_ = TVector3( px, py, pz );
+        break;
+      }
+    }
+
+    if ( !found_muon ) {
+      std::cout << "WARNING: Missing muon in MC signal event!\n";
+      return;
+    }
   }
 
   // Set the true 3-momentum of the leading proton (if there is one)
   float max_mom = LOW_FLOAT;
-  TVector3 temp_p3;
-  for ( int p = 0; p < genie_event_->GetEntries(); ++p ) {
-    genie::GHepParticle* par = genie_event_->Particle( p );
-    if ( par->Pdg() == PROTON
-      && par->Status() == genie::kIStStableFinalState )
+  for ( int p = 0; p < num_mc_daughters; ++p ) {
+    int pdg = mc_nu_daughter_pdg_->at( p );
+    if ( pdg == PROTON )
     {
-      float mom = par->P4()->P();
+      float px = mc_nu_daughter_px_->at( p );
+      float py = mc_nu_daughter_py_->at( p );
+      float pz = mc_nu_daughter_pz_->at( p );
+      TVector3 temp_p3 = TVector3( px, py, pz );
+
+      float mom = temp_p3.Mag();
       if ( mom > max_mom ) {
         max_mom = mom;
-        temp_p3 = par->P4()->Vect();
+        mc_p3_lead_p_ = temp_p3;
       }
     }
   }
@@ -1016,12 +1101,9 @@ void AnalysisEvent::compute_mc_truth_observables() {
   // If the event contains a leading proton, then set the 3-momentum
   // accordingly
   bool true_lead_p = ( max_mom != LOW_FLOAT );
-  if ( true_lead_p ) mc_p3_lead_p_ = temp_p3;
-  else if ( mc_is_signal_ ) {
+  if ( !true_lead_p && mc_is_signal_ ) {
     // If it doesn't for a signal event, then something is wrong.
-    // Complain and set the genie_ok flag to false as a workaround.
-    std::cout << "WARNING: Missing leading proton in GHEP event!\n";
-    genie_ok_ = false;
+    std::cout << "WARNING: Missing leading proton in MC signal event!\n";
     return;
   }
 
@@ -1034,9 +1116,8 @@ void AnalysisEvent::compute_mc_truth_observables() {
 }
 
 void analyzer(const std::string& in_file_name,
- const std::string& output_filename, const std::string& genie_file_name)
+ const std::string& output_filename)
 {
   std::vector<std::string> in_files = { in_file_name };
-  std::vector<std::string> genie_files = { genie_file_name };
-  analyze( in_files, output_filename, genie_files );
+  analyze( in_files, output_filename );
 }
