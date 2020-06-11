@@ -12,6 +12,7 @@ void make_flat_weights_tree( const std::string& input_file_name,
 
   TChain gtree_ch( "NuCCanalyzer/gtree" );
   gtree_ch.Add( input_file_name.c_str() );
+  gtree_ch.SetBranchAddress( "gmcrec", &gmcrec );
   gtree_ch.SetBranchAddress( "weights_map", &weights_map );
 
   TFile out_file( output_file_name.c_str(), "recreate" );
