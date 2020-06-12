@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Run with genie -l
 //
-// Updated 6 April 2020
+// Updated 12 June 2020
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -107,7 +107,12 @@ class AnalysisGenieBranches {
 
     AnalysisGenieBranches() {}
 
-    genie::NtpMCEventRecord* gmcrec_ = nullptr;
+    ~AnalysisGenieBranches() {
+      //if ( gmcrec_ ) delete gmcrec_;
+      if ( weights_map_ ) delete weights_map_;
+    }
+
+    //genie::NtpMCEventRecord* gmcrec_ = nullptr;
     std::map< std::string, std::vector<double> >* weights_map_ = nullptr;
 };
 
@@ -371,7 +376,8 @@ class AnalysisEvent {
 // from the gtree TTree
 void set_gtree_branch_addresses(TTree& gtree, AnalysisGenieBranches& gb)
 {
-  gtree.SetBranchAddress("gmcrec", &gb.gmcrec_ );
+  //gtree.SetBranchAddress("gmcrec", &gb.gmcrec_ );
+  gtree.SetBranchStatus( "gmcrec", false );
   gtree.SetBranchAddress("weights_map", &gb.weights_map_ );
 }
 
@@ -739,7 +745,7 @@ void analyze(const std::vector<std::string>& in_file_names,
 
       // Avoid memory leaks by manually deleting the owned GENIE EventRecord object
       // (necessary for dumb ROOT reasons)
-      delete temp_genie_branches.gmcrec_->event;
+      //delete temp_genie_branches.gmcrec_->event;
 
       // Advance to the next GENIE event
       ++gtree_entry;
