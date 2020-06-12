@@ -726,35 +726,40 @@ void analyze(const std::vector<std::string>& in_file_names,
       if ( daughter_local_entry < 0 ) break;
     }
 
-    // Create temporary storage for the gtree TTree branch variables and
-    // set up the branch addresses
-    AnalysisGenieBranches temp_genie_branches;
-    set_gtree_branch_addresses( gtree_ch, temp_genie_branches );
+    // Only MC output will have GENIE event records and weights
+    if ( cur_event.is_mc_ ) {
 
-    while ( gtree_ch.GetEntry( gtree_entry ),
-      events_event == gtree_event && events_run == gtree_run
-        && events_subrun == gtree_subrun )
-    {
-      // Process the information from the current gtree entry and
-      // save the results we care about in an AnalysisGenieRecord object
-      AnalysisGenieRecord temp_genie_record( temp_genie_branches );
+      // Create temporary storage for the gtree TTree branch variables and
+      // set up the branch addresses
+      AnalysisGenieBranches temp_genie_branches;
+      set_gtree_branch_addresses( gtree_ch, temp_genie_branches );
 
-      // Store the extended GENIE event / EventWeight information for later
-      // analysis
-      cur_event.add_genie_record( temp_genie_record );
+      while ( gtree_ch.GetEntry( gtree_entry ),
+        events_event == gtree_event && events_run == gtree_run
+          && events_subrun == gtree_subrun )
+      {
+        // Process the information from the current gtree entry and
+        // save the results we care about in an AnalysisGenieRecord object
+        AnalysisGenieRecord temp_genie_record( temp_genie_branches );
 
-      // Avoid memory leaks by manually deleting the owned GENIE EventRecord object
-      // (necessary for dumb ROOT reasons)
-      //delete temp_genie_branches.gmcrec_->event;
+        // Store the extended GENIE event / EventWeight information for later
+        // analysis
+        cur_event.add_genie_record( temp_genie_record );
 
-      // Advance to the next GENIE event
-      ++gtree_entry;
+        // Avoid memory leaks by manually deleting the owned GENIE EventRecord object
+        // (necessary for dumb ROOT reasons)
+        //delete temp_genie_branches.gmcrec_->event;
 
-      // gtree_local_entry will be negative if we've
-      // reached the end of the gtree TChain
-      int gtree_local_entry = gtree_ch.LoadTree( gtree_entry );
+        // Advance to the next GENIE event
+        ++gtree_entry;
 
-      if ( gtree_local_entry < 0 ) break;
+        // gtree_local_entry will be negative if we've
+        // reached the end of the gtree TChain
+        int gtree_local_entry = gtree_ch.LoadTree( gtree_entry );
+
+        if ( gtree_local_entry < 0 ) break;
+      }
+
     }
 
     // We've finished looping over all reco neutrino daughters. Now
