@@ -81,7 +81,7 @@ void flux_avg_xsec_xml()
     "G18_10a_02_11a", "CCinclMEC" );*/
 
   // Alternate GENIE model for MicroBooNE
-  load_splines("/cvmfs/larsoft.opensciencegrid.org/products/genie_xsec/v3_00_04a/NULL/G0000b00000-k250-e1000/data/gxspl-FNALsmall.xml")
+  load_splines("/cvmfs/larsoft.opensciencegrid.org/products/genie_xsec/v3_00_04a/NULL/G0000b00000-k250-e1000/data/gxspl-FNALsmall.xml","G00_00b_00_000","CCinclMEC");
   // TODO: add me, then comment out the default model
 
   auto evgd_numu = configure_evg_driver( 14, 1000180400 );
@@ -127,4 +127,4 @@ void flux_avg_xsec_xml()
       flux_avg_xsec_per_nucleon_numu );
     flux_avg_numu_ccincl_xsec.Write();
 }
-////////////////
+
