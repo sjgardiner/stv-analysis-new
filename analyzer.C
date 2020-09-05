@@ -397,6 +397,17 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "ccnc", &ev.mc_nu_ccnc_ );
   etree.SetBranchAddress( "interaction", &ev.mc_nu_interaction_type_ );
 
+  // Decide whether we are working with data or MC events by checking
+  // the NeutrinoSelectionFilter TTree. If it has a branch named "weightSpline", then we
+  // are using MC events. Otherwise, we're using data. We default
+  // to is_mc_ == false in the AnalysisEvent class, so make the
+  // switch to true if needed.
+  TBranch* temp_mc_branch = etree.GetBranch( "weightSpline" );
+  if ( temp_mc_branch ) ev.is_mc_ = true;
+  // If we're working with data, we don't need to set the remaining
+  // branch addresses
+  else return;
+
   // MC truth information for the final-state primary particles
   etree.SetBranchAddress( "mc_pdg", &ev.mc_nu_daughter_pdg_ );
   etree.SetBranchAddress( "mc_E", &ev.mc_nu_daughter_energy_ );
@@ -630,9 +641,8 @@ EventCategory AnalysisEvent::categorize_event() {
   // TODO: switch to using GHEP truth information?
   // At least verify against it if it is available
 
-  // Real data has a bogus true neutrino PDG code that
-  // is below the minimum possible value (-16 <--> nutaubar)
-  is_mc_ = ( mc_nu_pdg_ >= TAU_ANTINEUTRINO );
+  // The is_mc flag has already been set when we set up the branch addresses.
+  // If we're working with real data, then just return an unknown category.
   if ( !is_mc_ ) return kUnknown;
 
   mc_vertex_in_FV_ = mc_vertex_inside_FV();
