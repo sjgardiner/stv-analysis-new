@@ -853,10 +853,10 @@ void AnalysisEvent::apply_selection() {
     if ( generation != 2u ) continue;
 
     float tscore = pfp_track_score_->at( p );
-    if ( tscore > TRACK_SCORE_CUT ) ++reco_shower_count;
+    if ( tscore <= TRACK_SCORE_CUT ) ++reco_shower_count;
   }
   // Check the shower cut
-  sel_no_reco_showers_ = ( reco_shower_count > 0 );
+  sel_no_reco_showers_ = ( reco_shower_count == 0 );
 
   // Set flags that default to true here
   sel_passed_proton_pid_cut_ = true;
