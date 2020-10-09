@@ -60,7 +60,7 @@ constexpr float MUON_VTX_DISTANCE_CUT = 4.; // cm
 constexpr float MUON_LENGTH_CUT = 10.; // cm
 constexpr float MUON_PID_CUT = 0.2;
 
-constexpr float PROTON_TRACK_SCORE_CUT = 0.5;
+constexpr float TRACK_SCORE_CUT = 0.5;
 
 // Boundaries of the neutrino vertex fiducial volume (cm)
 // This is handled the same way for reco (in the NuCCanalyzer)
@@ -189,7 +189,10 @@ class AnalysisEvent {
     std::vector<float>* track_dirx_ = nullptr;
     std::vector<float>* track_diry_ = nullptr;
     std::vector<float>* track_dirz_ = nullptr;
-    std::vector<float>* track_energy_p_ = nullptr;
+
+    // Proton *kinetic* energy using range-based momentum reconstruction
+    std::vector<float>* track_kinetic_energy_p_ = nullptr;
+
     std::vector<float>* track_range_mom_mu_ = nullptr;
     std::vector<float>* track_mcs_mom_mu_ = nullptr;
     std::vector<float>* track_chi2_proton_ = nullptr;
@@ -382,7 +385,7 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "trk_dir_x_v", &ev.track_dirx_ );
   etree.SetBranchAddress( "trk_dir_y_v", &ev.track_diry_ );
   etree.SetBranchAddress( "trk_dir_z_v", &ev.track_dirz_ );
-  etree.SetBranchAddress( "trk_energy_proton_v", &ev.track_energy_p_ );
+  etree.SetBranchAddress( "trk_energy_proton_v", &ev.track_kinetic_energy_p_ );
   etree.SetBranchAddress( "trk_range_muon_mom_v", &ev.track_range_mom_mu_ );
   etree.SetBranchAddress( "trk_mcs_muon_mom_v", &ev.track_mcs_mom_mu_ );
   etree.SetBranchAddress( "trk_pid_chipr_v", &ev.track_chi2_proton_ );
@@ -396,17 +399,6 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "nu_e", &ev.mc_nu_energy_ );
   etree.SetBranchAddress( "ccnc", &ev.mc_nu_ccnc_ );
   etree.SetBranchAddress( "interaction", &ev.mc_nu_interaction_type_ );
-
-  // Decide whether we are working with data or MC events by checking
-  // the NeutrinoSelectionFilter TTree. If it has a branch named "weightSpline", then we
-  // are using MC events. Otherwise, we're using data. We default
-  // to is_mc_ == false in the AnalysisEvent class, so make the
-  // switch to true if needed.
-  TBranch* temp_mc_branch = etree.GetBranch( "weightSpline" );
-  if ( temp_mc_branch ) ev.is_mc_ = true;
-  // If we're working with data, we don't need to set the remaining
-  // branch addresses
-  else return;
 
   // MC truth information for the final-state primary particles
   etree.SetBranchAddress( "mc_pdg", &ev.mc_nu_daughter_pdg_ );
@@ -619,8 +611,6 @@ void analyze(const std::vector<std::string>& in_file_names,
     // TChain::SetBranchAddress() above
     events_ch.GetEntry( events_entry );
 
-    //std::cout << "DEBUG: EVENT " << events_entry << '\n';
-
     // Apply the CCNp0pi selection criteria and categorize the event.
     cur_event.apply_selection();
 
@@ -641,8 +631,9 @@ EventCategory AnalysisEvent::categorize_event() {
   // TODO: switch to using GHEP truth information?
   // At least verify against it if it is available
 
-  // The is_mc flag has already been set when we set up the branch addresses.
-  // If we're working with real data, then just return an unknown category.
+  // Real data has a bogus true neutrino PDG code that
+  // is below the minimum possible value (-16 <--> nutaubar)
+  is_mc_ = ( mc_nu_pdg_ >= TAU_ANTINEUTRINO );
   if ( !is_mc_ ) return kUnknown;
 
   mc_vertex_in_FV_ = mc_vertex_inside_FV();
@@ -719,21 +710,40 @@ void AnalysisEvent::apply_numu_CC_selection() {
   bool topo_ok = topological_score_ > TOPO_SCORE_CUT;
   bool cip_ok = cosmic_impact_parameter_ > COSMIC_IP_CUT;
 
-  // TODO: revisit which containment volume to use for PFParticle start
-  // positions. See https://stackoverflow.com/a/2488507 for an explanation
-  // of the use of &= here. Don't worry, it's type-safe since both operands
-  // are bool.
+  // Apply the containment cut to the starting positions of all
+  // reconstructed tracks and showers. Pass this cut by default.
   bool pfp_starts_ok = true;
-  for ( int s = 0; s < num_showers_; ++s ) {
-    float x = shower_startx_->at( s );
-    float y = shower_starty_->at( s );
-    float z = shower_startz_->at( s );
-    pfp_starts_ok &= in_proton_containment_vol( x, y, z );
-  }
-  for ( int t = 0; t < num_tracks_; ++t ) {
-    float x = track_startx_->at( t );
-    float y = track_starty_->at( t );
-    float z = track_startz_->at( t );
+
+  // Loop over each PFParticle in the event
+  for ( int p = 0; p < num_pf_particles_; ++p ) {
+
+    // Only check direct neutrino daughters (generation == 2)
+    unsigned int generation = pfp_generation_->at( p );
+    if ( generation != 2u ) continue;
+
+    // Get the track score for the current PFParticle
+    float tscore = pfp_track_score_->at( p );
+
+    // A PFParticle is considered a track if its score is above the track score
+    // cut. Get the track or shower start coordinates as appropriate.
+    float x, y, z;
+    if ( tscore > TRACK_SCORE_CUT ) {
+      x = track_startx_->at( p );
+      y = track_starty_->at( p );
+      z = track_startz_->at( p );
+    }
+    else {
+      x = shower_startx_->at( p );
+      y = shower_starty_->at( p );
+      z = shower_startz_->at( p );
+    }
+
+    // Verify that the start of the PFParticle lies within the containment
+    // volume.
+    // TODO: revisit which containment volume to use for PFParticle start
+    // positions. See https://stackoverflow.com/a/2488507 for an explanation
+    // of the use of &= here. Don't worry, it's type-safe since both operands
+    // are bool.
     pfp_starts_ok &= in_proton_containment_vol( x, y, z );
   }
 
@@ -799,7 +809,7 @@ void AnalysisEvent::apply_selection() {
   category_ = this->categorize_event();
 
 /////////////
-/////DEBUG
+///////DEBUG
 //  std::cout << "DEBUG: num_pf_particles = " << num_pf_particles_ << '\n';
 //  std::cout << "DEBUG: num_tracks = " << num_tracks_ << '\n';
 //  std::cout << "DEBUG: num_showers = " << num_showers_ << '\n';
@@ -808,12 +818,21 @@ void AnalysisEvent::apply_selection() {
 //    std::cout << "DEBUG:    PFP #" << p << ": generation = " << pfp_generation_->at( p ) << '\n';
 //  }
 //  for ( int t = 0; t < track_pfp_id_->size(); ++t ) {
-//    std::cout << "DEBUG:    Track #" << t << ": track PFP ID = " << track_pfp_id_->at( t ) << '\n';
+//    std::cout << "DEBUG:    Track #" << t << ": track PFP ID = " << track_pfp_id_->at( t ) << ", track length = " << track_length_->at( t ) << '\n';
+//    std::cout << "DEBUG:    track start x = " << track_startx_->at( t ) << '\n';
+//    std::cout << "DEBUG:    track start y = " << track_starty_->at( t ) << '\n';
+//    std::cout << "DEBUG:    track start z = " << track_startz_->at( t ) << '\n';
 //  }
 //  for ( int s = 0; s < shower_pfp_id_->size(); ++s ) {
-//    std::cout << "DEBUG:    Shower #" << s << ": shower PFP ID = " << shower_pfp_id_->at( s ) << '\n';
+//    std::cout << "DEBUG:    Shower #" << s << ": shower PFP ID = "
+//      << shower_pfp_id_->at( s ) << ", start distance = "
+//      << shower_start_distance_->at( s ) << '\n';
+//    std::cout << "DEBUG:    shower start x = " << shower_startx_->at( s ) << '\n';
+//    std::cout << "DEBUG:    shower start y = " << shower_starty_->at( s ) << '\n';
+//    std::cout << "DEBUG:    shower start z = " << shower_startz_->at( s ) << '\n';
+//
 //  }
-////////////
+//////////////
 
   // Set sel_nu_mu_cc_ by applying those criteria
   this->apply_numu_CC_selection();
@@ -822,8 +841,22 @@ void AnalysisEvent::apply_selection() {
   //std::cout << "DEBUG: muon candidate has index " << muon_candidate_idx_ << '\n';
 
   // Fail the shower cut if any showers were reconstructed
-  // TODO: revisit based on track score
-  sel_no_reco_showers_ = ( num_showers_ > 0 );
+  // NOTE: We could do this quicker like this,
+  //   sel_no_reco_showers_ = ( num_showers_ > 0 );
+  // but it might be nice to be able to adjust the track score for this cut.
+  // Thus, we do it the hard way.
+  int reco_shower_count = 0;
+  for ( int p = 0; p < num_pf_particles_; ++p ) {
+
+    // Only check direct neutrino daughters (generation == 2)
+    unsigned int generation = pfp_generation_->at( p );
+    if ( generation != 2u ) continue;
+
+    float tscore = pfp_track_score_->at( p );
+    if ( tscore > TRACK_SCORE_CUT ) ++reco_shower_count;
+  }
+  // Check the shower cut
+  sel_no_reco_showers_ = ( reco_shower_count > 0 );
 
   // Set flags that default to true here
   sel_passed_proton_pid_cut_ = true;
@@ -847,7 +880,7 @@ void AnalysisEvent::apply_selection() {
     else {
 
       float track_score = pfp_track_score_->at( p );
-      if ( track_score < PROTON_TRACK_SCORE_CUT ) continue;
+      if ( track_score <= TRACK_SCORE_CUT ) continue;
 
       // Bad tracks in the searchingfornues TTree can have
       // bogus track lengths. This skips those.
@@ -899,9 +932,9 @@ void AnalysisEvent::apply_selection() {
   }
 
   // Check the range-based reco momentum for the leading proton candidate
-  float lead_p_energy = track_energy_p_->at( lead_p_candidate_idx_ );
-  float range_mom_lead_p = std::sqrt( std::max(0., lead_p_energy*lead_p_energy
-    - PROTON_MASS*PROTON_MASS) );
+  float lead_p_KE = track_kinetic_energy_p_->at( lead_p_candidate_idx_ );
+  float range_mom_lead_p = real_sqrt( lead_p_KE*lead_p_KE
+    + 2.*PROTON_MASS*lead_p_KE );
   if ( range_mom_lead_p >= LEAD_P_MOM_CUT ) {
     sel_lead_p_above_mom_cut_ = true;
   }
@@ -921,13 +954,17 @@ void AnalysisEvent::find_lead_p_candidate() {
   size_t lead_p_index = 0u;
   for ( int p = 0; p < num_pf_particles_; ++p ) {
 
+    // Only check direct neutrino daughters (generation == 2)
+    unsigned int generation = pfp_generation_->at( p );
+    if ( generation != 2u ) continue;
+
     // Skip the muon candidate reco track (this function assumes that it has
     // already been found)
     if ( p == muon_candidate_idx_ ) continue;
 
     // Skip PFParticles that are shower-like (track scores near 0)
     float track_score = pfp_track_score_->at( p );
-    if ( track_score < PROTON_TRACK_SCORE_CUT ) continue;
+    if ( track_score <= TRACK_SCORE_CUT ) continue;
 
     // All non-muon-candidate reco tracks are considered proton candidates
     float track_length = track_length_->at( p );
@@ -1000,8 +1037,8 @@ void AnalysisEvent::compute_observables() {
     float p_dirx = track_dirx_->at( lead_p_candidate_idx_ );
     float p_diry = track_diry_->at( lead_p_candidate_idx_ );
     float p_dirz = track_dirz_->at( lead_p_candidate_idx_ );
-    float Ep = track_energy_p_->at( lead_p_candidate_idx_ );
-    float p_mom = std::sqrt( std::max(0., Ep*Ep - PROTON_MASS*PROTON_MASS) );
+    float KEp = track_kinetic_energy_p_->at( lead_p_candidate_idx_ );
+    float p_mom = real_sqrt( KEp*KEp + 2.*PROTON_MASS*KEp );
 
     p3p = TVector3( p_dirx, p_diry, p_dirz );
     p3p = p3p.Unit() * p_mom;
@@ -1091,6 +1128,9 @@ void analyzer(const std::string& in_file_name,
 }
 
 int main() {
- analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "out.root");
+//analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_CCmuNoPi_overlay_mcc9_v08_00_00_33_all_run1_reco2_reco2.root", "out.root");
+analyzer("/uboone/data/users/gardiner/searchingfornues/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "out.root");
+//analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "out.root");
  return 0;
+
 }
