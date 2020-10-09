@@ -9,8 +9,8 @@ void plot_eff_hist( TTree& stv_tree, const std::string& branch,
 {
   // For computing efficiencies and purities, we need to only use MC events.
   // Unconditionally add this requirement to the cuts defined above.
-  std::string signal = signal_cuts + " && is_mc && genie_ok ";
-  std::string selection = selection_cuts + " && is_mc && genie_ok ";
+  std::string signal = signal_cuts + " && is_mc ";
+  std::string selection = selection_cuts + " && is_mc ";
 
   std::string unit_part;
   if ( !unit_name.empty() ) unit_part = " [" + unit_name + ']';

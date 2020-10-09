@@ -40,7 +40,7 @@ void make_resolution_plot( const std::string& stv_file_name,
 
   std::string plot_invocation = mc_branch + ':' + branch + ">> " + hist_name;
   stv_tree->Draw( plot_invocation.c_str(), "is_mc && mc_is_signal"
-    " && sel_CCNp0pi && genie_ok", "colz" );
+    " && sel_CCNp0pi ", "colz" );
 
   hist->SetDirectory( nullptr );
 

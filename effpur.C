@@ -13,8 +13,8 @@ void compute_eff_pur( TTree& stv_tree, const std::string& signal_cuts,
 {
   // For computing efficiencies and purities, we need to only use MC events.
   // Unconditionally add this requirement to the cuts defined above.
-  std::string signal = signal_cuts + " && is_mc && genie_ok ";
-  std::string selection = selection_cuts + " && is_mc && genie_ok ";
+  std::string signal = signal_cuts + " && is_mc ";
+  std::string selection = selection_cuts + " && is_mc ";
 
   // These are actually integer counts, but since we will use them below to
   // compute ratios, intrinsically cast them to double-precision values for
@@ -52,18 +52,18 @@ void effpur() {
   const std::vector< std::string > selection_defs = { "1",
   "sel_nu_mu_cc",
   "sel_nu_mu_cc && sel_no_reco_showers",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_single_muon_candidate",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_single_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
     " && sel_muon_above_threshold",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_single_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
     " && sel_muon_above_threshold && sel_has_p_candidate",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_single_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained ",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_single_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained && sel_passed_proton_pid_cut",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_single_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained && sel_passed_proton_pid_cut"
     " && sel_lead_p_passed_hits_cut",
