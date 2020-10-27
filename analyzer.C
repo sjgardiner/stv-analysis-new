@@ -118,21 +118,9 @@ class AnalysisEvent {
 
   public:
 
-    AnalysisEvent() {
-      //mc_nu_daughter_pdg_ = new std::vector<int>;
-      //mc_nu_daughter_energy_ = new std::vector<float>;
-      //mc_nu_daughter_px_ = new std::vector<float>;
-      //mc_nu_daughter_py_ = new std::vector<float>;
-      //mc_nu_daughter_pz_ = new std::vector<float>;
-    }
+    AnalysisEvent() {}
 
-    ~AnalysisEvent() {
-      //if ( mc_nu_daughter_pdg_ ) delete mc_nu_daughter_pdg_;
-      //if ( mc_nu_daughter_energy_ ) delete mc_nu_daughter_energy_;
-      //if ( mc_nu_daughter_px_ ) delete mc_nu_daughter_px_;
-      //if ( mc_nu_daughter_py_ ) delete mc_nu_daughter_py_;
-      //if ( mc_nu_daughter_pz_ ) delete mc_nu_daughter_pz_;
-    }
+    ~AnalysisEvent() {}
 
     EventCategory categorize_event();
     void apply_selection();
@@ -163,9 +151,9 @@ class AnalysisEvent {
     std::vector<unsigned int>* pfp_generation_ = nullptr;
     std::vector<float>* pfp_track_score_ = nullptr;
     // Reco PDG code assigned by Pandora
-    std::vector<float>* pfp_reco_pdg_ = nullptr;
+    std::vector<int>* pfp_reco_pdg_ = nullptr;
     // True PDG code found using the backtracker
-    std::vector<float>* pfp_true_pdg_ = nullptr;
+    std::vector<int>* pfp_true_pdg_ = nullptr;
     // Number of hits on the collection plane
     std::vector<int>* pfp_hitsY_ = nullptr;
 
@@ -412,8 +400,8 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "weightTune", &ev.tuned_cv_weight_ );
 }
 
-// Helper function that creates a branch (or just sets a new address)
-// for a variable in the output TTree
+// Helper function that creates a branch (or just sets a new address) for a
+// simple variable in the output TTree
 void set_output_branch_address( TTree& out_tree, const std::string& branch_name,
   void* address, bool create = false, const std::string leaf_spec = "")
 {
@@ -430,25 +418,41 @@ void set_output_branch_address( TTree& out_tree, const std::string& branch_name,
   }
 }
 
+// Helper function template that creates a branch (or just sets a new address)
+// for a pointer to an object in the output TTree
+template <typename T> void set_object_output_branch_address( TTree& out_tree,
+  const std::string& branch_name, T*& address, bool create = false )
+{
+  if ( create ) out_tree.Branch( branch_name.c_str(), &address );
+  else out_tree.SetBranchAddress( branch_name.c_str(), &address );
+}
+
 // Helper function to set branch addresses for the output TTree
 void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   bool create = false)
 {
   // Signal definition flags
   set_output_branch_address( out_tree, "is_mc", &ev.is_mc_, create, "is_mc/O" );
+
   set_output_branch_address( out_tree, "mc_neutrino_is_numu",
     &ev.mc_neutrino_is_numu_, create, "mc_neutrino_is_numu/O" );
+
   set_output_branch_address( out_tree, "mc_vertex_in_FV",
     &ev.mc_vertex_in_FV_, create, "mc_vertex_in_FV/O" );
+
   set_output_branch_address( out_tree, "mc_pmu_above_threshold",
     &ev.mc_pmu_above_threshold_, create, "mc_pmu_above_threshold/O" );
+
   set_output_branch_address( out_tree, "mc_has_p_above_threshold",
     &ev.mc_has_p_above_threshold_, create, "mc_has_p_above_threshold/O" );
+
   set_output_branch_address( out_tree, "mc_no_fs_pi0",
     &ev.mc_no_fs_pi0_, create, "mc_no_fs_pi0/O" );
+
   set_output_branch_address( out_tree, "mc_no_charged_pi_above_threshold",
     &ev.mc_no_charged_pi_above_threshold_, create,
     "mc_no_charged_pi_above_threshold/O" );
+
   set_output_branch_address( out_tree, "mc_is_signal",
     &ev.mc_is_signal_, create, "mc_is_signal/O" );
 
@@ -459,77 +463,227 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   // Event weights
   set_output_branch_address( out_tree, "spline_weight",
     &ev.spline_weight_, create, "spline_weight/F" );
+
   set_output_branch_address( out_tree, "tuned_cv_weight",
     &ev.tuned_cv_weight_, create, "tuned_cv_weight/F" );
 
   // CCNp0pi selection criteria
-  set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_, create,
-    "sel_nu_mu_cc/O" );
+  set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
+    create, "sel_nu_mu_cc/O" );
 
   set_output_branch_address( out_tree, "sel_no_reco_showers",
     &ev.sel_no_reco_showers_, create, "sel_no_reco_showers/O" );
+
   set_output_branch_address( out_tree, "sel_has_muon_candidate",
     &ev.sel_has_muon_candidate_, create,
     "sel_has_muon_candidate/O" );
+
   set_output_branch_address( out_tree, "sel_muon_above_threshold",
     &ev.sel_muon_above_threshold_, create, "sel_muon_above_threshold/O" );
+
   set_output_branch_address( out_tree, "sel_has_p_candidate",
     &ev.sel_has_p_candidate_, create, "sel_has_p_candidate/O" );
+
   set_output_branch_address( out_tree, "sel_passed_proton_pid_cut",
     &ev.sel_passed_proton_pid_cut_, create, "sel_passed_proton_pid_cut/O" );
+
   set_output_branch_address( out_tree, "sel_protons_contained",
     &ev.sel_protons_contained_, create, "sel_protons_contained/O" );
+
   set_output_branch_address( out_tree, "sel_lead_p_passed_hits_cut",
     &ev.sel_lead_p_passed_hits_cut_, create, "sel_lead_p_passed_hits_cut/O" );
+
   set_output_branch_address( out_tree, "sel_lead_p_above_mom_cut",
     &ev.sel_lead_p_above_mom_cut_, create, "sel_lead_p_above_mom_cut/O" );
+
   set_output_branch_address( out_tree, "sel_CCNp0pi",
     &ev.sel_CCNp0pi_, create, "sel_CCNp0pi/O" );
 
   // Reco 3-momenta (muon, leading proton)
-  // Note: these branches contain TVector3 objects
-  if ( create ) {
-    // Reco
-    out_tree.Branch( "p3_mu", &ev.p3_mu_ptr_ );
-    out_tree.Branch( "p3_lead_p", &ev.p3_lead_p_ptr_ );
+  set_object_output_branch_address< TVector3 >( out_tree,
+    "p3_mu", ev.p3_mu_ptr_, create );
 
-    // True
-    out_tree.Branch( "mc_p3_mu", &ev.mc_p3_mu_ptr_ );
-    out_tree.Branch( "mc_p3_lead_p", &ev.mc_p3_lead_p_ptr_ );
-  }
-  else {
-    // Reco
-    out_tree.SetBranchAddress( "p3_mu", &ev.p3_mu_ptr_ );
-    out_tree.SetBranchAddress( "p3_lead_p", &ev.p3_lead_p_ptr_ );
+  set_object_output_branch_address< TVector3 >( out_tree,
+    "p3_lead_p", ev.p3_lead_p_ptr_, create );
 
-    // True
-    out_tree.SetBranchAddress( "mc_p3_mu", &ev.mc_p3_mu_ptr_ );
-    out_tree.SetBranchAddress( "mc_p3_lead_p", &ev.mc_p3_lead_p_ptr_ );
-  }
+  // True 3-momenta (muon, leading proton)
+  set_object_output_branch_address< TVector3 >( out_tree,
+    "mc_p3_mu", ev.mc_p3_mu_ptr_, create );
+
+  set_object_output_branch_address< TVector3 >( out_tree,
+    "mc_p3_lead_p", ev.mc_p3_lead_p_ptr_, create );
 
   // Reco STVs
   set_output_branch_address( out_tree, "delta_pT",
     &ev.delta_pT_, create, "delta_pT/F" );
+
   set_output_branch_address( out_tree, "delta_phiT",
     &ev.delta_phiT_, create, "delta_phiT/F" );
+
   set_output_branch_address( out_tree, "delta_alphaT",
     &ev.delta_alphaT_, create, "delta_alphaT/F" );
+
   set_output_branch_address( out_tree, "delta_pL",
     &ev.delta_pL_, create, "delta_pL/F" );
+
   set_output_branch_address( out_tree, "pn",
     &ev.pn_, create, "pn/F" );
 
   // MC STVs (only filled for signal events)
   set_output_branch_address( out_tree, "mc_delta_pT",
     &ev.mc_delta_pT_, create, "mc_delta_pT/F" );
+
   set_output_branch_address( out_tree, "mc_delta_phiT",
     &ev.mc_delta_phiT_, create, "mc_delta_phiT/F" );
+
   set_output_branch_address( out_tree, "mc_delta_alphaT",
     &ev.mc_delta_alphaT_, create, "mc_delta_alphaT/F" );
+
   set_output_branch_address( out_tree, "mc_delta_pL",
     &ev.mc_delta_pL_, create, "mc_delta_pL/F" );
+
   set_output_branch_address( out_tree, "mc_pn",
     &ev.mc_pn_, create, "mc_pn/F" );
+
+  // *** Branches copied directly from the input ***
+
+  // Cosmic rejection parameters for numu CC inclusive selection
+  set_output_branch_address( out_tree, "topological_score",
+    &ev.topological_score_, create, "topological_score/F" );
+
+  set_output_branch_address( out_tree, "CosmicIP",
+    &ev.cosmic_impact_parameter_, create, "CosmicIP/F" );
+
+  // Reconstructed neutrino vertex position
+  set_output_branch_address( out_tree, "reco_nu_vtx_x",
+    &ev.nu_vx_, create, "reco_nu_vtx_x/F" );
+
+  set_output_branch_address( out_tree, "reco_nu_vtx_y",
+    &ev.nu_vy_, create, "reco_nu_vtx_y/F" );
+
+  set_output_branch_address( out_tree, "reco_nu_vtx_z",
+    &ev.nu_vz_, create, "reco_nu_vtx_z/F" );
+
+  // MC truth information for the neutrino
+  set_output_branch_address( out_tree, "mc_nu_pdg", &ev.mc_nu_pdg_,
+    create, "mc_nu_pdg/I" );
+
+  set_output_branch_address( out_tree, "mc_nu_vtx_x", &ev.mc_nu_vx_,
+    create, "mc_nu_vtx_x/F" );
+
+  set_output_branch_address( out_tree, "mc_nu_vtx_y", &ev.mc_nu_vy_,
+    create, "mc_nu_vtx_y/F" );
+
+  set_output_branch_address( out_tree, "mc_nu_vtx_z", &ev.mc_nu_vz_,
+    create, "mc_nu_vtx_z/F" );
+
+  set_output_branch_address( out_tree, "mc_nu_energy", &ev.mc_nu_energy_,
+    create, "mc_nu_energy/F" );
+
+  set_output_branch_address( out_tree, "mc_ccnc", &ev.mc_nu_ccnc_,
+    create, "mc_ccnc/I" );
+
+  set_output_branch_address( out_tree, "mc_interaction",
+    &ev.mc_nu_interaction_type_, create, "mc_interaction/I" );
+
+  // PFParticle properties
+  set_object_output_branch_address< std::vector<unsigned int> >( out_tree,
+    "pfp_generation_v", ev.pfp_generation_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_score_v", ev.pfp_track_score_, create );
+
+  set_object_output_branch_address< std::vector<int> >( out_tree,
+    "pfpdg", ev.pfp_reco_pdg_, create );
+
+  set_object_output_branch_address< std::vector<int> >( out_tree,
+    "backtracked_pdg", ev.pfp_true_pdg_, create );
+
+  set_object_output_branch_address< std::vector<int> >( out_tree,
+    "pfnplanehits_Y", ev.pfp_hitsY_, create );
+
+  // Shower properties
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "shr_start_x_v", ev.shower_startx_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "shr_start_y_v", ev.shower_starty_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "shr_start_z_v", ev.shower_startz_, create );
+
+  // Shower start distance from reco neutrino vertex (pre-calculated for
+  // convenience)
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "shr_dist_v", ev.shower_start_distance_, create );
+
+  // Track properties
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_len_v", ev.track_length_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_start_x_v", ev.track_startx_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_start_y_v", ev.track_starty_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_start_z_v", ev.track_startz_, create );
+
+  // Track start distance from reco neutrino vertex (pre-calculated for
+  // convenience)
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_distance_v", ev.track_start_distance_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_end_x_v", ev.track_endx_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_end_y_v", ev.track_endy_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_end_z_v", ev.track_endz_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_dir_x_v", ev.track_dirx_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_dir_y_v", ev.track_diry_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_dir_z_v", ev.track_dirz_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_energy_proton_v", ev.track_kinetic_energy_p_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_range_muon_mom_v", ev.track_range_mom_mu_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_mcs_muon_mom_v", ev.track_mcs_mom_mu_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_pid_chipr_v", ev.track_chi2_proton_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_llr_pid_score_v", ev.track_llr_pid_score_, create );
+
+  // MC truth information for the final-state primary particles
+  set_object_output_branch_address< std::vector<int> >( out_tree, "mc_pdg",
+    ev.mc_nu_daughter_pdg_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree, "mc_E",
+    ev.mc_nu_daughter_energy_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree, "mc_px",
+    ev.mc_nu_daughter_px_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree, "mc_py",
+    ev.mc_nu_daughter_py_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree, "mc_pz",
+    ev.mc_nu_daughter_pz_, create );
+
 }
 
 void analyze(const std::vector<std::string>& in_file_names,
