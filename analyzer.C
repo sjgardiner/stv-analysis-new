@@ -375,15 +375,15 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   // Track properties
   etree.SetBranchAddress( "trk_pfp_id_v", &ev.track_pfp_id_ );
   etree.SetBranchAddress( "trk_len_v", &ev.track_length_ );
-  etree.SetBranchAddress( "trk_start_x_v", &ev.track_startx_ );
-  etree.SetBranchAddress( "trk_start_y_v", &ev.track_starty_ );
-  etree.SetBranchAddress( "trk_start_z_v", &ev.track_startz_ );
+  etree.SetBranchAddress( "trk_sce_start_x_v", &ev.track_startx_ );
+  etree.SetBranchAddress( "trk_sce_start_y_v", &ev.track_starty_ );
+  etree.SetBranchAddress( "trk_sce_start_z_v", &ev.track_startz_ );
   // Track start distance from reco neutrino vertex (pre-calculated for
   // convenience)
   etree.SetBranchAddress( "trk_distance_v", &ev.track_start_distance_ );
-  etree.SetBranchAddress( "trk_end_x_v", &ev.track_endx_ );
-  etree.SetBranchAddress( "trk_end_y_v", &ev.track_endy_ );
-  etree.SetBranchAddress( "trk_end_z_v", &ev.track_endz_ );
+  etree.SetBranchAddress( "trk_sce_end_x_v", &ev.track_endx_ );
+  etree.SetBranchAddress( "trk_sce_end_y_v", &ev.track_endy_ );
+  etree.SetBranchAddress( "trk_sce_end_z_v", &ev.track_endz_ );
   etree.SetBranchAddress( "trk_dir_x_v", &ev.track_dirx_ );
   etree.SetBranchAddress( "trk_dir_y_v", &ev.track_diry_ );
   etree.SetBranchAddress( "trk_dir_z_v", &ev.track_dirz_ );
@@ -660,13 +660,13 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     "trk_len_v", ev.track_length_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_start_x_v", ev.track_startx_, create );
+    "trk_sce_start_x_v", ev.track_startx_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_start_y_v", ev.track_starty_, create );
+    "trk_sce_start_y_v", ev.track_starty_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_start_z_v", ev.track_startz_, create );
+    "trk_sce_start_z_v", ev.track_startz_, create );
 
   // Track start distance from reco neutrino vertex (pre-calculated for
   // convenience)
@@ -674,13 +674,13 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     "trk_distance_v", ev.track_start_distance_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_end_x_v", ev.track_endx_, create );
+    "trk_sce_end_x_v", ev.track_endx_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_end_y_v", ev.track_endy_, create );
+    "trk_sce_end_y_v", ev.track_endy_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_end_z_v", ev.track_endz_, create );
+    "trk_sce_end_z_v", ev.track_endz_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
     "trk_dir_x_v", ev.track_dirx_, create );
