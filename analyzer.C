@@ -134,6 +134,10 @@ class AnalysisEvent {
     float topological_score_ = BOGUS;
     float cosmic_impact_parameter_ = BOGUS;
 
+    // Backtracked purity and completeness of hits (MC only)
+    float nu_completeness_from_pfp_ = BOGUS;
+    float nu_purity_from_pfp_ = BOGUS;
+
     // Reco PDG code of the neutrino candidate
     int nu_pdg_ = BOGUS_INT;
 
@@ -401,6 +405,16 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
     etree.SetBranchAddress( "weightSpline", &ev.spline_weight_ );
     etree.SetBranchAddress( "weightTune", &ev.tuned_cv_weight_ );
   }
+
+  // Purity and completeness of the backtracked hits in the neutrino slice
+  bool has_pfp_backtracked_purity = ( etree.GetBranch("nu_purity_from_pfp")
+    != nullptr );
+  if ( has_pfp_backtracked_purity ) {
+    etree.SetBranchAddress( "nu_completeness_from_pfp",
+      &ev.nu_completeness_from_pfp_ );
+    etree.SetBranchAddress( "nu_purity_from_pfp", &ev.nu_purity_from_pfp_ );
+  }
+
 }
 
 // Helper function that creates a branch (or just sets a new address) for a
@@ -469,6 +483,13 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
 
   set_output_branch_address( out_tree, "tuned_cv_weight",
     &ev.tuned_cv_weight_, create, "tuned_cv_weight/F" );
+
+  // Backtracked neutrino purity and completeness
+  set_output_branch_address( out_tree, "nu_completeness_from_pfp",
+    &ev.nu_completeness_from_pfp_, create, "nu_completeness_from_pfp/F" );
+
+  set_output_branch_address( out_tree, "nu_purity_from_pfp",
+    &ev.nu_purity_from_pfp_, create, "nu_purity_from_pfp/F" );
 
   // CCNp0pi selection criteria
   set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
