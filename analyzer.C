@@ -1324,9 +1324,7 @@ void analyzer(const std::string& in_file_name,
 }
 
 int main() {
-//analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_CCmuNoPi_overlay_mcc9_v08_00_00_33_all_run1_reco2_reco2.root", "out.root");
-analyzer("/uboone/data/users/gardiner/searchingfornues/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "/uboone/data/users/gardiner/searchingfornues/mytemp_out.root");
-//analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "out.root");
- return 0;
-
+analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "out.root");
+//analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root", "out.root");
+return 0;
 }

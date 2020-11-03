@@ -11,15 +11,15 @@ void reproc() {
     "off_data_stv.root");
 
   // Process the numu overlay MC
-  analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root",
+  analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root",
     "numu_overlay_stv.root");
 
   // Process the nue overlay MC
-  analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root",
+  analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root",
     "nue_overlay_stv.root");
 
   // Process the dirt MC
-  analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root",
+  analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root",
     "dirt_stv.root");
 
 }
