@@ -258,9 +258,14 @@ class AnalysisEvent {
     TVector3 p3_mu_;
     TVector3 p3_lead_p_;
 
+    // Reconstructed 3-momenta for all proton candidates,
+    // ordered from highest to lowest by magnitude
+    std::vector< TVector3 > p3_p_vec_;
+
     // Dummy pointers to assist in setting branch addresses
     TVector3* p3_mu_ptr_ = &p3_mu_;
     TVector3* p3_lead_p_ptr_ = &p3_lead_p_;
+    std::vector< TVector3 >* p3_p_vec_ptr_ = &p3_p_vec_;
 
     // Reco STVs
     float delta_pT_ = BOGUS;
@@ -277,9 +282,14 @@ class AnalysisEvent {
     TVector3 mc_p3_mu_;
     TVector3 mc_p3_lead_p_;
 
+    // True 3-momenta for all true MC protons, ordered from highest to lowest
+    // by magnitude
+    std::vector< TVector3 > mc_p3_p_vec_;
+
     // Dummy pointers to assist in setting branch addresses
     TVector3* mc_p3_mu_ptr_ = &mc_p3_mu_;
     TVector3* mc_p3_lead_p_ptr_ = &mc_p3_lead_p_;
+    std::vector< TVector3 >* mc_p3_p_vec_ptr_ = &mc_p3_p_vec_;
 
     // MC truth STVs
     float mc_delta_pT_ = BOGUS;
@@ -528,12 +538,21 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_object_output_branch_address< TVector3 >( out_tree,
     "p3_lead_p", ev.p3_lead_p_ptr_, create );
 
+  // Reco 3-momenta (all proton candidates, ordered from highest to lowest
+  // magnitude)
+  set_object_output_branch_address< std::vector<TVector3> >( out_tree,
+    "p3_p_vec", ev.p3_p_vec_ptr_, create );
+
   // True 3-momenta (muon, leading proton)
   set_object_output_branch_address< TVector3 >( out_tree,
     "mc_p3_mu", ev.mc_p3_mu_ptr_, create );
 
   set_object_output_branch_address< TVector3 >( out_tree,
     "mc_p3_lead_p", ev.mc_p3_lead_p_ptr_, create );
+
+  // True 3-momenta (all protons, ordered from highest to lowest magnitude)
+  set_object_output_branch_address< std::vector<TVector3> >( out_tree,
+    "mc_p3_p_vec", ev.mc_p3_p_vec_ptr_, create );
 
   // Reco STVs
   set_output_branch_address( out_tree, "delta_pT",
@@ -803,6 +822,8 @@ void analyze(const std::vector<std::string>& in_file_names,
   }
 
   out_tree->Write();
+  out_file->Close();
+  delete out_file;
 }
 
 // Sets the signal definition flags and returns an event category based on MC
@@ -993,37 +1014,10 @@ void AnalysisEvent::apply_selection() {
   // keeps the category as kUnknown for real data.
   category_ = this->categorize_event();
 
-/////////////
-///////DEBUG
-//  std::cout << "DEBUG: num_pf_particles = " << num_pf_particles_ << '\n';
-//  std::cout << "DEBUG: num_tracks = " << num_tracks_ << '\n';
-//  std::cout << "DEBUG: num_showers = " << num_showers_ << '\n';
-//  for ( int p = 0; p < pfp_track_score_->size(); ++p ) {
-//    std::cout << "DEBUG:    PFP #" << p << ": track score = " << pfp_track_score_->at( p ) << '\n';
-//    std::cout << "DEBUG:    PFP #" << p << ": generation = " << pfp_generation_->at( p ) << '\n';
-//  }
-//  for ( int t = 0; t < track_pfp_id_->size(); ++t ) {
-//    std::cout << "DEBUG:    Track #" << t << ": track PFP ID = " << track_pfp_id_->at( t ) << ", track length = " << track_length_->at( t ) << '\n';
-//    std::cout << "DEBUG:    track start x = " << track_startx_->at( t ) << '\n';
-//    std::cout << "DEBUG:    track start y = " << track_starty_->at( t ) << '\n';
-//    std::cout << "DEBUG:    track start z = " << track_startz_->at( t ) << '\n';
-//  }
-//  for ( int s = 0; s < shower_pfp_id_->size(); ++s ) {
-//    std::cout << "DEBUG:    Shower #" << s << ": shower PFP ID = "
-//      << shower_pfp_id_->at( s ) << ", start distance = "
-//      << shower_start_distance_->at( s ) << '\n';
-//    std::cout << "DEBUG:    shower start x = " << shower_startx_->at( s ) << '\n';
-//    std::cout << "DEBUG:    shower start y = " << shower_starty_->at( s ) << '\n';
-//    std::cout << "DEBUG:    shower start z = " << shower_startz_->at( s ) << '\n';
-//
-//  }
-//////////////
-
   // Set sel_nu_mu_cc_ by applying those criteria
   this->apply_numu_CC_selection();
 
   this->find_muon_candidate();
-  //std::cout << "DEBUG: muon candidate has index " << muon_candidate_idx_ << '\n';
 
   // Fail the shower cut if any showers were reconstructed
   // NOTE: We could do this quicker like this,
@@ -1106,8 +1100,6 @@ void AnalysisEvent::apply_selection() {
   // search for it above, but doing it here makes the code more readable (with
   // likely negligible impact on performance)
   this->find_lead_p_candidate();
-
-  //std::cout << "DEBUG: lead proton has index " << lead_p_candidate_idx_ << '\n';
 
   // Check whether the leading proton candidate has the required minimum number
   // of collection plane hits
@@ -1229,6 +1221,35 @@ void AnalysisEvent::compute_observables() {
     p3p = p3p.Unit() * p_mom;
   }
 
+  // Reset the vector of reconstructed proton candidate 3-momenta
+  p3_p_vec_.clear();
+
+  // Set the reco 3-momenta of all proton candidates (i.e., all tracks except
+  // the muon candidate) assuming we found both a muon candidate and at least
+  // one proton candidate.
+  if ( muon && lead_p ) {
+    for ( int p = 0; p < num_pf_particles_; ++p ) {
+      // Skip the muon candidate
+      if ( p == muon_candidate_idx_ ) continue;
+      float p_dirx = track_dirx_->at( p );
+      float p_diry = track_diry_->at( p );
+      float p_dirz = track_dirz_->at( p );
+      float KEp = track_kinetic_energy_p_->at( p );
+      float p_mom = real_sqrt( KEp*KEp + 2.*PROTON_MASS*KEp );
+
+      TVector3 p3_temp( p_dirx, p_diry, p_dirz );
+      p3_temp = p3p.Unit() * p_mom;
+
+      p3_p_vec_.push_back( p3_temp );
+    }
+
+    // TODO: reduce code duplication by just getting the leading proton
+    // 3-momentum from this sorted vector
+    // Sort the reco proton 3-momenta in order from highest to lowest magnitude
+    std::sort( p3_p_vec_.begin(), p3_p_vec_.end(), [](const TVector3& a,
+      const TVector3& b) -> bool { return a.Mag() > b.Mag(); } );
+  }
+
   // Compute reco STVs if we have both a muon candidate
   // and a leading proton candidate in the event
   if ( muon && lead_p ) {
@@ -1269,6 +1290,9 @@ void AnalysisEvent::compute_mc_truth_observables() {
     }
   }
 
+  // Reset the vector of true MC proton 3-momenta
+  mc_p3_p_vec_.clear();
+
   // Set the true 3-momentum of the leading proton (if there is one)
   float max_mom = LOW_FLOAT;
   for ( int p = 0; p < num_mc_daughters; ++p ) {
@@ -1280,6 +1304,8 @@ void AnalysisEvent::compute_mc_truth_observables() {
       float pz = mc_nu_daughter_pz_->at( p );
       TVector3 temp_p3 = TVector3( px, py, pz );
 
+      mc_p3_p_vec_.push_back( temp_p3 );
+
       float mom = temp_p3.Mag();
       if ( mom > max_mom ) {
         max_mom = mom;
@@ -1287,6 +1313,12 @@ void AnalysisEvent::compute_mc_truth_observables() {
       }
     }
   }
+
+  // TODO: reduce code duplication by just getting the leading proton
+  // 3-momentum from this sorted vector
+  // Sort the true proton 3-momenta in order from highest to lowest magnitude
+  std::sort( mc_p3_p_vec_.begin(), mc_p3_p_vec_.end(), [](const TVector3& a,
+    const TVector3& b) -> bool { return a.Mag() > b.Mag(); } );
 
   // If the event contains a leading proton, then set the 3-momentum
   // accordingly
