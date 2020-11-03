@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 4 September 2020
+// Updated 3 November 2020
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -17,6 +17,9 @@
 #include "TParameter.h"
 #include "TTree.h"
 #include "TVector3.h"
+
+// STV analysis includes
+#include "EventCategory.hh"
 
 // Helper function that avoids NaNs when taking square roots of negative
 // numbers
@@ -40,7 +43,7 @@ constexpr int NEUTRAL_CURRENT = 1;
 constexpr int ELECTRON_NEUTRINO = 12;
 constexpr int MUON = 13;
 constexpr int MUON_NEUTRINO = 14;
-constexpr int TAU_ANTINEUTRINO = -16;
+constexpr int TAU_NEUTRINO = 16;
 constexpr int PROTON = 2212;
 constexpr int PI_ZERO = 111;
 constexpr int PI_PLUS = 211;
@@ -91,26 +94,6 @@ constexpr double PROTON_MASS = 0.93827208; // GeV
 constexpr double BINDING_ENERGY = 0.0295; // 40Ar, GeV
 constexpr double MUON_MASS = 0.10565837; // GeV
 constexpr double PI_PLUS_MASS = 0.13957000; // GeV
-
-// Enum used to label event categories of interest for analysis plots
-enum EventCategory {
-
-  kUnknown = 0,
-  kSignalCCQE = 1,
-  kSignalCCMEC = 2,
-  kSignalCCRES = 3,
-  kSignalOther = 4,
-  kOOFV = 5, // True neutrino vertex is outside of fiducial volume
-  kNC = 6,
-  // True numu CC event with at least one final-state pion above threshold
-  kNuMuCCNpi = 7,
-  // True nue CC event
-  kNuECC = 8,
-  kOther = 9
-  // True numu CC event with zero protons above threshold
-  //kNuMuCC0p,
-
-};
 
 // Class used to hold information from the searchingfornues TTree branches and
 // process it for our analysis
@@ -287,7 +270,8 @@ class AnalysisEvent {
     float pn_ = BOGUS;
 
     // ** MC truth observables **
-    // These are loaded for signal events whenever we have a GHEP event to use
+    // These are loaded for signal events whenever we have MC information
+    // to use
 
     // 3-momenta
     TVector3 mc_p3_mu_;
@@ -824,12 +808,12 @@ void analyze(const std::vector<std::string>& in_file_names,
 // Sets the signal definition flags and returns an event category based on MC
 // truth information
 EventCategory AnalysisEvent::categorize_event() {
-  // TODO: switch to using GHEP truth information?
-  // At least verify against it if it is available
 
-  // Real data has a bogus true neutrino PDG code that
-  // is below the minimum possible value (-16 <--> nutaubar)
-  is_mc_ = ( mc_nu_pdg_ >= TAU_ANTINEUTRINO );
+  // Real data has a bogus true neutrino PDG code that is not one of the
+  // allowed values (±12, ±14, ±16)
+  int abs_mc_nu_pdg = std::abs( mc_nu_pdg_ );
+  is_mc_ = ( abs_mc_nu_pdg == ELECTRON_NEUTRINO
+    || abs_mc_nu_pdg == MUON_NEUTRINO || abs_mc_nu_pdg == TAU_NEUTRINO );
   if ( !is_mc_ ) return kUnknown;
 
   mc_vertex_in_FV_ = mc_vertex_inside_FV();
@@ -850,7 +834,9 @@ EventCategory AnalysisEvent::categorize_event() {
     else return kOther;
   }
 
-  // Set flags that default to true here
+  // Set flags to their default values here
+  mc_pmu_above_threshold_ = false;
+  mc_has_p_above_threshold_ = false;
   mc_no_fs_pi0_ = true;
   mc_no_charged_pi_above_threshold_ = true;
 
@@ -894,10 +880,13 @@ EventCategory AnalysisEvent::categorize_event() {
     //else if ( mc_nu_interaction_type_ == 3 ) // COH
     else return kSignalOther;
   }
-  else if ( mc_no_fs_pi0_ || mc_no_charged_pi_above_threshold_ ) {
+  else if ( !mc_no_fs_pi0_ || !mc_no_charged_pi_above_threshold_ ) {
     return kNuMuCCNpi;
   }
-  else return kOther;
+  else if ( !mc_has_p_above_threshold_ ) {
+    return kNuMuCC0pi0p;
+  }
+  else return kNuMuCCOther;
 }
 
 void AnalysisEvent::apply_numu_CC_selection() {
