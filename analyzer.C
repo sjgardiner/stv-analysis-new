@@ -396,8 +396,11 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "mc_pz", &ev.mc_nu_daughter_pz_ );
 
   // GENIE weights
-  etree.SetBranchAddress( "weightSpline", &ev.spline_weight_ );
-  etree.SetBranchAddress( "weightTune", &ev.tuned_cv_weight_ );
+  bool has_mc_weights = ( etree.GetBranch("weightSpline") != nullptr );
+  if ( has_mc_weights ) {
+    etree.SetBranchAddress( "weightSpline", &ev.spline_weight_ );
+    etree.SetBranchAddress( "weightTune", &ev.tuned_cv_weight_ );
+  }
 }
 
 // Helper function that creates a branch (or just sets a new address) for a
@@ -706,13 +709,17 @@ void analyze(const std::vector<std::string>& in_file_names,
   TTree* out_tree = new TTree( "stv_tree", "STV analysis tree" );
 
   // Get the total POT from the subruns TTree. Save it in the output
-  // TFile as a TParameter<float>
+  // TFile as a TParameter<float>. Real data doesn't have this TTree,
+  // so check that it exists first.
   float pot;
   float summed_pot = 0.;
-  subruns_ch.SetBranchAddress( "pot", &pot );
-  for ( int se = 0; se < subruns_ch.GetEntries(); ++se ) {
-    subruns_ch.GetEntry( se );
-    summed_pot += pot;
+  bool has_pot_branch = ( subruns_ch.GetBranch("pot") != nullptr );
+  if ( has_pot_branch ) {
+    subruns_ch.SetBranchAddress( "pot", &pot );
+    for ( int se = 0; se < subruns_ch.GetEntries(); ++se ) {
+      subruns_ch.GetEntry( se );
+      summed_pot += pot;
+    }
   }
 
   TParameter<float>* summed_pot_param = new TParameter<float>( "summed_pot",

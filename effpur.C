@@ -93,6 +93,7 @@ void effpur() {
   }
 
   TCanvas* c1 = new TCanvas;
+  eff_graph->SetTitle( "CC0#piNp selection; cut number; efficiency or purity" );
   eff_graph->SetLineColor(kBlue);
   eff_graph->SetMarkerColor(kBlue);
   eff_graph->SetLineWidth(3);
