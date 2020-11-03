@@ -141,7 +141,12 @@ class AnalysisEvent {
     // Reco PDG code of the neutrino candidate
     int nu_pdg_ = BOGUS_INT;
 
-    // Reco neutrino vertex coordinates (cm)
+    // Number of neutrino slices identified by the SliceID. Allowed values
+    // are zero or one.
+    int nslice_ = BOGUS_INT;
+
+    // Reco neutrino vertex coordinates (cm). Space charge corrections have
+    // been applied for these.
     float nu_vx_ = BOGUS;
     float nu_vy_ = BOGUS;
     float nu_vz_ = BOGUS;
@@ -331,15 +336,20 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   // candidate)
   etree.SetBranchAddress( "slpdg", &ev.nu_pdg_ );
 
+  // Number of neutrino slices identified by the SliceID. Allowed values
+  // are zero or one.
+  etree.SetBranchAddress( "nslice", &ev.nslice_ );
+
   // Topological score
   etree.SetBranchAddress( "topological_score", &ev.topological_score_ );
   etree.SetBranchAddress( "CosmicIP", &ev.cosmic_impact_parameter_ );
   //etree.SetBranchAddress( "CosmicIPAll3D", &ev.CosmicIPAll3D_ );
 
-  // Reconstructed neutrino vertex position
-  etree.SetBranchAddress( "reco_nu_vtx_x", &ev.nu_vx_ );
-  etree.SetBranchAddress( "reco_nu_vtx_y", &ev.nu_vy_ );
-  etree.SetBranchAddress( "reco_nu_vtx_z", &ev.nu_vz_ );
+  // Reconstructed neutrino vertex position (with corrections for
+  // space charge applied)
+  etree.SetBranchAddress( "reco_nu_vtx_sce_x", &ev.nu_vx_ );
+  etree.SetBranchAddress( "reco_nu_vtx_sce_y", &ev.nu_vy_ );
+  etree.SetBranchAddress( "reco_nu_vtx_sce_z", &ev.nu_vz_ );
 
   // Reconstructed object counts
   etree.SetBranchAddress( "n_pfps", &ev.num_pf_particles_ );
@@ -491,6 +501,10 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "nu_purity_from_pfp",
     &ev.nu_purity_from_pfp_, create, "nu_purity_from_pfp/F" );
 
+  // Number of neutrino slices identified by the SliceID
+  set_output_branch_address( out_tree, "nslice", &ev.nslice_, create,
+    "nslice/I" );
+
   // CCNp0pi selection criteria
   set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
     create, "sel_nu_mu_cc/O" );
@@ -579,14 +593,14 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     &ev.cosmic_impact_parameter_, create, "CosmicIP/F" );
 
   // Reconstructed neutrino vertex position
-  set_output_branch_address( out_tree, "reco_nu_vtx_x",
-    &ev.nu_vx_, create, "reco_nu_vtx_x/F" );
+  set_output_branch_address( out_tree, "reco_nu_vtx_sce_x",
+    &ev.nu_vx_, create, "reco_nu_vtx_sce_x/F" );
 
-  set_output_branch_address( out_tree, "reco_nu_vtx_y",
-    &ev.nu_vy_, create, "reco_nu_vtx_y/F" );
+  set_output_branch_address( out_tree, "reco_nu_vtx_sce_y",
+    &ev.nu_vy_, create, "reco_nu_vtx_sce_y/F" );
 
-  set_output_branch_address( out_tree, "reco_nu_vtx_z",
-    &ev.nu_vz_, create, "reco_nu_vtx_z/F" );
+  set_output_branch_address( out_tree, "reco_nu_vtx_sce_z",
+    &ev.nu_vz_, create, "reco_nu_vtx_sce_z/F" );
 
   // MC truth information for the neutrino
   set_output_branch_address( out_tree, "mc_nu_pdg", &ev.mc_nu_pdg_,
