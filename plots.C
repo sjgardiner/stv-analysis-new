@@ -150,8 +150,10 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   stacked_hist->Add( off_data_hist );
   stat_err_hist->Add( off_data_hist );
 
-  for ( const auto& pair : mc_hists ) {
-    auto* hist = pair.second;
+  for ( auto citer = mc_hists.crbegin(); citer != mc_hists.crend();
+    ++citer )
+  {
+    TH1D* hist = citer->second;
     stacked_hist->Add( hist );
     stat_err_hist->Add( hist );
   }
