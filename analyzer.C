@@ -20,6 +20,7 @@
 
 // STV analysis includes
 #include "EventCategory.hh"
+#include "FiducialVolume.hh"
 
 // Helper function that avoids NaNs when taking square roots of negative
 // numbers
@@ -64,18 +65,6 @@ constexpr float MUON_LENGTH_CUT = 10.; // cm
 constexpr float MUON_PID_CUT = 0.2;
 
 constexpr float TRACK_SCORE_CUT = 0.5;
-
-// Boundaries of the neutrino vertex fiducial volume (cm)
-// This is handled the same way for reco (in the NuCCanalyzer)
-// and in MC (herein)
-double FV_X_MIN =   10.;
-double FV_X_MAX =  246.35;
-
-double FV_Y_MIN = -106.5;
-double FV_Y_MAX =  106.5;
-
-double FV_Z_MIN =   10.;
-double FV_Z_MAX =  968.8;
 
 // Boundaries of the proton containment volume (used in reco only) in cm
 double PCV_X_MIN =   10.;
@@ -297,13 +286,6 @@ class AnalysisEvent {
     float mc_delta_alphaT_ = BOGUS;
     float mc_delta_pL_ = BOGUS;
     float mc_pn_ = BOGUS;
-
-    bool point_inside_FV( float x, float y, float z ) {
-      bool x_inside_FV = ( FV_X_MIN < x ) && ( x < FV_X_MAX );
-      bool y_inside_FV = ( FV_Y_MIN < y ) && ( y < FV_Y_MAX );
-      bool z_inside_FV = ( FV_Z_MIN < z ) && ( z < FV_Z_MAX );
-      return ( x_inside_FV && y_inside_FV && z_inside_FV );
-    }
 
     bool reco_vertex_inside_FV() {
       return point_inside_FV( nu_vx_, nu_vy_, nu_vz_ );
