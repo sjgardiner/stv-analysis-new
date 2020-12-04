@@ -130,6 +130,9 @@ class AnalysisEvent {
 
     // PFParticle properties
     std::vector<unsigned int>* pfp_generation_ = nullptr;
+    std::vector<unsigned int>* pfp_trk_daughters_count_ = nullptr;
+    std::vector<unsigned int>* pfp_shr_daughters_count_ = nullptr;
+
     std::vector<float>* pfp_track_score_ = nullptr;
 
     // Reco PDG code assigned by Pandora
@@ -362,6 +365,9 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
 
   // PFParticle properties
   etree.SetBranchAddress( "pfp_generation_v", &ev.pfp_generation_ );
+  etree.SetBranchAddress( "pfp_trk_daughters_v", &ev.pfp_trk_daughters_count_ );
+  etree.SetBranchAddress( "pfp_shr_daughters_v", &ev.pfp_shr_daughters_count_ );
+
   etree.SetBranchAddress( "trk_score_v", &ev.pfp_track_score_ );
   etree.SetBranchAddress( "pfpdg", &ev.pfp_reco_pdg_ );
   etree.SetBranchAddress( "pfnhits", &ev.pfp_hits_ );
@@ -655,6 +661,12 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   // PFParticle properties
   set_object_output_branch_address< std::vector<unsigned int> >( out_tree,
     "pfp_generation_v", ev.pfp_generation_, create );
+
+  set_object_output_branch_address< std::vector<unsigned int> >( out_tree,
+    "pfp_trk_daughters_v", ev.pfp_trk_daughters_count_, create );
+
+  set_object_output_branch_address< std::vector<unsigned int> >( out_tree,
+    "pfp_shr_daughters_v", ev.pfp_shr_daughters_count_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
     "trk_score_v", ev.pfp_track_score_, create );
