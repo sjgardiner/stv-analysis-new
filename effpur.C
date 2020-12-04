@@ -44,9 +44,9 @@ void effpur() {
     "mc_vertex_in_FV && mc_neutrino_is_numu",
     "mc_vertex_in_FV && mc_neutrino_is_numu && mc_pmu_above_threshold",
     "mc_vertex_in_FV && mc_neutrino_is_numu && mc_pmu_above_threshold"
-      " && mc_has_p_above_threshold",
+      " && mc_lead_p_in_mom_range",
     "mc_vertex_in_FV && mc_neutrino_is_numu && mc_pmu_above_threshold"
-      " && mc_has_p_above_threshold && mc_no_fs_pi0",
+      " && mc_lead_p_in_mom_range && mc_no_fs_pi0",
     "mc_is_signal" };
 
   const std::vector< std::string > selection_defs = { "1",
@@ -63,10 +63,6 @@ void effpur() {
   "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained && sel_passed_proton_pid_cut",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
-    " && sel_muon_above_threshold && sel_has_p_candidate"
-    " && sel_protons_contained && sel_passed_proton_pid_cut"
-    " && sel_lead_p_passed_hits_cut",
   "sel_CCNp0pi" };
 
   TChain stv_ch( "stv_tree" );

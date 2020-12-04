@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 3 November 2020
+// Updated 4 December 2020
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -50,10 +50,10 @@ constexpr int PI_ZERO = 111;
 constexpr int PI_PLUS = 211;
 
 // Values of parameters to use in analysis cuts
-constexpr float PROTON_CHI2_CUT = 88.;
-constexpr unsigned int HITS_Y_CUT = 5u;
-constexpr float LEAD_P_MOM_CUT = 0.300; // GeV/c
-constexpr float MUON_MOM_CUT = 0.150; // GeV/c
+constexpr float PROTON_PID_CUT = 0.2;
+constexpr float LEAD_P_MIN_MOM_CUT = 0.200; // GeV/c
+constexpr float LEAD_P_MAX_MOM_CUT = 1.200; // GeV/c
+constexpr float MUON_MOM_CUT = 0.100; // GeV/c
 constexpr float CHARGED_PI_MOM_CUT = 0.070; // GeV/c
 
 constexpr float TOPO_SCORE_CUT = 0.1;
@@ -231,13 +231,16 @@ class AnalysisEvent {
     bool mc_neutrino_is_numu_ = false;
     bool mc_vertex_in_FV_ = false;
     bool mc_pmu_above_threshold_ = false;
-    bool mc_has_p_above_threshold_ = false;
+    bool mc_lead_p_in_mom_range_ = false;
     bool mc_no_fs_pi0_ = false;
     bool mc_no_charged_pi_above_threshold_ = false;
     // Intersection of all of these requirements
     bool mc_is_signal_ = false;
 
     EventCategory category_ = kUnknown;
+
+    // Informational boolean flags
+    bool info_muon_contained_ = false;
 
     // **** Reco selection requirements ****
 
@@ -258,12 +261,9 @@ class AnalysisEvent {
     // Whether all proton candidates have track end coordinates that lie within
     // the "containment volume"
     bool sel_protons_contained_ = false;
-    // Whether the leading proton candidate has at least HITS_Y_CUT collection
-    // plane hits
-    bool sel_lead_p_passed_hits_cut_ = false;
     // Whether the leading proton candidate has a range-based reco momentum
-    // above LEAD_P_MOM_CUT
-    bool sel_lead_p_above_mom_cut_ = false;
+    // above LEAD_P_MIN_MOM_CUT and below LEAD_P_MAX_MOM_CUT
+    bool sel_lead_p_passed_mom_cuts_ = false;
     // Intersection of all of the above requirements
     bool sel_CCNp0pi_ = false;
 
@@ -495,8 +495,8 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "mc_pmu_above_threshold",
     &ev.mc_pmu_above_threshold_, create, "mc_pmu_above_threshold/O" );
 
-  set_output_branch_address( out_tree, "mc_has_p_above_threshold",
-    &ev.mc_has_p_above_threshold_, create, "mc_has_p_above_threshold/O" );
+  set_output_branch_address( out_tree, "mc_lead_p_in_mom_range",
+    &ev.mc_lead_p_in_mom_range_, create, "mc_lead_p_in_mom_range/O" );
 
   set_output_branch_address( out_tree, "mc_no_fs_pi0",
     &ev.mc_no_fs_pi0_, create, "mc_no_fs_pi0/O" );
@@ -530,6 +530,10 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "nslice", &ev.nslice_, create,
     "nslice/I" );
 
+  // Informational boolean flags
+  set_output_branch_address( out_tree, "info_muon_contained",
+    &ev.info_muon_contained_, create, "info_muon_contained/O" );
+
   // CCNp0pi selection criteria
   set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
     create, "sel_nu_mu_cc/O" );
@@ -553,11 +557,8 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "sel_protons_contained",
     &ev.sel_protons_contained_, create, "sel_protons_contained/O" );
 
-  set_output_branch_address( out_tree, "sel_lead_p_passed_hits_cut",
-    &ev.sel_lead_p_passed_hits_cut_, create, "sel_lead_p_passed_hits_cut/O" );
-
-  set_output_branch_address( out_tree, "sel_lead_p_above_mom_cut",
-    &ev.sel_lead_p_above_mom_cut_, create, "sel_lead_p_above_mom_cut/O" );
+  set_output_branch_address( out_tree, "sel_lead_p_passed_mom_cuts",
+    &ev.sel_lead_p_passed_mom_cuts_, create, "sel_lead_p_passed_mom_cuts/O" );
 
   set_output_branch_address( out_tree, "sel_CCNp0pi",
     &ev.sel_CCNp0pi_, create, "sel_CCNp0pi/O" );
@@ -929,9 +930,11 @@ EventCategory AnalysisEvent::categorize_event() {
 
   // Set flags to their default values here
   mc_pmu_above_threshold_ = false;
-  mc_has_p_above_threshold_ = false;
+  mc_lead_p_in_mom_range_ = false;
   mc_no_fs_pi0_ = true;
   mc_no_charged_pi_above_threshold_ = true;
+
+  double lead_p_mom = LOW_FLOAT;
 
   for ( size_t p = 0u; p < mc_nu_daughter_pdg_->size(); ++p ) {
     int pdg = mc_nu_daughter_pdg_->at( p );
@@ -945,9 +948,7 @@ EventCategory AnalysisEvent::categorize_event() {
     }
     else if ( pdg == PROTON ) {
       double mom = real_sqrt( std::pow(energy, 2) - std::pow(PROTON_MASS, 2) );
-      if ( mom > LEAD_P_MOM_CUT ) {
-        mc_has_p_above_threshold_ = true;
-      }
+      if ( mom > lead_p_mom ) lead_p_mom = mom;
     }
     else if ( pdg == PI_ZERO ) {
       mc_no_fs_pi0_ = false;
@@ -960,8 +961,13 @@ EventCategory AnalysisEvent::categorize_event() {
     }
   }
 
+  // Check that the leading proton has a momentum within the allowed range
+  if ( lead_p_mom >= LEAD_P_MIN_MOM_CUT && lead_p_mom <= LEAD_P_MAX_MOM_CUT ) {
+    mc_lead_p_in_mom_range_ = true;
+  }
+
   mc_is_signal_ = mc_vertex_in_FV_ && mc_neutrino_is_numu_
-    && mc_pmu_above_threshold_ && mc_has_p_above_threshold_
+    && mc_pmu_above_threshold_ && mc_lead_p_in_mom_range_
     && mc_no_fs_pi0_ && mc_no_charged_pi_above_threshold_;
 
   // Sort signal by interaction mode
@@ -976,7 +982,7 @@ EventCategory AnalysisEvent::categorize_event() {
   else if ( !mc_no_fs_pi0_ || !mc_no_charged_pi_above_threshold_ ) {
     return kNuMuCCNpi;
   }
-  else if ( !mc_has_p_above_threshold_ ) {
+  else if ( !mc_lead_p_in_mom_range_ ) {
     return kNuMuCC0pi0p;
   }
   else return kNuMuCCOther;
@@ -1113,6 +1119,9 @@ void AnalysisEvent::apply_selection() {
   sel_passed_proton_pid_cut_ = true;
   sel_protons_contained_ = true;
 
+  // Set flags that default to false here
+  info_muon_contained_ = false;
+
   for ( int p = 0; p < num_pf_particles_; ++p ) {
 
     // Only worry about direct neutrino daughters (PFParticles considered
@@ -1123,9 +1132,22 @@ void AnalysisEvent::apply_selection() {
     // Check that we can find a muon candidate in the event. If more than
     // one is found, also fail the cut.
     if ( p == muon_candidate_idx_ ) {
-      // Check that the muon candidate is above threshold
-      // TODO: revisit muon momentum (use range if contained)
-      float muon_mom = track_mcs_mom_mu_->at( p );
+
+      // Check whether the muon candidate is contained. Use the same
+      // containment volume as the protons. TODO: revisit this as needed.
+      float endx = track_endx_->at( p );
+      float endy = track_endy_->at( p );
+      float endz = track_endz_->at( p );
+      bool end_contained = this->in_proton_containment_vol( endx, endy, endz );
+
+      if ( end_contained ) info_muon_contained_ = true;
+
+      // Check that the muon candidate is above threshold. Use the best
+      // momentum based on whether it was contained or not.
+      float muon_mom = LOW_FLOAT;
+      if ( info_muon_contained_ ) muon_mom = track_range_mom_mu_->at( p );
+      else muon_mom = track_mcs_mom_mu_->at( p );
+
       if ( muon_mom >= MUON_MOM_CUT ) sel_muon_above_threshold_ = true;
     }
     else {
@@ -1142,12 +1164,10 @@ void AnalysisEvent::apply_selection() {
       // tracks are considered proton candidates.
       sel_has_p_candidate_ = true;
 
-      int hitsY = pfp_hitsY_->at( p );
-      // TODO: revisit proton PID
-      float chi2_proton = track_chi2_proton_->at( p );
+      float llr_pid_score = track_llr_pid_score_->at( p );
 
       // Check whether the current proton candidate fails the proton PID cut
-      if ( hitsY >= HITS_Y_CUT && chi2_proton > PROTON_CHI2_CUT ) {
+      if ( llr_pid_score > PROTON_PID_CUT ) {
         sel_passed_proton_pid_cut_ = false;
       }
 
@@ -1173,19 +1193,14 @@ void AnalysisEvent::apply_selection() {
   // likely negligible impact on performance)
   this->find_lead_p_candidate();
 
-  // Check whether the leading proton candidate has the required minimum number
-  // of collection plane hits
-  float lead_p_hitsY = pfp_hitsY_->at( lead_p_candidate_idx_ );
-  if ( lead_p_hitsY >= HITS_Y_CUT ) {
-    sel_lead_p_passed_hits_cut_ = true;
-  }
-
   // Check the range-based reco momentum for the leading proton candidate
   float lead_p_KE = track_kinetic_energy_p_->at( lead_p_candidate_idx_ );
   float range_mom_lead_p = real_sqrt( lead_p_KE*lead_p_KE
     + 2.*PROTON_MASS*lead_p_KE );
-  if ( range_mom_lead_p >= LEAD_P_MOM_CUT ) {
-    sel_lead_p_above_mom_cut_ = true;
+  if ( range_mom_lead_p >= LEAD_P_MIN_MOM_CUT
+    && range_mom_lead_p <= LEAD_P_MAX_MOM_CUT )
+  {
+    sel_lead_p_passed_mom_cuts_ = true;
   }
 
   // All right, we've applied all selection cuts. Set the flag that indicates
@@ -1194,8 +1209,7 @@ void AnalysisEvent::apply_selection() {
   sel_CCNp0pi_ = sel_nu_mu_cc_ && sel_no_reco_showers_
     && sel_has_muon_candidate_ && sel_muon_above_threshold_
     && sel_has_p_candidate_ && sel_passed_proton_pid_cut_
-    && sel_protons_contained_ && sel_lead_p_passed_hits_cut_
-    && sel_lead_p_above_mom_cut_;
+    && sel_protons_contained_ && sel_lead_p_passed_mom_cuts_;
 }
 
 void AnalysisEvent::find_lead_p_candidate() {
@@ -1273,10 +1287,20 @@ void AnalysisEvent::compute_observables() {
     float mu_dirx = track_dirx_->at( muon_candidate_idx_ );
     float mu_diry = track_diry_->at( muon_candidate_idx_ );
     float mu_dirz = track_dirz_->at( muon_candidate_idx_ );
-    // TODO: revisit use of MCS momentum here
-    float mu_mom = track_mcs_mom_mu_->at( muon_candidate_idx_ );
+
+    // The "info" flag indicating whether the muon candidate is contained was
+    // already set when the selection was applied. Use it to choose the best
+    // momentum estimator to use.
+    float muon_mom = LOW_FLOAT;
+    if ( info_muon_contained_ ) {
+      muon_mom = track_range_mom_mu_->at( muon_candidate_idx_ );
+    }
+    else {
+      muon_mom = track_mcs_mom_mu_->at( muon_candidate_idx_ );
+    }
+
     p3mu = TVector3( mu_dirx, mu_diry, mu_dirz );
-    p3mu = p3mu.Unit() * mu_mom;
+    p3mu = p3mu.Unit() * muon_mom;
   }
 
   // Set the reco 3-momentum of the leading proton candidate if we found one
