@@ -131,12 +131,27 @@ class AnalysisEvent {
     // PFParticle properties
     std::vector<unsigned int>* pfp_generation_ = nullptr;
     std::vector<float>* pfp_track_score_ = nullptr;
+
     // Reco PDG code assigned by Pandora
     std::vector<int>* pfp_reco_pdg_ = nullptr;
+
+    // Total number of wire plane hits associated with each PFParticle
+    std::vector<int>* pfp_hits_ = nullptr;
+
+    // Number of hits on the three individual planes
+    // (Y is the collection plane)
+    std::vector<int>* pfp_hitsU_ = nullptr;
+    std::vector<int>* pfp_hitsV_ = nullptr;
+    std::vector<int>* pfp_hitsY_ = nullptr;
+
     // True PDG code found using the backtracker
     std::vector<int>* pfp_true_pdg_ = nullptr;
-    // Number of hits on the collection plane
-    std::vector<int>* pfp_hitsY_ = nullptr;
+
+    // True 4-momentum components found using the backtracker
+    std::vector<float>* pfp_true_E_ = nullptr;
+    std::vector<float>* pfp_true_px_ = nullptr;
+    std::vector<float>* pfp_true_py_ = nullptr;
+    std::vector<float>* pfp_true_pz_ = nullptr;
 
     // Shower properties
     std::vector<unsigned long>* shower_pfp_id_ = nullptr;
@@ -165,6 +180,19 @@ class AnalysisEvent {
     std::vector<float>* track_range_mom_mu_ = nullptr;
     std::vector<float>* track_mcs_mom_mu_ = nullptr;
     std::vector<float>* track_chi2_proton_ = nullptr;
+
+    // Log-likelihood ratio particle ID information
+
+    // Product of muon/proton log-likelihood ratios from all wire three planes
+    std::vector<float>* track_llr_pid_ = nullptr;
+
+    // Individual wire plane muon/proton log-likelihood ratios
+    std::vector<float>* track_llr_pid_U_ = nullptr;
+    std::vector<float>* track_llr_pid_V_ = nullptr;
+    std::vector<float>* track_llr_pid_Y_ = nullptr;
+
+    // Rescaled overall PID score (all three planes) that lies
+    // on the interval [-1, 1]
     std::vector<float>* track_llr_pid_score_ = nullptr;
 
     // True neutrino PDG code
@@ -336,8 +364,17 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "pfp_generation_v", &ev.pfp_generation_ );
   etree.SetBranchAddress( "trk_score_v", &ev.pfp_track_score_ );
   etree.SetBranchAddress( "pfpdg", &ev.pfp_reco_pdg_ );
-  etree.SetBranchAddress( "backtracked_pdg", &ev.pfp_true_pdg_ );
+  etree.SetBranchAddress( "pfnhits", &ev.pfp_hits_ );
+  etree.SetBranchAddress( "pfnplanehits_U", &ev.pfp_hitsU_ );
+  etree.SetBranchAddress( "pfnplanehits_V", &ev.pfp_hitsV_ );
   etree.SetBranchAddress( "pfnplanehits_Y", &ev.pfp_hitsY_ );
+
+  // Backtracked PFParticle properties
+  etree.SetBranchAddress( "backtracked_pdg", &ev.pfp_true_pdg_ );
+  etree.SetBranchAddress( "backtracked_e", &ev.pfp_true_E_ );
+  etree.SetBranchAddress( "backtracked_px", &ev.pfp_true_px_ );
+  etree.SetBranchAddress( "backtracked_py", &ev.pfp_true_py_ );
+  etree.SetBranchAddress( "backtracked_pz", &ev.pfp_true_pz_ );
 
   // Shower properties
   etree.SetBranchAddress( "shr_pfp_id_v", &ev.shower_pfp_id_ );
@@ -367,6 +404,12 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "trk_range_muon_mom_v", &ev.track_range_mom_mu_ );
   etree.SetBranchAddress( "trk_mcs_muon_mom_v", &ev.track_mcs_mom_mu_ );
   etree.SetBranchAddress( "trk_pid_chipr_v", &ev.track_chi2_proton_ );
+
+  // Log-likelihood-based particle ID information
+  etree.SetBranchAddress( "trk_llr_pid_v", &ev.track_llr_pid_ );
+  etree.SetBranchAddress( "trk_llr_pid_u_v", &ev.track_llr_pid_U_ );
+  etree.SetBranchAddress( "trk_llr_pid_v_v", &ev.track_llr_pid_V_ );
+  etree.SetBranchAddress( "trk_llr_pid_y_v", &ev.track_llr_pid_Y_ );
   etree.SetBranchAddress( "trk_llr_pid_score_v", &ev.track_llr_pid_score_ );
 
   // MC truth information for the neutrino
@@ -620,10 +663,32 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     "pfpdg", ev.pfp_reco_pdg_, create );
 
   set_object_output_branch_address< std::vector<int> >( out_tree,
-    "backtracked_pdg", ev.pfp_true_pdg_, create );
+    "pfnhits", ev.pfp_hits_, create );
+
+  set_object_output_branch_address< std::vector<int> >( out_tree,
+    "pfnplanehits_U", ev.pfp_hitsU_, create );
+
+  set_object_output_branch_address< std::vector<int> >( out_tree,
+    "pfnplanehits_V", ev.pfp_hitsV_, create );
 
   set_object_output_branch_address< std::vector<int> >( out_tree,
     "pfnplanehits_Y", ev.pfp_hitsY_, create );
+
+  // Backtracked PFParticle properties
+  set_object_output_branch_address< std::vector<int> >( out_tree,
+    "backtracked_pdg", ev.pfp_true_pdg_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "backtracked_e", ev.pfp_true_E_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "backtracked_px", ev.pfp_true_px_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "backtracked_py", ev.pfp_true_py_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "backtracked_pz", ev.pfp_true_pz_, create );
 
   // Shower properties
   set_object_output_branch_address< std::vector<float> >( out_tree,
@@ -687,6 +752,19 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
     "trk_pid_chipr_v", ev.track_chi2_proton_, create );
+
+  // Log-likelihood-based particle ID information
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_llr_pid_v", ev.track_llr_pid_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_llr_pid_u_v", ev.track_llr_pid_U_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_llr_pid_v_v", ev.track_llr_pid_V_, create );
+
+  set_object_output_branch_address< std::vector<float> >( out_tree,
+    "trk_llr_pid_y_v", ev.track_llr_pid_Y_, create );
 
   set_object_output_branch_address< std::vector<float> >( out_tree,
     "trk_llr_pid_score_v", ev.track_llr_pid_score_, create );
