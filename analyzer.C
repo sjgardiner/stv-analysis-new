@@ -563,6 +563,14 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "sel_CCNp0pi",
     &ev.sel_CCNp0pi_, create, "sel_CCNp0pi/O" );
 
+  // Index for the muon candidate in the vectors of PFParticles
+  set_output_branch_address( out_tree, "muon_candidate_idx",
+    &ev.muon_candidate_idx_, create, "muon_candidate_idx/I" );
+
+  // Index for the leading proton candidate in the vectors of PFParticles
+  set_output_branch_address( out_tree, "lead_p_candidate_idx",
+    &ev.lead_p_candidate_idx_, create, "lead_p_candidate_idx/I" );
+
   // Reco 3-momenta (muon, leading proton)
   set_object_output_branch_address< TVector3 >( out_tree,
     "p3_mu", ev.p3_mu_ptr_, create );
