@@ -222,6 +222,13 @@ class AnalysisEvent {
     std::vector<float>* mc_nu_daughter_py_ = nullptr;
     std::vector<float>* mc_nu_daughter_pz_ = nullptr;
 
+    // General systematic weights
+    std::map< std::string, std::vector<double> >* mc_weights_map_ = nullptr;
+    // Map of pointers used to set output branch addresses for the elements
+    // of the weights map. Hacky, but it works.
+    // TODO: revisit this to make something more elegant
+    std::map< std::string, std::vector<double>* > mc_weights_ptr_map_;
+
     // GENIE weights
     float spline_weight_ = DEFAULT_WEIGHT;
     float tuned_cv_weight_ = DEFAULT_WEIGHT;
@@ -240,7 +247,7 @@ class AnalysisEvent {
     EventCategory category_ = kUnknown;
 
     // Informational boolean flags
-    bool info_muon_contained_ = false;
+    bool reco_muon_contained_ = false;
 
     // **** Reco selection requirements ****
 
@@ -383,13 +390,18 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "backtracked_pz", &ev.pfp_true_pz_ );
 
   // Shower properties
-  etree.SetBranchAddress( "shr_pfp_id_v", &ev.shower_pfp_id_ );
-  etree.SetBranchAddress( "shr_start_x_v", &ev.shower_startx_ );
-  etree.SetBranchAddress( "shr_start_y_v", &ev.shower_starty_ );
-  etree.SetBranchAddress( "shr_start_z_v", &ev.shower_startz_ );
-  // Shower start distance from reco neutrino vertex (pre-calculated for
-  // convenience)
-  etree.SetBranchAddress( "shr_dist_v", &ev.shower_start_distance_ );
+  // These are excluded from some ntuples to ensure blindness for the LEE
+  // analyses. We will skip them when not available.
+  bool has_shower_branches = ( etree.GetBranch("shr_pfp_id_v") != nullptr );
+  if ( has_shower_branches ) {
+    etree.SetBranchAddress( "shr_pfp_id_v", &ev.shower_pfp_id_ );
+    etree.SetBranchAddress( "shr_start_x_v", &ev.shower_startx_ );
+    etree.SetBranchAddress( "shr_start_y_v", &ev.shower_starty_ );
+    etree.SetBranchAddress( "shr_start_z_v", &ev.shower_startz_ );
+    // Shower start distance from reco neutrino vertex (pre-calculated for
+    // convenience)
+    etree.SetBranchAddress( "shr_dist_v", &ev.shower_start_distance_ );
+  }
 
   // Track properties
   etree.SetBranchAddress( "trk_pfp_id_v", &ev.track_pfp_id_ );
@@ -409,7 +421,13 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "trk_energy_proton_v", &ev.track_kinetic_energy_p_ );
   etree.SetBranchAddress( "trk_range_muon_mom_v", &ev.track_range_mom_mu_ );
   etree.SetBranchAddress( "trk_mcs_muon_mom_v", &ev.track_mcs_mom_mu_ );
-  etree.SetBranchAddress( "trk_pid_chipr_v", &ev.track_chi2_proton_ );
+
+  // Some ntuples exclude the old proton chi^2 PID score. Only include it
+  // in the output if this branch is available.
+  bool has_chipr = ( etree.GetBranch("trk_pid_chipr_v") != nullptr );
+  if ( has_chipr ) {
+    etree.SetBranchAddress( "trk_pid_chipr_v", &ev.track_chi2_proton_ );
+  }
 
   // Log-likelihood-based particle ID information
   etree.SetBranchAddress( "trk_llr_pid_v", &ev.track_llr_pid_ );
@@ -434,11 +452,16 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "mc_py", &ev.mc_nu_daughter_py_ );
   etree.SetBranchAddress( "mc_pz", &ev.mc_nu_daughter_pz_ );
 
-  // GENIE weights
-  bool has_mc_weights = ( etree.GetBranch("weightSpline") != nullptr );
-  if ( has_mc_weights ) {
+  // GENIE and other systematic variation weights
+  bool has_genie_mc_weights = ( etree.GetBranch("weightSpline") != nullptr );
+  if ( has_genie_mc_weights ) {
     etree.SetBranchAddress( "weightSpline", &ev.spline_weight_ );
     etree.SetBranchAddress( "weightTune", &ev.tuned_cv_weight_ );
+  }
+
+  bool has_weight_map = ( etree.GetBranch("weights") != nullptr );
+  if ( has_weight_map ) {
+    etree.SetBranchAddress( "weights", &ev.mc_weights_map_ );
   }
 
   // Purity and completeness of the backtracked hits in the neutrino slice
@@ -519,6 +542,27 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "tuned_cv_weight",
     &ev.tuned_cv_weight_, create, "tuned_cv_weight/F" );
 
+  // If MC weights are available, prepare to store them in the output TTree
+  if ( ev.mc_weights_map_ ) {
+
+    // Make separate branches for the various sets of systematic variation
+    // weights in the map
+    for ( auto& pair : *ev.mc_weights_map_ ) {
+
+      // Prepend "weight_" to the name of the vector of weights in the map
+      std::string weight_branch_name = "weight_" + pair.first;
+
+      // Store a pointer to the vector of weights (needed to set the branch
+      // address properly) in the temporary map of pointers
+      ev.mc_weights_ptr_map_[ weight_branch_name ] = &pair.second;
+
+      // Set the branch address for this vector of weights
+      set_object_output_branch_address< std::vector<double> >( out_tree,
+        weight_branch_name, ev.mc_weights_ptr_map_.at(weight_branch_name),
+        create );
+    }
+  }
+
   // Backtracked neutrino purity and completeness
   set_output_branch_address( out_tree, "nu_completeness_from_pfp",
     &ev.nu_completeness_from_pfp_, create, "nu_completeness_from_pfp/F" );
@@ -531,8 +575,8 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     "nslice/I" );
 
   // Informational boolean flags
-  set_output_branch_address( out_tree, "info_muon_contained",
-    &ev.info_muon_contained_, create, "info_muon_contained/O" );
+  set_output_branch_address( out_tree, "reco_muon_contained",
+    &ev.reco_muon_contained_, create, "reco_muon_contained/O" );
 
   // CCNp0pi selection criteria
   set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
@@ -712,19 +756,23 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     "backtracked_pz", ev.pfp_true_pz_, create );
 
   // Shower properties
-  set_object_output_branch_address< std::vector<float> >( out_tree,
-    "shr_start_x_v", ev.shower_startx_, create );
+  // For some ntuples, reconstructed shower information is excluded.
+  // In such cases, skip writing these branches to the output TTree.
+  if ( ev.shower_startx_ ) {
+    set_object_output_branch_address< std::vector<float> >( out_tree,
+      "shr_start_x_v", ev.shower_startx_, create );
 
-  set_object_output_branch_address< std::vector<float> >( out_tree,
-    "shr_start_y_v", ev.shower_starty_, create );
+    set_object_output_branch_address< std::vector<float> >( out_tree,
+      "shr_start_y_v", ev.shower_starty_, create );
 
-  set_object_output_branch_address< std::vector<float> >( out_tree,
-    "shr_start_z_v", ev.shower_startz_, create );
+    set_object_output_branch_address< std::vector<float> >( out_tree,
+      "shr_start_z_v", ev.shower_startz_, create );
 
-  // Shower start distance from reco neutrino vertex (pre-calculated for
-  // convenience)
-  set_object_output_branch_address< std::vector<float> >( out_tree,
-    "shr_dist_v", ev.shower_start_distance_, create );
+    // Shower start distance from reco neutrino vertex (pre-calculated for
+    // convenience)
+    set_object_output_branch_address< std::vector<float> >( out_tree,
+      "shr_dist_v", ev.shower_start_distance_, create );
+  }
 
   // Track properties
   set_object_output_branch_address< std::vector<float> >( out_tree,
@@ -771,8 +819,12 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_object_output_branch_address< std::vector<float> >( out_tree,
     "trk_mcs_muon_mom_v", ev.track_mcs_mom_mu_, create );
 
-  set_object_output_branch_address< std::vector<float> >( out_tree,
-    "trk_pid_chipr_v", ev.track_chi2_proton_, create );
+  // Some ntuples exclude the old chi^2 proton PID score. Only include it in
+  // the output if it is available.
+  if ( ev.track_chi2_proton_ ) {
+    set_object_output_branch_address< std::vector<float> >( out_tree,
+      "trk_pid_chipr_v", ev.track_chi2_proton_, create );
+  }
 
   // Log-likelihood-based particle ID information
   set_object_output_branch_address< std::vector<float> >( out_tree,
@@ -866,16 +918,6 @@ void analyze(const std::vector<std::string>& in_file_names,
     // directly from the Event TTree.
     set_event_branch_addresses( events_ch, cur_event );
 
-    // Set the output TTree branch addresses, creating the branches if needed
-    // (during the first event loop iteration)
-    bool create_them = false;
-    if ( !created_output_branches ) {
-      create_them = true;
-      created_output_branches = true;
-    }
-
-    set_event_output_branch_addresses( *out_tree, cur_event, create_them );
-
     // TChain::LoadTree() returns the entry number that should be used with
     // the current TTree object, which (together with the TBranch objects
     // that it owns) doesn't know about the other TTrees in the TChain.
@@ -891,6 +933,16 @@ void analyze(const std::vector<std::string>& in_file_names,
     // TChain::SetBranchAddress() above
     events_ch.GetEntry( events_entry );
 
+    // Set the output TTree branch addresses, creating the branches if needed
+    // (during the first event loop iteration)
+    bool create_them = false;
+    if ( !created_output_branches ) {
+      create_them = true;
+      created_output_branches = true;
+    }
+
+    set_event_output_branch_addresses( *out_tree, cur_event, create_them );
+
     // Apply the CCNp0pi selection criteria and categorize the event.
     cur_event.apply_selection();
 
@@ -900,6 +952,11 @@ void analyze(const std::vector<std::string>& in_file_names,
     // We're done. Save the results and move on to the next event.
     out_tree->Fill();
     ++events_entry;
+
+    // Manually delete the map of systematic variation weights. Due to dumb
+    // ROOT reasons, failing to do this leads to a memory leak.
+    if ( cur_event.mc_weights_map_ ) delete cur_event.mc_weights_map_;
+    cur_event.mc_weights_ptr_map_.clear();
   }
 
   out_tree->Write();
@@ -1019,7 +1076,12 @@ void AnalysisEvent::apply_numu_CC_selection() {
     // A PFParticle is considered a track if its score is above the track score
     // cut. Get the track or shower start coordinates as appropriate.
     float x, y, z;
-    if ( tscore > TRACK_SCORE_CUT ) {
+    // Use the reco track information for tracks. For showers, if we're working
+    // with an ntuple for which the shower information has been excluded (to
+    // preserve blindness for the LEE effort), then just fall back to using the
+    // starting position for the track-like reconstruction in order to apply
+    // the containment cut.
+    if ( tscore > TRACK_SCORE_CUT || !shower_startx_ ) {
       x = track_startx_->at( p );
       y = track_starty_->at( p );
       z = track_startz_->at( p );
@@ -1128,7 +1190,7 @@ void AnalysisEvent::apply_selection() {
   sel_protons_contained_ = true;
 
   // Set flags that default to false here
-  info_muon_contained_ = false;
+  reco_muon_contained_ = false;
 
   for ( int p = 0; p < num_pf_particles_; ++p ) {
 
@@ -1148,12 +1210,12 @@ void AnalysisEvent::apply_selection() {
       float endz = track_endz_->at( p );
       bool end_contained = this->in_proton_containment_vol( endx, endy, endz );
 
-      if ( end_contained ) info_muon_contained_ = true;
+      if ( end_contained ) reco_muon_contained_ = true;
 
       // Check that the muon candidate is above threshold. Use the best
       // momentum based on whether it was contained or not.
       float muon_mom = LOW_FLOAT;
-      if ( info_muon_contained_ ) muon_mom = track_range_mom_mu_->at( p );
+      if ( reco_muon_contained_ ) muon_mom = track_range_mom_mu_->at( p );
       else muon_mom = track_mcs_mom_mu_->at( p );
 
       if ( muon_mom >= MUON_MOM_CUT ) sel_muon_above_threshold_ = true;
@@ -1300,7 +1362,7 @@ void AnalysisEvent::compute_observables() {
     // already set when the selection was applied. Use it to choose the best
     // momentum estimator to use.
     float muon_mom = LOW_FLOAT;
-    if ( info_muon_contained_ ) {
+    if ( reco_muon_contained_ ) {
       muon_mom = track_range_mom_mu_->at( muon_candidate_idx_ );
     }
     else {
