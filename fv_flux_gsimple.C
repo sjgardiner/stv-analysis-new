@@ -90,6 +90,9 @@ namespace genie {
 
 // STV analysis includes
 #include "FiducialVolume.hh"
+//#include "ActiveVolume.hh"
+
+constexpr double METER_TO_CENTIMETER = 1e2;
 
 struct FiducialVolumeFace {
   FiducialVolumeFace( const TVector3& norm,
@@ -240,9 +243,9 @@ void fv_flux_gsimple() {
   TChain meta( "meta" );
   TChain flux( "flux" );
   flux.Add( "/pnfs/uboone/persistent/uboonebeam/bnb_gsimple/bnb_gsimple_"
-    "fluxes_01.09.2019_463/converted_beammc_wincorr_1667.root" );
+    "fluxes_01.09.2019_463/converted_beammc_wincorr_*.root" );
   meta.Add( "/pnfs/uboone/persistent/uboonebeam/bnb_gsimple/bnb_gsimple_"
-    "fluxes_01.09.2019_463/converted_beammc_wincorr_1667.root" );
+    "fluxes_01.09.2019_463/converted_beammc_wincorr_*.root" );
 
   // Compute the total simulated beam exposure in protons-on-target (POT)
   // by summing the entries on the "protons" branch of the "meta" TTree
@@ -287,6 +290,7 @@ void fv_flux_gsimple() {
   // Set up the output TFile and TTree
   double trkl = 0.;
   TFile* out_file = new TFile( "/uboone/data/users/gardiner/nu_rays.root", "recreate" );
+  //TFile* out_file = new TFile( "/uboone/data/users/gardiner/nu_rays_activeVol.root", "recreate" );
   TTree* out_tree = new TTree( "nu_ray_tree", "nu_ray_tree" );
   out_tree->Branch( "E", &flux_info.E, "E/D" );
   out_tree->Branch( "px", &flux_info.px, "px/D" );
@@ -313,6 +317,13 @@ void fv_flux_gsimple() {
     // TChain::SetBranchAddress() above
     flux.GetEntry( flux_entry );
     ++flux_entry;
+
+    // Convert the coordinates of the neutrino ray vertex on the flux window
+    // from meters (as given in the gsimple files) to centimeters (as used
+    // in this script)
+    flux_info.vtxx *= METER_TO_CENTIMETER;
+    flux_info.vtxy *= METER_TO_CENTIMETER;
+    flux_info.vtxz *= METER_TO_CENTIMETER;
 
     TVector3 vtx3( flux_info.vtxx, flux_info.vtxy, flux_info.vtxz );
     TVector3 p3( flux_info.px, flux_info.py, flux_info.pz );
