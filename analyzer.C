@@ -1,13 +1,14 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 4 December 2020
+// Updated 10 December 2020
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
 #include <cmath>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -84,6 +85,24 @@ constexpr double BINDING_ENERGY = 0.0295; // 40Ar, GeV
 constexpr double MUON_MASS = 0.10565837; // GeV
 constexpr double PI_PLUS_MASS = 0.13957000; // GeV
 
+// A std::unique_ptr with redundant storage of a bare pointer to the managed
+// object. This is a hacky workaround for setting TTree branch addresses for
+// objects managed by a std::unique_ptr.
+template <typename T> class MyPointer : public std::unique_ptr<T> {
+  public:
+
+    MyPointer() : std::unique_ptr<T>( new T ) {}
+
+    T*& get_bare_ptr() {
+      bare_ptr_ = this->get();
+      return bare_ptr_;
+    }
+
+  protected:
+
+    T* bare_ptr_ = nullptr;
+};
+
 // Class used to hold information from the searchingfornues TTree branches and
 // process it for our analysis
 class AnalysisEvent {
@@ -129,74 +148,74 @@ class AnalysisEvent {
     int num_showers_ = BOGUS_INT;
 
     // PFParticle properties
-    std::vector<unsigned int>* pfp_generation_ = nullptr;
-    std::vector<unsigned int>* pfp_trk_daughters_count_ = nullptr;
-    std::vector<unsigned int>* pfp_shr_daughters_count_ = nullptr;
+    MyPointer< std::vector<unsigned int> > pfp_generation_;
+    MyPointer< std::vector<unsigned int> > pfp_trk_daughters_count_;
+    MyPointer< std::vector<unsigned int> > pfp_shr_daughters_count_;
 
-    std::vector<float>* pfp_track_score_ = nullptr;
+    MyPointer< std::vector<float> > pfp_track_score_;
 
     // Reco PDG code assigned by Pandora
-    std::vector<int>* pfp_reco_pdg_ = nullptr;
+    MyPointer< std::vector<int> > pfp_reco_pdg_;
 
     // Total number of wire plane hits associated with each PFParticle
-    std::vector<int>* pfp_hits_ = nullptr;
+    MyPointer< std::vector<int> > pfp_hits_;
 
     // Number of hits on the three individual planes
     // (Y is the collection plane)
-    std::vector<int>* pfp_hitsU_ = nullptr;
-    std::vector<int>* pfp_hitsV_ = nullptr;
-    std::vector<int>* pfp_hitsY_ = nullptr;
+    MyPointer< std::vector<int> > pfp_hitsU_;
+    MyPointer< std::vector<int> > pfp_hitsV_;
+    MyPointer< std::vector<int> > pfp_hitsY_;
 
     // True PDG code found using the backtracker
-    std::vector<int>* pfp_true_pdg_ = nullptr;
+    MyPointer< std::vector<int> > pfp_true_pdg_;
 
     // True 4-momentum components found using the backtracker
-    std::vector<float>* pfp_true_E_ = nullptr;
-    std::vector<float>* pfp_true_px_ = nullptr;
-    std::vector<float>* pfp_true_py_ = nullptr;
-    std::vector<float>* pfp_true_pz_ = nullptr;
+    MyPointer< std::vector<float> > pfp_true_E_;
+    MyPointer< std::vector<float> > pfp_true_px_;
+    MyPointer< std::vector<float> > pfp_true_py_;
+    MyPointer< std::vector<float> > pfp_true_pz_;
 
     // Shower properties
-    std::vector<unsigned long>* shower_pfp_id_ = nullptr;
-    std::vector<float>* shower_startx_ = nullptr;
-    std::vector<float>* shower_starty_ = nullptr;
-    std::vector<float>* shower_startz_ = nullptr;
-    std::vector<float>* shower_start_distance_ = nullptr;
+    MyPointer< std::vector<unsigned long> > shower_pfp_id_;
+    MyPointer< std::vector<float> > shower_startx_;
+    MyPointer< std::vector<float> > shower_starty_;
+    MyPointer< std::vector<float> > shower_startz_;
+    MyPointer< std::vector<float> > shower_start_distance_;
 
     // Track properties
-    std::vector<unsigned long>* track_pfp_id_ = nullptr;
-    std::vector<float>* track_length_ = nullptr;
-    std::vector<float>* track_startx_ = nullptr;
-    std::vector<float>* track_starty_ = nullptr;
-    std::vector<float>* track_startz_ = nullptr;
-    std::vector<float>* track_start_distance_ = nullptr;
-    std::vector<float>* track_endx_ = nullptr;
-    std::vector<float>* track_endy_ = nullptr;
-    std::vector<float>* track_endz_ = nullptr;
-    std::vector<float>* track_dirx_ = nullptr;
-    std::vector<float>* track_diry_ = nullptr;
-    std::vector<float>* track_dirz_ = nullptr;
+    MyPointer< std::vector<unsigned long> > track_pfp_id_;
+    MyPointer< std::vector<float> > track_length_;
+    MyPointer< std::vector<float> > track_startx_;
+    MyPointer< std::vector<float> > track_starty_;
+    MyPointer< std::vector<float> > track_startz_;
+    MyPointer< std::vector<float> > track_start_distance_;
+    MyPointer< std::vector<float> > track_endx_;
+    MyPointer< std::vector<float> > track_endy_;
+    MyPointer< std::vector<float> > track_endz_;
+    MyPointer< std::vector<float> > track_dirx_;
+    MyPointer< std::vector<float> > track_diry_;
+    MyPointer< std::vector<float> > track_dirz_;
 
     // Proton *kinetic* energy using range-based momentum reconstruction
-    std::vector<float>* track_kinetic_energy_p_ = nullptr;
+    MyPointer< std::vector<float> > track_kinetic_energy_p_;
 
-    std::vector<float>* track_range_mom_mu_ = nullptr;
-    std::vector<float>* track_mcs_mom_mu_ = nullptr;
-    std::vector<float>* track_chi2_proton_ = nullptr;
+    MyPointer< std::vector<float> > track_range_mom_mu_;
+    MyPointer< std::vector<float> > track_mcs_mom_mu_;
+    MyPointer< std::vector<float> > track_chi2_proton_;
 
     // Log-likelihood ratio particle ID information
 
     // Product of muon/proton log-likelihood ratios from all wire three planes
-    std::vector<float>* track_llr_pid_ = nullptr;
+    MyPointer< std::vector<float> > track_llr_pid_;
 
     // Individual wire plane muon/proton log-likelihood ratios
-    std::vector<float>* track_llr_pid_U_ = nullptr;
-    std::vector<float>* track_llr_pid_V_ = nullptr;
-    std::vector<float>* track_llr_pid_Y_ = nullptr;
+    MyPointer< std::vector<float> > track_llr_pid_U_;
+    MyPointer< std::vector<float> > track_llr_pid_V_;
+    MyPointer< std::vector<float> > track_llr_pid_Y_;
 
     // Rescaled overall PID score (all three planes) that lies
     // on the interval [-1, 1]
-    std::vector<float>* track_llr_pid_score_ = nullptr;
+    MyPointer< std::vector<float> > track_llr_pid_score_;
 
     // True neutrino PDG code
     int mc_nu_pdg_ = BOGUS_INT;
@@ -216,14 +235,14 @@ class AnalysisEvent {
     int mc_nu_interaction_type_ = BOGUS_INT;
 
     // Final-state particle PDG codes and energies (post-FSIs)
-    std::vector<int>* mc_nu_daughter_pdg_ = nullptr;
-    std::vector<float>* mc_nu_daughter_energy_ = nullptr;
-    std::vector<float>* mc_nu_daughter_px_ = nullptr;
-    std::vector<float>* mc_nu_daughter_py_ = nullptr;
-    std::vector<float>* mc_nu_daughter_pz_ = nullptr;
+    MyPointer< std::vector<int> > mc_nu_daughter_pdg_;
+    MyPointer< std::vector<float> > mc_nu_daughter_energy_;
+    MyPointer< std::vector<float> > mc_nu_daughter_px_;
+    MyPointer< std::vector<float> > mc_nu_daughter_py_;
+    MyPointer< std::vector<float> > mc_nu_daughter_pz_;
 
     // General systematic weights
-    std::map< std::string, std::vector<double> >* mc_weights_map_ = nullptr;
+    MyPointer< std::map< std::string, std::vector<double> > > mc_weights_map_;
     // Map of pointers used to set output branch addresses for the elements
     // of the weights map. Hacky, but it works.
     // TODO: revisit this to make something more elegant
@@ -282,17 +301,12 @@ class AnalysisEvent {
     // ** Reconstructed observables **
 
     // 3-momenta
-    TVector3 p3_mu_;
-    TVector3 p3_lead_p_;
+    MyPointer< TVector3 > p3_mu_;
+    MyPointer< TVector3 > p3_lead_p_;
 
     // Reconstructed 3-momenta for all proton candidates,
     // ordered from highest to lowest by magnitude
-    std::vector< TVector3 > p3_p_vec_;
-
-    // Dummy pointers to assist in setting branch addresses
-    TVector3* p3_mu_ptr_ = &p3_mu_;
-    TVector3* p3_lead_p_ptr_ = &p3_lead_p_;
-    std::vector< TVector3 >* p3_p_vec_ptr_ = &p3_p_vec_;
+    MyPointer< std::vector<TVector3> > p3_p_vec_;
 
     // Reco STVs
     float delta_pT_ = BOGUS;
@@ -306,17 +320,12 @@ class AnalysisEvent {
     // to use
 
     // 3-momenta
-    TVector3 mc_p3_mu_;
-    TVector3 mc_p3_lead_p_;
+    MyPointer< TVector3 > mc_p3_mu_;
+    MyPointer< TVector3 > mc_p3_lead_p_;
 
     // True 3-momenta for all true MC protons, ordered from highest to lowest
     // by magnitude
-    std::vector< TVector3 > mc_p3_p_vec_;
-
-    // Dummy pointers to assist in setting branch addresses
-    TVector3* mc_p3_mu_ptr_ = &mc_p3_mu_;
-    TVector3* mc_p3_lead_p_ptr_ = &mc_p3_lead_p_;
-    std::vector< TVector3 >* mc_p3_p_vec_ptr_ = &mc_p3_p_vec_;
+    MyPointer< std::vector<TVector3> > mc_p3_p_vec_;
 
     // MC truth STVs
     float mc_delta_pT_ = BOGUS;
@@ -341,6 +350,22 @@ class AnalysisEvent {
     }
 
 };
+
+// Helper function template that sets a new address for a pointer to an object
+// in an input TTree
+template <typename T> void set_object_input_branch_address( TTree& in_tree,
+  const std::string& branch_name, T*& address )
+{
+  in_tree.SetBranchAddress( branch_name.c_str(), &address );
+}
+
+// Overloaded version that uses a MyPointer argument instead
+template <typename T> void set_object_input_branch_address( TTree& in_tree,
+  const std::string& branch_name, MyPointer<T>& u_ptr )
+{
+  T*& address = u_ptr.get_bare_ptr();
+  set_object_input_branch_address( in_tree, branch_name, address );
+}
 
 // Helper function to set branch addresses for reading information
 // from the Event TTree
@@ -371,70 +396,108 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "n_showers", &ev.num_showers_ );
 
   // PFParticle properties
-  etree.SetBranchAddress( "pfp_generation_v", &ev.pfp_generation_ );
-  etree.SetBranchAddress( "pfp_trk_daughters_v", &ev.pfp_trk_daughters_count_ );
-  etree.SetBranchAddress( "pfp_shr_daughters_v", &ev.pfp_shr_daughters_count_ );
+  set_object_input_branch_address( etree, "pfp_generation_v",
+    ev.pfp_generation_ );
 
-  etree.SetBranchAddress( "trk_score_v", &ev.pfp_track_score_ );
-  etree.SetBranchAddress( "pfpdg", &ev.pfp_reco_pdg_ );
-  etree.SetBranchAddress( "pfnhits", &ev.pfp_hits_ );
-  etree.SetBranchAddress( "pfnplanehits_U", &ev.pfp_hitsU_ );
-  etree.SetBranchAddress( "pfnplanehits_V", &ev.pfp_hitsV_ );
-  etree.SetBranchAddress( "pfnplanehits_Y", &ev.pfp_hitsY_ );
+  set_object_input_branch_address( etree, "pfp_trk_daughters_v",
+    ev.pfp_trk_daughters_count_ );
+
+  set_object_input_branch_address( etree, "pfp_shr_daughters_v",
+    ev.pfp_shr_daughters_count_ );
+
+  set_object_input_branch_address( etree, "trk_score_v", ev.pfp_track_score_ );
+  set_object_input_branch_address( etree, "pfpdg", ev.pfp_reco_pdg_ );
+  set_object_input_branch_address( etree, "pfnhits", ev.pfp_hits_ );
+  set_object_input_branch_address( etree, "pfnplanehits_U", ev.pfp_hitsU_ );
+  set_object_input_branch_address( etree, "pfnplanehits_V", ev.pfp_hitsV_ );
+  set_object_input_branch_address( etree, "pfnplanehits_Y", ev.pfp_hitsY_ );
 
   // Backtracked PFParticle properties
-  etree.SetBranchAddress( "backtracked_pdg", &ev.pfp_true_pdg_ );
-  etree.SetBranchAddress( "backtracked_e", &ev.pfp_true_E_ );
-  etree.SetBranchAddress( "backtracked_px", &ev.pfp_true_px_ );
-  etree.SetBranchAddress( "backtracked_py", &ev.pfp_true_py_ );
-  etree.SetBranchAddress( "backtracked_pz", &ev.pfp_true_pz_ );
+  set_object_input_branch_address( etree, "backtracked_pdg", ev.pfp_true_pdg_ );
+  set_object_input_branch_address( etree, "backtracked_e", ev.pfp_true_E_ );
+  set_object_input_branch_address( etree, "backtracked_px", ev.pfp_true_px_ );
+  set_object_input_branch_address( etree, "backtracked_py", ev.pfp_true_py_ );
+  set_object_input_branch_address( etree, "backtracked_pz", ev.pfp_true_pz_ );
 
   // Shower properties
   // These are excluded from some ntuples to ensure blindness for the LEE
   // analyses. We will skip them when not available.
   bool has_shower_branches = ( etree.GetBranch("shr_pfp_id_v") != nullptr );
   if ( has_shower_branches ) {
-    etree.SetBranchAddress( "shr_pfp_id_v", &ev.shower_pfp_id_ );
-    etree.SetBranchAddress( "shr_start_x_v", &ev.shower_startx_ );
-    etree.SetBranchAddress( "shr_start_y_v", &ev.shower_starty_ );
-    etree.SetBranchAddress( "shr_start_z_v", &ev.shower_startz_ );
+    set_object_input_branch_address( etree, "shr_pfp_id_v", ev.shower_pfp_id_ );
+    set_object_input_branch_address( etree, "shr_start_x_v", ev.shower_startx_ );
+    set_object_input_branch_address( etree, "shr_start_y_v", ev.shower_starty_ );
+    set_object_input_branch_address( etree, "shr_start_z_v", ev.shower_startz_ );
     // Shower start distance from reco neutrino vertex (pre-calculated for
     // convenience)
-    etree.SetBranchAddress( "shr_dist_v", &ev.shower_start_distance_ );
+    set_object_input_branch_address( etree, "shr_dist_v",
+      ev.shower_start_distance_ );
+  }
+  else {
+    // When the shower information is not available, delete the owned vectors
+    // to signal that the associated branches should not be written to the
+    // output TTree
+    ev.shower_pfp_id_.reset( nullptr );
+    ev.shower_startx_.reset( nullptr );
+    ev.shower_starty_.reset( nullptr );
+    ev.shower_startz_.reset( nullptr );
+    ev.shower_start_distance_.reset( nullptr );
   }
 
   // Track properties
-  etree.SetBranchAddress( "trk_pfp_id_v", &ev.track_pfp_id_ );
-  etree.SetBranchAddress( "trk_len_v", &ev.track_length_ );
-  etree.SetBranchAddress( "trk_sce_start_x_v", &ev.track_startx_ );
-  etree.SetBranchAddress( "trk_sce_start_y_v", &ev.track_starty_ );
-  etree.SetBranchAddress( "trk_sce_start_z_v", &ev.track_startz_ );
+  set_object_input_branch_address( etree, "trk_pfp_id_v", ev.track_pfp_id_ );
+  set_object_input_branch_address( etree, "trk_len_v", ev.track_length_ );
+  set_object_input_branch_address( etree, "trk_sce_start_x_v", ev.track_startx_ );
+  set_object_input_branch_address( etree, "trk_sce_start_y_v", ev.track_starty_ );
+  set_object_input_branch_address( etree, "trk_sce_start_z_v", ev.track_startz_ );
+
   // Track start distance from reco neutrino vertex (pre-calculated for
   // convenience)
-  etree.SetBranchAddress( "trk_distance_v", &ev.track_start_distance_ );
-  etree.SetBranchAddress( "trk_sce_end_x_v", &ev.track_endx_ );
-  etree.SetBranchAddress( "trk_sce_end_y_v", &ev.track_endy_ );
-  etree.SetBranchAddress( "trk_sce_end_z_v", &ev.track_endz_ );
-  etree.SetBranchAddress( "trk_dir_x_v", &ev.track_dirx_ );
-  etree.SetBranchAddress( "trk_dir_y_v", &ev.track_diry_ );
-  etree.SetBranchAddress( "trk_dir_z_v", &ev.track_dirz_ );
-  etree.SetBranchAddress( "trk_energy_proton_v", &ev.track_kinetic_energy_p_ );
-  etree.SetBranchAddress( "trk_range_muon_mom_v", &ev.track_range_mom_mu_ );
-  etree.SetBranchAddress( "trk_mcs_muon_mom_v", &ev.track_mcs_mom_mu_ );
+  set_object_input_branch_address( etree, "trk_distance_v",
+    ev.track_start_distance_ );
+
+  set_object_input_branch_address( etree, "trk_sce_end_x_v", ev.track_endx_ );
+  set_object_input_branch_address( etree, "trk_sce_end_y_v", ev.track_endy_ );
+  set_object_input_branch_address( etree, "trk_sce_end_z_v", ev.track_endz_ );
+
+  set_object_input_branch_address( etree, "trk_dir_x_v", ev.track_dirx_ );
+  set_object_input_branch_address( etree, "trk_dir_y_v", ev.track_diry_ );
+  set_object_input_branch_address( etree, "trk_dir_z_v", ev.track_dirz_ );
+
+  set_object_input_branch_address( etree, "trk_energy_proton_v",
+    ev.track_kinetic_energy_p_ );
+
+  set_object_input_branch_address( etree, "trk_range_muon_mom_v",
+    ev.track_range_mom_mu_ );
+
+  set_object_input_branch_address( etree, "trk_mcs_muon_mom_v",
+    ev.track_mcs_mom_mu_ );
 
   // Some ntuples exclude the old proton chi^2 PID score. Only include it
   // in the output if this branch is available.
   bool has_chipr = ( etree.GetBranch("trk_pid_chipr_v") != nullptr );
   if ( has_chipr ) {
-    etree.SetBranchAddress( "trk_pid_chipr_v", &ev.track_chi2_proton_ );
+    set_object_input_branch_address( etree, "trk_pid_chipr_v",
+      ev.track_chi2_proton_ );
+  }
+  else {
+    ev.track_chi2_proton_.reset( nullptr );
   }
 
   // Log-likelihood-based particle ID information
-  etree.SetBranchAddress( "trk_llr_pid_v", &ev.track_llr_pid_ );
-  etree.SetBranchAddress( "trk_llr_pid_u_v", &ev.track_llr_pid_U_ );
-  etree.SetBranchAddress( "trk_llr_pid_v_v", &ev.track_llr_pid_V_ );
-  etree.SetBranchAddress( "trk_llr_pid_y_v", &ev.track_llr_pid_Y_ );
-  etree.SetBranchAddress( "trk_llr_pid_score_v", &ev.track_llr_pid_score_ );
+  set_object_input_branch_address( etree, "trk_llr_pid_v", ev.track_llr_pid_ );
+
+  set_object_input_branch_address( etree, "trk_llr_pid_u_v",
+    ev.track_llr_pid_U_ );
+
+  set_object_input_branch_address( etree, "trk_llr_pid_v_v",
+    ev.track_llr_pid_V_ );
+
+  set_object_input_branch_address( etree, "trk_llr_pid_y_v",
+    ev.track_llr_pid_Y_ );
+
+  set_object_input_branch_address( etree, "trk_llr_pid_score_v",
+    ev.track_llr_pid_score_ );
 
   // MC truth information for the neutrino
   etree.SetBranchAddress( "nu_pdg", &ev.mc_nu_pdg_ );
@@ -446,11 +509,11 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
   etree.SetBranchAddress( "interaction", &ev.mc_nu_interaction_type_ );
 
   // MC truth information for the final-state primary particles
-  etree.SetBranchAddress( "mc_pdg", &ev.mc_nu_daughter_pdg_ );
-  etree.SetBranchAddress( "mc_E", &ev.mc_nu_daughter_energy_ );
-  etree.SetBranchAddress( "mc_px", &ev.mc_nu_daughter_px_ );
-  etree.SetBranchAddress( "mc_py", &ev.mc_nu_daughter_py_ );
-  etree.SetBranchAddress( "mc_pz", &ev.mc_nu_daughter_pz_ );
+  set_object_input_branch_address( etree, "mc_pdg", ev.mc_nu_daughter_pdg_ );
+  set_object_input_branch_address( etree, "mc_E", ev.mc_nu_daughter_energy_ );
+  set_object_input_branch_address( etree, "mc_px", ev.mc_nu_daughter_px_ );
+  set_object_input_branch_address( etree, "mc_py", ev.mc_nu_daughter_py_ );
+  set_object_input_branch_address( etree, "mc_pz", ev.mc_nu_daughter_pz_ );
 
   // GENIE and other systematic variation weights
   bool has_genie_mc_weights = ( etree.GetBranch("weightSpline") != nullptr );
@@ -461,16 +524,22 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
 
   bool has_weight_map = ( etree.GetBranch("weights") != nullptr );
   if ( has_weight_map ) {
-    etree.SetBranchAddress( "weights", &ev.mc_weights_map_ );
+    set_object_input_branch_address( etree, "weights", ev.mc_weights_map_ );
+  }
+  else {
+    ev.mc_weights_map_.reset( nullptr );
   }
 
   // Purity and completeness of the backtracked hits in the neutrino slice
   bool has_pfp_backtracked_purity = ( etree.GetBranch("nu_purity_from_pfp")
     != nullptr );
   if ( has_pfp_backtracked_purity ) {
+
     etree.SetBranchAddress( "nu_completeness_from_pfp",
       &ev.nu_completeness_from_pfp_ );
+
     etree.SetBranchAddress( "nu_purity_from_pfp", &ev.nu_purity_from_pfp_ );
+
   }
 
 }
@@ -500,6 +569,15 @@ template <typename T> void set_object_output_branch_address( TTree& out_tree,
 {
   if ( create ) out_tree.Branch( branch_name.c_str(), &address );
   else out_tree.SetBranchAddress( branch_name.c_str(), &address );
+}
+
+// Overloaded version that uses a MyPointer argument instead
+template <typename T> void set_object_output_branch_address( TTree& out_tree,
+  const std::string& branch_name, MyPointer<T>& u_ptr,
+  bool create = false )
+{
+  T*& address = u_ptr.get_bare_ptr();
+  set_object_output_branch_address( out_tree, branch_name, address, create );
 }
 
 // Helper function to set branch addresses for the output TTree
@@ -617,26 +695,26 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
 
   // Reco 3-momenta (muon, leading proton)
   set_object_output_branch_address< TVector3 >( out_tree,
-    "p3_mu", ev.p3_mu_ptr_, create );
+    "p3_mu", ev.p3_mu_, create );
 
   set_object_output_branch_address< TVector3 >( out_tree,
-    "p3_lead_p", ev.p3_lead_p_ptr_, create );
+    "p3_lead_p", ev.p3_lead_p_, create );
 
   // Reco 3-momenta (all proton candidates, ordered from highest to lowest
   // magnitude)
   set_object_output_branch_address< std::vector<TVector3> >( out_tree,
-    "p3_p_vec", ev.p3_p_vec_ptr_, create );
+    "p3_p_vec", ev.p3_p_vec_, create );
 
   // True 3-momenta (muon, leading proton)
   set_object_output_branch_address< TVector3 >( out_tree,
-    "mc_p3_mu", ev.mc_p3_mu_ptr_, create );
+    "mc_p3_mu", ev.mc_p3_mu_, create );
 
   set_object_output_branch_address< TVector3 >( out_tree,
-    "mc_p3_lead_p", ev.mc_p3_lead_p_ptr_, create );
+    "mc_p3_lead_p", ev.mc_p3_lead_p_, create );
 
   // True 3-momenta (all protons, ordered from highest to lowest magnitude)
   set_object_output_branch_address< std::vector<TVector3> >( out_tree,
-    "mc_p3_p_vec", ev.mc_p3_p_vec_ptr_, create );
+    "mc_p3_p_vec", ev.mc_p3_p_vec_, create );
 
   // Reco STVs
   set_output_branch_address( out_tree, "delta_pT",
@@ -952,11 +1030,6 @@ void analyze(const std::vector<std::string>& in_file_names,
     // We're done. Save the results and move on to the next event.
     out_tree->Fill();
     ++events_entry;
-
-    // Manually delete the map of systematic variation weights. Due to dumb
-    // ROOT reasons, failing to do this leads to a memory leak.
-    if ( cur_event.mc_weights_map_ ) delete cur_event.mc_weights_map_;
-    cur_event.mc_weights_ptr_map_.clear();
   }
 
   out_tree->Write();
@@ -1348,8 +1421,8 @@ void AnalysisEvent::compute_observables() {
 
   // Abbreviate some of the calculations below by using these handy
   // references to the muon and leading proton 3-momenta
-  auto& p3mu = p3_mu_;
-  auto& p3p = p3_lead_p_;
+  auto& p3mu = *p3_mu_;
+  auto& p3p = *p3_lead_p_;
 
   // Set the reco 3-momentum of the muon candidate if we found one
   bool muon = muon_candidate_idx_ != BOGUS_INDEX;
@@ -1388,7 +1461,7 @@ void AnalysisEvent::compute_observables() {
   }
 
   // Reset the vector of reconstructed proton candidate 3-momenta
-  p3_p_vec_.clear();
+  p3_p_vec_->clear();
 
   // Set the reco 3-momenta of all proton candidates (i.e., all tracks except
   // the muon candidate) assuming we found both a muon candidate and at least
@@ -1406,13 +1479,13 @@ void AnalysisEvent::compute_observables() {
       TVector3 p3_temp( p_dirx, p_diry, p_dirz );
       p3_temp = p3p.Unit() * p_mom;
 
-      p3_p_vec_.push_back( p3_temp );
+      p3_p_vec_->push_back( p3_temp );
     }
 
     // TODO: reduce code duplication by just getting the leading proton
     // 3-momentum from this sorted vector
     // Sort the reco proton 3-momenta in order from highest to lowest magnitude
-    std::sort( p3_p_vec_.begin(), p3_p_vec_.end(), [](const TVector3& a,
+    std::sort( p3_p_vec_->begin(), p3_p_vec_->end(), [](const TVector3& a,
       const TVector3& b) -> bool { return a.Mag() > b.Mag(); } );
   }
 
@@ -1445,7 +1518,7 @@ void AnalysisEvent::compute_mc_truth_observables() {
         float px = mc_nu_daughter_px_->at( d );
         float py = mc_nu_daughter_py_->at( d );
         float pz = mc_nu_daughter_pz_->at( d );
-        mc_p3_mu_ = TVector3( px, py, pz );
+        *mc_p3_mu_ = TVector3( px, py, pz );
         break;
       }
     }
@@ -1457,7 +1530,7 @@ void AnalysisEvent::compute_mc_truth_observables() {
   }
 
   // Reset the vector of true MC proton 3-momenta
-  mc_p3_p_vec_.clear();
+  mc_p3_p_vec_->clear();
 
   // Set the true 3-momentum of the leading proton (if there is one)
   float max_mom = LOW_FLOAT;
@@ -1470,12 +1543,12 @@ void AnalysisEvent::compute_mc_truth_observables() {
       float pz = mc_nu_daughter_pz_->at( p );
       TVector3 temp_p3 = TVector3( px, py, pz );
 
-      mc_p3_p_vec_.push_back( temp_p3 );
+      mc_p3_p_vec_->push_back( temp_p3 );
 
       float mom = temp_p3.Mag();
       if ( mom > max_mom ) {
         max_mom = mom;
-        mc_p3_lead_p_ = temp_p3;
+        *mc_p3_lead_p_ = temp_p3;
       }
     }
   }
@@ -1483,7 +1556,7 @@ void AnalysisEvent::compute_mc_truth_observables() {
   // TODO: reduce code duplication by just getting the leading proton
   // 3-momentum from this sorted vector
   // Sort the true proton 3-momenta in order from highest to lowest magnitude
-  std::sort( mc_p3_p_vec_.begin(), mc_p3_p_vec_.end(), [](const TVector3& a,
+  std::sort( mc_p3_p_vec_->begin(), mc_p3_p_vec_->end(), [](const TVector3& a,
     const TVector3& b) -> bool { return a.Mag() > b.Mag(); } );
 
   // If the event contains a leading proton, then set the 3-momentum
@@ -1498,7 +1571,7 @@ void AnalysisEvent::compute_mc_truth_observables() {
   // Compute true STVs if the event contains both a muon and a leading
   // proton
   if ( true_muon && true_lead_p ) {
-    compute_stvs( mc_p3_mu_, mc_p3_lead_p_, mc_delta_pT_, mc_delta_phiT_,
+    compute_stvs( *mc_p3_mu_, *mc_p3_lead_p_, mc_delta_pT_, mc_delta_phiT_,
       mc_delta_alphaT_, mc_delta_pL_, mc_pn_ );
   }
 }
@@ -1511,7 +1584,8 @@ void analyzer(const std::string& in_file_name,
 }
 
 int main() {
-analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "out.root");
-//analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_43/0702/run1/data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root", "out.root");
-return 0;
+  //analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "/uboone/data/users/gardiner/ntuples-stv/out.root");
+  //analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_41/cc0pinp/0617/nslice/run1_neutrinoselection_filt_numu_ALL.root", "/uboone/data/users/gardiner/ntuples-stv/out.root");
+  analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_44/0724/noweights/prodgenie_bnb_nu_overlay_DetVar_CV_reco2_v08_00_00_38_run3b_reco2_reco2.root", "/uboone/data/users/gardiner/ntuples-stv/out.root");
+  return 0;
 }

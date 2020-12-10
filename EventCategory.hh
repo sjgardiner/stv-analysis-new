@@ -1,5 +1,7 @@
 #pragma once
 
+#include "TH1.h"
+
 // Enum used to label event categories of interest for analysis plots
 enum EventCategory {
 
