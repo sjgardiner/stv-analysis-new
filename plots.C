@@ -1,8 +1,8 @@
 // STV analysis includes
 #include "EventCategory.hh"
 
-const std::string BNB_DATA_FILE = "on_data_stv.root";
-const std::string EXT_BNB_DATA_FILE = "off_data_stv.root";
+const std::string BNB_DATA_FILE = "/uboone/data/users/gardiner/ntuples-stv/stv-data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root";
+const std::string EXT_BNB_DATA_FILE = "/uboone/data/users/gardiner/ntuples-stv/stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_C_all_reco2.root";
 
 constexpr double EXT_OFF_DATA = 65498807.0;
 constexpr double E1DCNT_ON_DATA = 10080350.0;
@@ -10,12 +10,8 @@ constexpr double POT_ON_DATA = 4.54e+19;
 constexpr double POT_OFF_DATA = (EXT_OFF_DATA / E1DCNT_ON_DATA) * POT_ON_DATA;
 
 // Cuts to use when filling histograms with selected events
-const std::string selection = "reco_nu_vtx_sce_x >= 10."
-" && reco_nu_vtx_sce_x <= 246.35"
-" && reco_nu_vtx_sce_y >= -106.5"
-" && reco_nu_vtx_sce_y <= 106.5"
-" && reco_nu_vtx_sce_z >= 10."
-" && reco_nu_vtx_sce_z <= 968.8";
+const std::string selection = "sel_CCNp0pi"; //" && @p3_p_vec.size() > 2";
+//const std::string selection = "sel_nu_mu_cc && sel_has_muon_candidate"; // && reco_muon_contained";
 
 // Weight to apply to MC events when filling histograms
 //const std::string mc_event_weight = "1.";
@@ -29,7 +25,7 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
 {
   const EventCategoryInterpreter& eci = EventCategoryInterpreter::Instance();
 
-  auto* c1 = new TCanvas( "c1", "", 800, 600 );
+  auto* c1 = new TCanvas; //( "c1", "", 800, 600 );
   //c1->SetLeftMargin( 0.12 );
   //c1->SetBottomMargin( 1.49 );
 
@@ -90,6 +86,7 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   // Loop over the different MC files and collect their contributions.
   // We have to handle them separately in order to get the POT normalization
   // correct.
+  int dummy_counter = 0;
   for ( const auto& mc_file_name : mc_file_names ) {
 
     // Get the POT values from the current input MC file
@@ -110,7 +107,9 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
       EventCategory ec = pair.first;
 
       std::string temp_mc_hist_name = hist_name_prefix + "-temp_mc"
-        + std::to_string(ec) + mc_file_name;
+        + std::to_string(ec) + "_number" + std::to_string(dummy_counter);
+
+      ++dummy_counter;
 
       TH1D* temp_mc_hist = new TH1D( temp_mc_hist_name.c_str(),
         plot_title.c_str(), Nbins, xmin, xmax );
@@ -138,6 +137,7 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   pad1->Draw();
   pad1->cd();
 
+  //on_data_hist->GetYaxis()->SetRangeUser(0., 300.);
   on_data_hist->Draw( "E1" );
 
   // Stack of categorized MC predictions plus extBNB contribution
@@ -145,7 +145,8 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
 
   // Sum all contributions into this TH1D so that we can get the overall
   // statistical uncertainty easily
-  TH1D* stat_err_hist = new TH1D( "stat_err_hist", "", Nbins, xmin, xmax );
+  TH1D* stat_err_hist = new TH1D(
+    ("stat_err_hist_" + hist_name_prefix).c_str(), "", Nbins, xmin, xmax );
 
   stacked_hist->Add( off_data_hist );
   stat_err_hist->Add( off_data_hist );
@@ -263,21 +264,35 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
 
 void plots() {
 
-  std::vector<std::string> mc_file_names = { "dirt_stv.root",
-    "nue_overlay_stv.root", "numu_overlay_stv.root" };
+  std::vector<std::string> mc_file_names = {
+"/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root",
+"/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root",
+"/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root"
+  };
 
-  make_plots("topological_score", "topological_score", "topological score",
-    0., 1., 50, mc_file_names);
+  //make_plots("cthmu", "p3_mu.CosTheta()", "cos#theta_{#mu}", -1., 1., 20, mc_file_names);
 
-  //make_plots("delta_alphaT", "reco #delta#alpha_{T} (GeV)", 0., M_PI, 10);
-  //make_plots("delta_phiT", "reco #delta#phi_{T} (GeV)", 0., M_PI, 10);
+  make_plots("phimu", "p3_mu.Phi()", "#phi_{#mu}", 0., M_PI, 40, mc_file_names);
 
-  //make_plots( "pn", "reco p_{n} (GeV)", 0., 2., 10, mc_file_names );
-//  make_plots("delta_pT", "reco #deltap_{T} (GeV)", 0., 2., 10, mc_file_names);
-//  make_plots("delta_phiT", "reco #delta_{#alphaT}", 0., M_PI, 10, mc_file_names);
-//  make_plots("delta_phiT", "reco #delta_{#alphaT}", 0., M_PI, 10, mc_file_names);
-  //make_plots("pmu", "p3_mu.Mag()", "p^{reco}_{#mu} [GeV]", 0., 2., 50, mc_file_names);
-  //make_plots("pp", "p3_lead_p.Mag()", "reco p_{lead p} (GeV)", 0.2, 1.4, 35, mc_file_names);
-  //make_plots("pmu", "p3_mu.Mag()", "reco p_{#mu} (GeV)", 0.15, 2., 35, mc_file_names);
-//  make_plots("delta_pT_2p", "reco #deltap_{T_{2p}} (GeV)", 0., 2., 10, mc_file_names);
+  //make_plots("cthp", "p3_lead_p.CosTheta()", "cos#theta_{p}", -1., 1., 20, mc_file_names);
+
+  //make_plots( "sumTp",
+  //  "Sum$(TMath::Sqrt(p3_p_vec.Mag2() + 0.93827208*0.93827208) - 0.93827208)",
+  //  "#Sigma Tp", 0., 0.8, 15, mc_file_names );
+
+  //make_plots("delta_alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 15, mc_file_names);
+
+  //make_plots( "pn", "pn", "reco p_{n} (GeV)", 0., 1., 25, mc_file_names );
+  //make_plots("delta_phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 20, mc_file_names);
+
+  //make_plots("trk_len_mu", "trk_len_v[muon_candidate_idx]", "muon candidate track length (uncontained only)", 0., 500., 15, mc_file_names);
+
+  //make_plots("trk_mom_mu", "trk_range_muon_mom_v[muon_candidate_idx]", "muon candidate momentum (uncontained only)", 0., 1.5, 15, mc_file_names);
+
+  //make_plots("trk_mom_mu", "trk_mcs_muon_mom_v[muon_candidate_idx]", "muon candidate momentum (contained only)", 0., 1.5, 15, mc_file_names);
+
+  make_plots("pp", "p3_lead_p.Mag()", "reco p_{lead p} (GeV)", 0.2, 1.2, 20, mc_file_names);
+
+  make_plots("delta_pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 1., 15, mc_file_names);
+
 }
