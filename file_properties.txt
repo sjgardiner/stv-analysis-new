@@ -1,0 +1,45 @@
+# Trigger counts and POT exposures are taken from the searching4nues
+# spreadsheet: tinyurl.com/pelee-nue-ntuples
+# basename run file_type triggers POT
+#
+# Open beam-on data
+# stv-data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root 1 onBNB 10080350 4.54e19
+# stv-data_bnb_mcc9.1_v08_00_00_25_reco2_G1_beam_good_reco2_1e19.root 3 onBNB  2271036 9.43e18
+#
+# Beam-off data
+stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_C_all_reco2.root 1 extBNB 65498807 0
+stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_D_E_all_reco2.root 2 extBNB 152404890 0
+stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_F_G_all_reco2.root 3 extBNB 214555174 0
+#
+# Full beam-on data
+stv-run1_neutrinoselection_filt_numu_ALL.root 1 onBNB 36139233 1.62e20
+stv-run2_neutrinoselection_filt_numu_ALL.root 2 onBNB 62045760 2.62e20
+stv-run3_neutrinoselection_filt_numu_ALL.root 3 onBNB 61012955 2.55e20
+#
+# Dirt MC samples
+stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root 1 dirtMC
+stv-prodgenie_dirt_overlay_v08_00_00_35_all_run2_reco2_reco2.root 2 dirtMC
+stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root 3 dirtMC
+#
+# Intrinsic nue MC samples
+stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root 1 nueMC
+stv-prodgenie_bnb_intrinsic_nue_overlay_run2_v08_00_00_35_run2a_reco2_reco2.root 2 nueMC
+stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root 3 nueMC
+#
+# numu MC samples
+stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root 1 numuMC
+stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root 2 numuMC
+stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root 3 numuMC
+#
+# detVar MC samples
+stv-prodgenie_bnb_nu_overlay_DetVar_CV_reco2_v08_00_00_38_run3b_reco2_reco2.root 3 detVarCV
+stv-prodgenie_bnb_nu_overlay_DetVar_LYAttenuation_v08_00_00_38_run3b_reco2_reco2.root 3 detVarLYatten
+stv-prodgenie_bnb_nu_overlay_DetVar_LYDown_v08_00_00_37_v2_run3b_reco2_reco2.root 3 detVarLYdown
+stv-prodgenie_bnb_nu_overlay_DetVar_LYRayleigh_v08_00_00_37_run3b_reco2_reco2.root 3 detVarLYrayl
+stv-prodgenie_bnb_nu_overlay_DetVar_Recomb2_reco2_v08_00_00_39_run3b_reco2_reco2.root 3 detVarRecomb2
+stv-prodgenie_bnb_nu_overlay_DetVar_SCE_reco2_v08_00_00_38_run3b_reco2_reco2.root 3 detVarSCE
+stv-prodgenie_bnb_nu_overlay_DetVar_WireModAngleXZ_v08_00_00_38_exe_run3b_reco2_reco2.root 3 detVarWMAngleXZ
+stv-prodgenie_bnb_nu_overlay_DetVar_WireModAngleYZ_v08_00_00_38_exe_run3b_reco2_reco2.root 3 detVarWMAngleYZ
+stv-prodgenie_bnb_nu_overlay_DetVar_wiremod_ScaledEdX_v08_00_00_39_run3b_reco2_reco2.root 3 detVarWMdEdx
+stv-prodgenie_bnb_nu_overlay_DetVar_wiremod_ScaleX_v08_00_00_38_run3b_reco2_reco2.root 3 detVarWMX
+stv-prodgenie_bnb_nu_overlay_DetVar_wiremod_ScaleYZ_v08_00_00_38_run3b_reco2_reco2.root 3 detVarWMYZ
