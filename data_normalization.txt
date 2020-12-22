@@ -1,0 +1,11 @@
+# Data file normalization factors
+# (taken from searching4nues spreadsheet: tinyurl.com/pelee-nue-ntuples)
+# basename triggers POT
+stv-data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root 10080350 4.54e19
+stv-data_bnb_mcc9.1_v08_00_00_25_reco2_G1_beam_good_reco2_1e19.root  2271036 9.43e18
+stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_C_all_reco2.root 65498807 0
+stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_D_E_all_reco2.root 152404890 0
+stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_F_G_all_reco2.root 214555174 0
+stv-run1_neutrinoselection_filt_numu_ALL.root 36139233 1.62e20
+stv-run2_neutrinoselection_filt_numu_ALL.root 62045760 2.62e20
+stv-run3_neutrinoselection_filt_numu_ALL.root 61012955 2.55e20
