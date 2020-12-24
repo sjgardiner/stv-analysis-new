@@ -1,77 +1,171 @@
+// Standard library includes
+#include <iomanip>
+#include <map>
+#include <memory>
+#include <string>
+
+// ROOT includes
+#include "TCanvas.h"
+#include "TChain.h"
+#include "TFile.h"
+#include "TH1D.h"
+#include "THStack.h"
+#include "TLegend.h"
+#include "TLine.h"
+#include "TParameter.h"
+#include "TStyle.h"
+#include "TPad.h"
+
 // STV analysis includes
 #include "EventCategory.hh"
+#include "FiducialVolume.hh"
+#include "FilePropertiesManager.hh"
 
-const std::string BNB_DATA_FILE = "/uboone/data/users/gardiner/ntuples-stv/stv-data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root";
-const std::string EXT_BNB_DATA_FILE = "/uboone/data/users/gardiner/ntuples-stv/stv-data_extbnb_mcc9.1_v08_00_00_25_reco2_C_all_reco2.root";
-
-constexpr double EXT_OFF_DATA = 65498807.0;
-constexpr double E1DCNT_ON_DATA = 10080350.0;
-constexpr double POT_ON_DATA = 4.54e+19;
-constexpr double POT_OFF_DATA = (EXT_OFF_DATA / E1DCNT_ON_DATA) * POT_ON_DATA;
-
-// Cuts to use when filling histograms with selected events
-const std::string selection = "sel_CCNp0pi"; //" && @p3_p_vec.size() > 2";
-//const std::string selection = "sel_nu_mu_cc && sel_has_muon_candidate"; // && reco_muon_contained";
-
-// Weight to apply to MC events when filling histograms
-//const std::string mc_event_weight = "1.";
-//const std::string mc_event_weight = "spline_weight";
-const std::string mc_event_weight = "spline_weight * (std::isfinite("
+// By default, weight the MC events using the MicroBooNE CV tune
+const std::string DEFAULT_MC_EVENT_WEIGHT = "spline_weight * (std::isfinite("
   "tuned_cv_weight) && tuned_cv_weight <= 100. ? tuned_cv_weight : 1)";
 
-void make_plots(const std::string& hist_name_prefix, const std::string& branch,
-  const std::string& var_name, double xmin, double xmax, int Nbins,
-  const std::vector<std::string>& mc_file_names)
+// Abbreviation to make using the enum class easier
+using NFT = NtupleFileType;
+
+void make_plots( const std::string& branchexpr, const std::string& selection,
+  const std::set<int>& runs, double xmin, double xmax, int Nbins,
+  const std::string& x_axis_label = "", const std::string& y_axis_label = "",
+  const std::string& title = "",
+  const std::string& mc_event_weight = DEFAULT_MC_EVENT_WEIGHT )
 {
+  // Make a counter that iterates each time this function is called. We'll use
+  // it to avoid duplicate histogram names (which can confuse ROOT).
+  static long plot_counter = -1;
+  ++plot_counter;
+
+  // Get access to the singleton utility classes that we'll need
   const EventCategoryInterpreter& eci = EventCategoryInterpreter::Instance();
+  const FilePropertiesManager& fpm = FilePropertiesManager::Instance();
 
-  auto* c1 = new TCanvas; //( "c1", "", 800, 600 );
-  //c1->SetLeftMargin( 0.12 );
-  //c1->SetBottomMargin( 1.49 );
+  // Consider samples for data taken with the beam on, data taken with the beam
+  // off, and CV MC samples for numus, intrinsic nues, and dirt events
+  constexpr std::array< NFT, 5 > file_types = { NFT::kOnBNB, NFT::kExtBNB,
+    NFT::kNumuMC, NFT::kIntrinsicNueMC, NFT::kDirtMC };
 
-  std::stringstream temp_ss;
-  temp_ss << POT_ON_DATA;
+  // Similar array that includes only the CV MC samples
+  constexpr std::array< NFT, 3 > mc_file_types = { NFT::kNumuMC,
+    NFT::kIntrinsicNueMC, NFT::kDirtMC };
 
-  std::string plot_title = var_name + ", MCC9, Run 1; " + var_name
-    + "; #frac{Selected Events}{" + temp_ss.str() + " POT}";
+  // Prepare TChains needed to loop over the event ntuples to be analyzed. Also
+  // prepare maps to keep track of the corresponding POT normalizations and
+  // total number of triggers (the latter of these is actually used only for
+  // data samples).
+  std::map< NFT, std::unique_ptr<TChain> > tchain_map;
+  std::map< NFT, double > pot_map;
+  std::map< NFT, long > trigger_map;
+  for ( const auto& type : file_types ) {
+    tchain_map.emplace( std::make_pair(type, new TChain("stv_tree")) );
+    pot_map[ type ] = 0.;
+    trigger_map[ type ] = 0;
+  }
 
-  TFile off_data_file( EXT_BNB_DATA_FILE.c_str(), "read" );
-  TTree* off_data_tree = nullptr;
-  off_data_file.GetObject( "stv_tree", off_data_tree );
+  // Add files for each of the selected runs to the appropriate TChain. Also
+  // update the corresponding POT normalizations. Use the FilePropertiesManager
+  // to find the right ntuple files for each run.
+  const auto& ntuple_map = fpm.ntuple_file_map();
+  const auto& data_norm_map = fpm.data_norm_map();
 
-  std::string off_data_hist_name = hist_name_prefix + "-ext";
+  for ( const int& run : runs ) {
+    // Get the map storing the ntuple file names for the current run
+    const auto& run_map = ntuple_map.at( run );
+
+    for ( const auto& type : file_types ) {
+
+      // Get the set of ntuple files for the current run and sample type
+      const auto& ntuple_files = run_map.at( type );
+
+      // Get access to the corresponding TChain, total POT value, and total
+      // number of triggers that we want to use to handle these files
+      auto* tchain = tchain_map.at( type ).get();
+      double& total_pot = pot_map.at( type );
+      long& total_triggers = trigger_map.at( type );
+
+      for ( const auto& file_name : ntuple_files ) {
+        // Add the current file to the appropriate TChain
+        tchain->Add( file_name.c_str() );
+
+        // For data samples, get normalization information from the
+        // FilePropertiesManager and add it to the total (it's not stored in
+        // the files themselves)
+        if ( type == NFT::kOnBNB || type == NFT::kExtBNB ) {
+          const auto& norm_info = data_norm_map.at( file_name );
+          total_triggers += norm_info.trigger_count_;
+          // This will just be zero for beam-off data. We will calculate an
+          // effective value using the trigger counts below.
+          total_pot += norm_info.pot_;
+        }
+        // For MC samples, extract the POT normalization from the TParameter
+        // stored in the file
+        else if ( type == NFT::kNumuMC || type == NFT::kIntrinsicNueMC
+          || type == NFT::kDirtMC )
+        {
+          TFile temp_file( file_name.c_str(), "read" );
+          TParameter<float>* temp_pot = nullptr;
+          temp_file.GetObject( "summed_pot", temp_pot );
+          double pot = temp_pot->GetVal();
+          total_pot += pot;
+        }
+      } // file names
+    } // ntuple types
+  } // runs
+
+  // Prepare strings used by multiple histograms below
+  std::string hist_name_prefix = "hist_plot" + std::to_string( plot_counter );
+  std::string plot_title = title + "; " + x_axis_label + "; " + y_axis_label;
+
+  // Fill the beam-off data histogram using the matching TChain
+  std::string off_data_hist_name = hist_name_prefix + "_ext";
   TH1D* off_data_hist = new TH1D( off_data_hist_name.c_str(),
     plot_title.c_str(), Nbins, xmin, xmax );
-  off_data_tree->Draw( (branch + " >> " + off_data_hist_name).c_str(),
-    selection.c_str() );
-  off_data_hist->Scale( POT_ON_DATA / POT_OFF_DATA );
-  off_data_hist->SetDirectory( nullptr );
+
+  TChain* off_chain = tchain_map.at( NFT::kExtBNB ).get();
+  off_chain->Draw( (branchexpr + " >> " + off_data_hist_name).c_str(),
+    selection.c_str(), "goff" );
+  //off_data_hist->SetDirectory( nullptr );
+
+  // We need to scale the beam-off data to an effective POT based on the ratio
+  // of the total trigger counts for beam-off and beam-on data. Do that here.
+  double pot_on = pot_map.at( NFT::kOnBNB );
+  double trigs_on = trigger_map.at( NFT::kOnBNB );
+  double trigs_off = trigger_map.at( NFT::kExtBNB );
+
+  // Compute the effective POT and store it in the map
+  double ext_effective_pot = trigs_off * pot_on / trigs_on;
+  pot_map[ NFT::kExtBNB ] = ext_effective_pot;
+
+  // Scale the beam-off data based on the effective POT
+  off_data_hist->Scale( pot_on / ext_effective_pot );
 
   eci.set_ext_histogram_style( off_data_hist );
 
-  TFile on_data_file( BNB_DATA_FILE.c_str(), "read" );
-  TTree* on_data_tree = nullptr;
-  on_data_file.GetObject( "stv_tree", on_data_tree );
-
-  std::string on_data_hist_name = hist_name_prefix + "-on";
+  // Fill the beam-on data histogram using the matching TChain
+  std::string on_data_hist_name = hist_name_prefix + "_on";
   TH1D* on_data_hist = new TH1D( on_data_hist_name.c_str(),
     plot_title.c_str(), Nbins, xmin, xmax);
-  on_data_tree->Draw( (branch + " >> " + on_data_hist_name).c_str(),
-    selection.c_str() );
 
+  TChain* on_chain = tchain_map.at( NFT::kOnBNB ).get();
+  on_chain->Draw( (branchexpr + " >> " + on_data_hist_name).c_str(),
+    selection.c_str(), "goff" );
+
+  //on_data_hist->SetDirectory( nullptr );
   on_data_hist->Scale( 1. );
-  on_data_hist->SetDirectory( nullptr );
 
   eci.set_bnb_data_histogram_style( on_data_hist );
 
-  // Initialize empty stacked histograms by MC event category
+  // Initialize empty stacked histograms organized by MC event category
   std::map< EventCategory, TH1D* > mc_hists;
   // Loop over all MC event categories
   for ( const auto& pair : eci.label_map() ) {
     EventCategory cat = pair.first;
     std::string cat_label = pair.second;
 
-    std::string temp_mc_hist_name = hist_name_prefix + "-temp_mc"
+    std::string temp_mc_hist_name = hist_name_prefix + "_mc"
       + std::to_string( cat );
 
     TH1D* temp_mc_hist = new TH1D( temp_mc_hist_name.c_str(),
@@ -79,55 +173,58 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
 
     mc_hists[ cat ] = temp_mc_hist;
 
-    temp_mc_hist->SetDirectory( nullptr );
+    //temp_mc_hist->SetDirectory( nullptr );
     eci.set_mc_histogram_style( cat, temp_mc_hist );
   }
 
-  // Loop over the different MC files and collect their contributions.
-  // We have to handle them separately in order to get the POT normalization
+  // Loop over the different MC samples and collect their contributions. We
+  // have to handle them separately in order to get the POT normalization
   // correct.
-  int dummy_counter = 0;
-  for ( const auto& mc_file_name : mc_file_names ) {
 
-    // Get the POT values from the current input MC file
-    TFile temp_mc_file( mc_file_name.c_str(), "read" );
-    TParameter<float>* temp_pot = nullptr;
-    temp_mc_file.GetObject( "summed_pot", temp_pot );
+  // Counter that avoids duplicate temporary MC histogram names. This is used
+  // to avoid annoying ROOT warnings.
+  static int dummy_counter = 0;
+  for ( const auto& type : mc_file_types ) {
 
-    double mc_pot = temp_pot->GetVal();
+    TChain* mc_ch = tchain_map.at( type ).get();
+    double on_pot = pot_map.at( NFT::kOnBNB );
+    double mc_pot = pot_map.at( type );
 
-    // Use a temporary TChain to analyze the MC events
-    TChain mc_ch( "stv_tree" );
-    mc_ch.Add( mc_file_name.c_str() );
-
-    // Add this file's contribution to the stacked histograms by MC event
+    // Add this sample's contribution to the stacked histograms by MC event
     // category
     for ( const auto& pair : eci.label_map() ) {
 
       EventCategory ec = pair.first;
 
-      std::string temp_mc_hist_name = hist_name_prefix + "-temp_mc"
-        + std::to_string(ec) + "_number" + std::to_string(dummy_counter);
+      std::string temp_mc_hist_name = hist_name_prefix + "_temp_mc"
+        + std::to_string( ec ) + "_number" + std::to_string( dummy_counter );
 
       ++dummy_counter;
 
       TH1D* temp_mc_hist = new TH1D( temp_mc_hist_name.c_str(),
         plot_title.c_str(), Nbins, xmin, xmax );
 
-      mc_ch.Draw( (branch + " >> " + temp_mc_hist_name).c_str(),
+      mc_ch->Draw( (branchexpr + " >> " + temp_mc_hist_name).c_str(),
         (mc_event_weight + "*(" + selection + " && category == "
-        + std::to_string(ec) + ')').c_str() );
+        + std::to_string(ec) + ')').c_str(), "goff" );
 
-      // Scale to the same exposure as the beam on data
-      temp_mc_hist->Scale( POT_ON_DATA / mc_pot );
+      // Scale to the same exposure as the beam-on data
+      temp_mc_hist->Scale( on_pot / mc_pot );
 
       // Add this histogram's contribution (now properly scaled) to the total
       mc_hists.at( ec )->Add( temp_mc_hist );
 
       // We don't need the temporary histogram anymore, so just get rid of it
       delete temp_mc_hist;
-    }
-  } // loop over MC files
+
+    } // event categories
+
+  } // MC samples
+
+  // All the input histograms are now ready. Prepare the plot.
+  auto* c1 = new TCanvas;
+  //c1->SetLeftMargin( 0.12 );
+  //c1->SetBottomMargin( 1.49 );
 
   TPad* pad1 = new TPad( "pad1", "", 0.0, 0.23, 1.0, 1.0 );
   pad1->SetBottomMargin( 0 );
@@ -137,7 +234,6 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   pad1->Draw();
   pad1->cd();
 
-  //on_data_hist->GetYaxis()->SetRangeUser(0., 300.);
   on_data_hist->Draw( "E1" );
 
   // Stack of categorized MC predictions plus extBNB contribution
@@ -166,10 +262,40 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   eci.set_stat_err_histogram_style( stat_err_hist );
   stat_err_hist->Draw( "E2 same" );
 
-  TLegend* lg = new TLegend( 0.64, 0.42, 0.94, 0.85 );
+  // Adjust y-axis range for stacked plot. Check both the data and the
+  // stacked histograms (via the combined stat_err_hist)
+  double ymax = stat_err_hist->GetBinContent( stat_err_hist->GetMaximumBin() );
+  double ymax2 = on_data_hist->GetBinContent( on_data_hist->GetMaximumBin() );
+  if ( ymax < ymax2 ) ymax = ymax2;
+
+  // Redraw the histograms with the updated y-axis range
+  on_data_hist->GetYaxis()->SetRangeUser( 0., 1.05*ymax );
+  on_data_hist->Draw( "E1 same" );
+
+  // Prepare the plot legend
+  TLegend* lg = new TLegend( 0.64, 0.32, 0.94, 0.85 );
+
+  // Print the data POT exposure to a precision of 3 decimal digits, then
+  // separate out the base-ten exponent for the legend header
+  std::stringstream temp_ss;
+  temp_ss << std::scientific << std::setprecision(3) << pot_on;
+
+  std::string pot_str = temp_ss.str();
+  size_t e_pos = pot_str.find( 'e' );
+
+  // Digits not including 'e' and the base-ten exponent
+  std::string pot_digits_str = pot_str.substr( 0, e_pos );
+  // pot_str now contains just the base-ten exponent
+  pot_str.erase( 0, e_pos + 1u );
+  // If there's a leading '+' in the exponent, erase that too
+  if ( pot_str.front() == '+' ) pot_str.erase( 0, 1u );
+
+  std::string legend_title = "MicroBooNE " + pot_digits_str + " #times 10^{"
+    + pot_str + "} POT, INTERNAL";
+  lg->SetHeader( legend_title.c_str(), "C" );
+
   lg->AddEntry( on_data_hist, "Data (beam on)", "lp" );
   lg->AddEntry( stat_err_hist, "Statistical uncertainty", "f" );
-
 
   double total_events = stat_err_hist->Integral();
   for ( const auto& pair : eci.label_map() ) {
@@ -196,6 +322,12 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
     + off_pct_label).c_str(), "f" );
 
   lg->SetBorderSize( 0 );
+
+  // Increase the font size for the legend header
+  // (see https://root-forum.cern.ch/t/tlegend-headers-font-size/14434)
+  TLegendEntry* lg_header = dynamic_cast< TLegendEntry* >(
+    lg->GetListOfPrimitives()->First() );
+  lg_header->SetTextSize( 0.03 );
 
   lg->Draw( "same" );
 
@@ -232,11 +364,11 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   h_ratio->GetXaxis()->SetTitleOffset( 0.9 );
 
   // y-axis
-  h_ratio->GetYaxis()->SetTitle( "#frac{Beam ON}{Beam OFF + MC}" );
+  h_ratio->GetYaxis()->SetTitle( "ratio" ); //"#frac{Beam ON}{Beam OFF + MC}" );
   h_ratio->GetYaxis()->CenterTitle( true );
-  h_ratio->GetYaxis()->SetLabelSize( 0.08 );
-  h_ratio->GetYaxis()->SetTitleSize( 0.085 );
-  h_ratio->GetYaxis()->SetTitleOffset( 0.5 );
+  h_ratio->GetYaxis()->SetLabelSize( 0.08);
+  h_ratio->GetYaxis()->SetTitleSize( 0.15 );
+  h_ratio->GetYaxis()->SetTitleOffset( 0.35 );
 
   h_ratio->Draw( "E1" );
 
@@ -246,7 +378,6 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
   double ratio_max = h_ratio->GetBinContent( h_ratio->GetMaximumBin() );
   double ratio_min = h_ratio->GetBinContent( h_ratio->GetMinimumBin() );
 
-  //h_ratio->GetYaxis()->SetRangeUser( ratio_min - ratio_min*0.2, ratio_max - ratio_max*0.8 );
   h_ratio->SetMaximum( ratio_max + ratio_max*0.15 );
   h_ratio->SetMinimum( ratio_min - ratio_min*0.2 );
 
@@ -264,35 +395,14 @@ void make_plots(const std::string& hist_name_prefix, const std::string& branch,
 
 void plots() {
 
-  std::vector<std::string> mc_file_names = {
-"/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root",
-"/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root",
-"/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root"
-  };
+  const std::string sel_CCNp = "sel_CCNp0pi";
+  const std::string sel_CCincl = "sel_nu_mu_cc && sel_has_muon_candidate"
+    " && sel_muon_above_threshold";
 
-  //make_plots("cthmu", "p3_mu.CosTheta()", "cos#theta_{#mu}", -1., 1., 20, mc_file_names);
+  make_plots( "delta_pT", sel_CCNp, std::set<int>{1,2,3}, 0.,
+    0.8, 25, "#deltap_{T} [GeV]", "events", "Runs 1-3" );
 
-  make_plots("phimu", "p3_mu.Phi()", "#phi_{#mu}", 0., M_PI, 40, mc_file_names);
-
-  //make_plots("cthp", "p3_lead_p.CosTheta()", "cos#theta_{p}", -1., 1., 20, mc_file_names);
-
-  //make_plots( "sumTp",
-  //  "Sum$(TMath::Sqrt(p3_p_vec.Mag2() + 0.93827208*0.93827208) - 0.93827208)",
-  //  "#Sigma Tp", 0., 0.8, 15, mc_file_names );
-
-  //make_plots("delta_alphaT", "delta_alphaT", "reco #delta#alpha_{T}", 0., M_PI, 15, mc_file_names);
-
-  //make_plots( "pn", "pn", "reco p_{n} (GeV)", 0., 1., 25, mc_file_names );
-  //make_plots("delta_phiT", "delta_phiT", "reco #delta#phi_{T}", 0., M_PI, 20, mc_file_names);
-
-  //make_plots("trk_len_mu", "trk_len_v[muon_candidate_idx]", "muon candidate track length (uncontained only)", 0., 500., 15, mc_file_names);
-
-  //make_plots("trk_mom_mu", "trk_range_muon_mom_v[muon_candidate_idx]", "muon candidate momentum (uncontained only)", 0., 1.5, 15, mc_file_names);
-
-  //make_plots("trk_mom_mu", "trk_mcs_muon_mom_v[muon_candidate_idx]", "muon candidate momentum (contained only)", 0., 1.5, 15, mc_file_names);
-
-  make_plots("pp", "p3_lead_p.Mag()", "reco p_{lead p} (GeV)", 0.2, 1.2, 20, mc_file_names);
-
-  make_plots("delta_pT", "delta_pT", "reco #deltap_{T} (GeV)", 0., 1., 15, mc_file_names);
+  //make_plots( "reco_nu_vtx_sce_z", sel_CCincl, std::set<int>{3}, FV_Z_MIN,
+  //  FV_Z_MAX, 40, "reco vertex z [cm]", "events", "Run " + std::to_string(3) );
 
 }

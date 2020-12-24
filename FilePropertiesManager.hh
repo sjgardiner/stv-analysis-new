@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <map>
+#include <set>
 #include <stdexcept>
 
 // Enum used to label types of analysis ntuple files
