@@ -116,8 +116,13 @@ class ResponseMatrix {
     // Gets the simulated POT exposure used to fill the owned histograms
     inline double pot() { return pot_; }
 
+    // Access the owned histograms
     inline TH1D* true_histogram() { return true_hist_.get(); }
     inline TH2D* smearing_histogram() { return smear_hist_.get(); }
+
+    // Access the bin definitions
+    inline const auto& true_bins() { return true_bins_; }
+    inline const auto& reco_bins() { return reco_bins_; }
 
   protected:
 
@@ -249,7 +254,7 @@ void ResponseMatrix::fill( TTree& in_tree, double mc_pot ) {
     // The x-axis variable is just the true bin number, so we can
     // fill the appropriate bin via TTree::Draw just by using it
     // as the x value.
-    std::string fill_var_expr = std::to_string( tb ) + " >> " + true_hist_name;
+    std::string fill_var_expr = std::to_string( tb ) + " >>+ " + true_hist_name;
 
     // Apply the cuts that define this true bin. Include the factor defined as
     // the overall MC event weight.
@@ -278,7 +283,7 @@ void ResponseMatrix::fill( TTree& in_tree, double mc_pot ) {
       std::string fill_var_expr = std::to_string( rb );
 
       // Likewise, the x-axis variable is just the true bin number.
-      fill_var_expr += ':' + std::to_string( tb ) + " >> " + smear_hist_name;
+      fill_var_expr += ':' + std::to_string( tb ) + " >>+ " + smear_hist_name;
 
       // Apply the cuts that define this smearing histogram bin. Include the
       // factor defined as the overall MC event weight.
