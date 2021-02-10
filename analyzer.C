@@ -22,6 +22,7 @@
 // STV analysis includes
 #include "EventCategory.hh"
 #include "FiducialVolume.hh"
+#include "TreeUtils.hh"
 
 // Helper function that avoids NaNs when taking square roots of negative
 // numbers
@@ -84,24 +85,6 @@ constexpr double PROTON_MASS = 0.93827208; // GeV
 constexpr double BINDING_ENERGY = 0.0295; // 40Ar, GeV
 constexpr double MUON_MASS = 0.10565837; // GeV
 constexpr double PI_PLUS_MASS = 0.13957000; // GeV
-
-// A std::unique_ptr with redundant storage of a bare pointer to the managed
-// object. This is a hacky workaround for setting TTree branch addresses for
-// objects managed by a std::unique_ptr.
-template <typename T> class MyPointer : public std::unique_ptr<T> {
-  public:
-
-    MyPointer() : std::unique_ptr<T>( new T ) {}
-
-    T*& get_bare_ptr() {
-      bare_ptr_ = this->get();
-      return bare_ptr_;
-    }
-
-  protected:
-
-    T* bare_ptr_ = nullptr;
-};
 
 // Class used to hold information from the searchingfornues TTree branches and
 // process it for our analysis
@@ -351,22 +334,6 @@ class AnalysisEvent {
 
 };
 
-// Helper function template that sets a new address for a pointer to an object
-// in an input TTree
-template <typename T> void set_object_input_branch_address( TTree& in_tree,
-  const std::string& branch_name, T*& address )
-{
-  in_tree.SetBranchAddress( branch_name.c_str(), &address );
-}
-
-// Overloaded version that uses a MyPointer argument instead
-template <typename T> void set_object_input_branch_address( TTree& in_tree,
-  const std::string& branch_name, MyPointer<T>& u_ptr )
-{
-  T*& address = u_ptr.get_bare_ptr();
-  set_object_input_branch_address( in_tree, branch_name, address );
-}
-
 // Helper function to set branch addresses for reading information
 // from the Event TTree
 void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
@@ -542,42 +509,6 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
 
   }
 
-}
-
-// Helper function that creates a branch (or just sets a new address) for a
-// simple variable in the output TTree
-void set_output_branch_address( TTree& out_tree, const std::string& branch_name,
-  void* address, bool create = false, const std::string leaf_spec = "")
-{
-  if ( create ) {
-    if ( leaf_spec != "" ) {
-      out_tree.Branch( branch_name.c_str(), address, leaf_spec.c_str() );
-    }
-    else {
-      out_tree.Branch( branch_name.c_str(), address );
-    }
-  }
-  else {
-    out_tree.SetBranchAddress( branch_name.c_str(), address );
-  }
-}
-
-// Helper function template that creates a branch (or just sets a new address)
-// for a pointer to an object in the output TTree
-template <typename T> void set_object_output_branch_address( TTree& out_tree,
-  const std::string& branch_name, T*& address, bool create = false )
-{
-  if ( create ) out_tree.Branch( branch_name.c_str(), &address );
-  else out_tree.SetBranchAddress( branch_name.c_str(), &address );
-}
-
-// Overloaded version that uses a MyPointer argument instead
-template <typename T> void set_object_output_branch_address( TTree& out_tree,
-  const std::string& branch_name, MyPointer<T>& u_ptr,
-  bool create = false )
-{
-  T*& address = u_ptr.get_bare_ptr();
-  set_object_output_branch_address( out_tree, branch_name, address, create );
 }
 
 // Helper function to set branch addresses for the output TTree

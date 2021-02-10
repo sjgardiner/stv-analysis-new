@@ -1,5 +1,6 @@
 #pragma once
 
+// Standard library includes
 #include <memory>
 #include <fstream>
 #include <iostream>
@@ -7,8 +8,13 @@
 #include <string>
 #include <vector>
 
+// ROOT includes
 #include "TH1D.h"
 #include "TH2D.h"
+
+// STV analysis includes
+#include "TreeUtils.hh"
+#include "WeightHandler.hh"
 
 // Define the missing intersection operator for TEntryList objects. Work
 // with smart pointers because we're using them elsewhere.
@@ -140,6 +146,10 @@ class ResponseMatrixMaker {
     // Populates the owned vectors of TEntryList objects using the input TChain
     // and the current bin configuration
     void build_entry_lists();
+
+    // Does the actual calculation of response matrix elements across the
+    // various systematic universes
+    void build_response_matrices();
 
   protected:
 
@@ -316,22 +326,46 @@ void ResponseMatrixMaker::build_entry_lists() {
 
 }
 
-//spline_weight : spline_weight/F
-//tuned_cv_weight : tuned_cv_weight/F
-//weight_All_UBGenie : vector<double>
-//weight_AxFFCCQEshape_UBGenie : vector<double>
-//weight_DecayAngMEC_UBGenie : vector<double>
-//weight_NormCCCOH_UBGenie : vector<double>
-//weight_NormNCCOH_UBGenie : vector<double>
-//weight_RPA_CCQE_UBGenie : vector<double>
-//weight_RootinoFix_UBGenie : vector<double>
-//weight_ThetaDelta2NRad_UBGenie : vector<double>
-//weight_Theta_Delta2Npi_UBGenie : vector<double>
-//weight_TunedCentralValue_UBGenie : vector<double>
-//weight_VecFFCCQEshape_UBGenie : vector<double>
-//weight_XSecShape_CCMEC_UBGenie : vector<double>
-//weight_flux_all : vector<double>
-//weight_reint_all : vector<double>
-//weight_splines_general_Spline : vector<double>
-//weight_xsr_scc_Fa3_SCC : vector<double>
-//weight_xsr_scc_Fv3_SCC : vector<double>
+void ResponseMatrixMaker::build_response_matrices() {
+  // Create temporary storage for the systematic variation event weights
+  WeightHandler wh;
+
+  // Sync the branch addresses of the input TChain with the WeightHandler
+  // object
+  wh.set_branch_addresses( input_chain_ );
+
+  // TESTING CODE
+  for ( const auto& tel : true_entry_lists_ ) {
+    for ( const auto& rel : reco_entry_lists_ ) {
+
+      // Compute the intersection of the entry lists
+      auto inter_tr_el = tel * rel;
+      std::cout << '\"' << inter_tr_el->GetName() << "\"\n";
+      inter_tr_el->Print();
+      std::cout << '\n';
+
+      // Configure the TChain to use it
+      input_chain_.SetEntryList( inter_tr_el.get() );
+
+      long long num_entries = inter_tr_el->GetN();
+
+      // Sum the entries in the TChain for the relevant entries
+      double sum = 0.;
+
+      for ( long long e = 0; e < num_entries; ++e ) {
+        long long entryNumber = input_chain_.GetEntryNumber( e );
+        if ( entryNumber < 0 ) break;
+
+        input_chain_.GetEntry( entryNumber );
+
+        sum += wh.bug_fix_weight_map_
+          .at("weight_splines_general_Spline")->front();
+
+        std::cout << "  e = " << e << '\n';
+      }
+
+      std::cout << "sum = " << sum << '\n';
+    }
+  }
+
+}

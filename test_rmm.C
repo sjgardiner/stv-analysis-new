@@ -16,4 +16,5 @@ void test_rmm() {
   //const auto& reco_bins = resp_mat->reco_bins();
 
   resp_mat->build_entry_lists();
+  resp_mat->build_response_matrices();
 }
