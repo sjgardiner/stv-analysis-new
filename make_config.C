@@ -50,6 +50,7 @@ void make_config() {
 
   // Dump this information to the output file
   std::ofstream out_file( "myconfig.txt" );
+  out_file << "stv_tree\n";
   out_file << true_bins.size() << '\n';
   for ( const auto& tb : true_bins ) out_file << tb << '\n';
 
