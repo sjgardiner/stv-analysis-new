@@ -55,7 +55,7 @@ void dump_them( const std::string& input_file_name ) {
     // during every iteration is very slow. This is fragile but appears to
     // work thanks to consistent weight vector sizes.
     if ( need_to_create_branches ) {
-      for ( auto& pair : wh.universe_weight_map_ ) {
+      for ( auto& pair : wh.weight_map() ) {
 
         const auto& weight_name = pair.first;
         auto& weight_vec = pair.second;
