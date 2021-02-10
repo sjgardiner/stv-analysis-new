@@ -39,7 +39,7 @@ template <typename T> void set_object_input_branch_address( TTree& in_tree,
 // Helper function that creates a branch (or just sets a new address) for a
 // simple variable in an output TTree
 void set_output_branch_address( TTree& out_tree, const std::string& branch_name,
-  void* address, bool create = false, const std::string leaf_spec = "" )
+  void* address, bool create = false, const std::string& leaf_spec = "" )
 {
   if ( create ) {
     if ( leaf_spec != "" ) {

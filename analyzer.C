@@ -226,10 +226,6 @@ class AnalysisEvent {
 
     // General systematic weights
     MyPointer< std::map< std::string, std::vector<double> > > mc_weights_map_;
-    // Map of pointers used to set output branch addresses for the elements
-    // of the weights map. Hacky, but it works.
-    // TODO: revisit this to make something more elegant
-    std::map< std::string, std::vector<double>* > mc_weights_ptr_map_;
 
     // GENIE weights
     float spline_weight_ = DEFAULT_WEIGHT;
@@ -561,14 +557,16 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
       // Prepend "weight_" to the name of the vector of weights in the map
       std::string weight_branch_name = "weight_" + pair.first;
 
-      // Store a pointer to the vector of weights (needed to set the branch
-      // address properly) in the temporary map of pointers
-      ev.mc_weights_ptr_map_[ weight_branch_name ] = &pair.second;
+      // NOTE: This assumes that the weight vectors are always the same size
+      // for every event (should be true if we have a consistent number of
+      // universes). We can therefore get away with storing a fixed-size array
+      // to boost downstream performance.
+      std::string leaf_spec = weight_branch_name + '['
+        + std::to_string( pair.second.size() ) + "]/D";
 
       // Set the branch address for this vector of weights
-      set_object_output_branch_address< std::vector<double> >( out_tree,
-        weight_branch_name, ev.mc_weights_ptr_map_.at(weight_branch_name),
-        create );
+      set_output_branch_address( out_tree, weight_branch_name,
+        pair.second.data(), create, leaf_spec );
     }
   }
 
