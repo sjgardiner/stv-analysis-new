@@ -1,3 +1,4 @@
+#include "FilePropertiesManager.hh"
 #include "ResponseMatrixMaker.hh"
 
 const std::string UNWEIGHTED_ID = "unweighted";
@@ -89,54 +90,92 @@ void make_response_matrix( const std::string& input_file_name ) {
 
   resp_mat.add_input_file( input_file_name.c_str() );
 
-  std::cout << "POT = " << resp_mat.pot() << '\n';
+  // Get access to the ResponseMatrixMaker object's owned input TChain
+  auto& input_chain = resp_mat.input_chain();
 
-  // TODO retrieve weight file programmatically
-  TChain weights_ch( "weight_tree" );
-  weights_ch.Add( "/uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_dirt_overlay_v08_00_00_35_all_run2_reco2_reco2.root" );
-
-  // Build a map of weight names (ignoring universe indices) by looping
-  // over all of the branches and trimming off trailing digits. We'll use the
-  // map values to keep track of universe counts for each unique weight name.
+  // Build a map of weight names (ignoring universe indices) by looping over
+  // all of the branches and trimming off trailing digits. We'll use the map
+  // values to keep track of universe counts for each unique weight name. For
+  // data and detVar MC samples, this map will be empty except for a special
+  // "unweighted" universe that we add below.
   std::map< std::string, unsigned > weight_names;
 
-  auto* lob = weights_ch.GetListOfBranches();
-  for ( int b = 0; b < lob->GetEntries(); ++b ) {
+  // Check if we need to associate dumped event weights with the input TChain.
+  // This is a requirement only for non-detVar MC samples.
+  const auto& fpm = FilePropertiesManager::Instance();
+  NtupleFileType nf_type = fpm.get_ntuple_file_type( input_file_name );
 
-    // Get the name of the current branch
-    auto* branch = dynamic_cast< TBranch* >( lob->At(b) );
-    std::string br_name = branch->GetName();
+  // Set up a helper TChain to manage reading weights from the "weight dump"
+  // input file (if needed)
+  TChain weights_ch( "weight_tree" );
 
-    // Do the trimming
-    trim_digits_from_end_in_place( br_name );
+  if ( nf_type == NtupleFileType::kNumuMC
+    || nf_type == NtupleFileType::kIntrinsicNueMC
+    || nf_type == NtupleFileType::kDirtMC )
+  {
+    // Retrieve the name of the weight dump file from the FilePropertiesManager
+    const auto& wgt_file_map = fpm.ntuple_to_weight_file_map();
+    std::string wgt_file_name = wgt_file_map.at( input_file_name );
 
-    // Check to see if the current weight name is already in the map
-    auto iter = weight_names.find( br_name );
-    // If it is, just increment the matching counter by one
-    if ( iter != weight_names.end() ) ++iter->second;
-    // If it isn't, add it and a new universe counter starting at 1
-    else {
-      weight_names[ br_name ] = 1u;
-    }
-  }
+    // Add the weight file to the helper TChain
+    weights_ch.Add( wgt_file_name.c_str() );
+
+    auto* lob = weights_ch.GetListOfBranches();
+    for ( int b = 0; b < lob->GetEntries(); ++b ) {
+
+      // Get the name of the current branch
+      auto* branch = dynamic_cast< TBranch* >( lob->At(b) );
+      std::string br_name = branch->GetName();
+
+      // Do the trimming
+      trim_digits_from_end_in_place( br_name );
+
+      // Check to see if the current weight name is already in the map
+      auto iter = weight_names.find( br_name );
+      // If it is, just increment the matching counter by one
+      if ( iter != weight_names.end() ) ++iter->second;
+      // If it isn't, add it and a new universe counter starting at 1
+      else {
+        weight_names[ br_name ] = 1u;
+      }
+    } // weight branch names
+
+    // Add the weights TChain as a friend of the event chain for easy
+    // manipulation of both
+    input_chain.AddFriend( &weights_ch );
+
+  } // MC event weights are needed
+
+  // Unconditionally add a special "unweighted" universe to the map of weight
+  // names
+  weight_names[ UNWEIGHTED_ID ] = 1u;
 
   for ( const auto& pair : weight_names ) {
     std::cout << pair.first << ' ' << pair.second << '\n';
   }
 
-  // Add the weights TChain as a friend of the event chain for easy
-  // manipulation of both
-  auto& input_chain = resp_mat.input_chain();
-  input_chain.AddFriend( &weights_ch );
+  // Find relevant entries in the input TChain for each of the reco space bins
+  resp_mat.build_reco_entry_lists();
 
-  // Find relevant entries in the input TChain for each of the true and reco
-  // space bins
-  resp_mat.build_entry_lists();
+  // If we're working with MC events, then also find the relevant entries in
+  // the input TChain for each of the true space bins
+  if ( nf_type != NtupleFileType::kOnBNB
+    && nf_type != NtupleFileType::kExtBNB )
+  {
+    resp_mat.build_true_entry_lists();
+  }
 
   // Configure the output TTree
-  // TODO: set output file name
-  TFile out_file( "/uboone/data/users/gardiner/resp_mat_test.root",
-    "recreate" );
+  // TODO: set output file name in a smarter way
+  // Get the basename of the input file using the trick described here:
+  // https://stackoverflow.com/a/24386991
+  std::string input_basename = input_file_name.substr(
+    input_file_name.find_last_of('/') + 1 );
+
+  std::string out_file_name = "/uboone/data/users/gardiner/ntuples-stv"
+    "/resp/respmat-" + input_basename;
+
+  TFile out_file( out_file_name.c_str(), "recreate" );
 
   double smear, smear_err2, swt, swt_err2, swr, swr_err2;
   unsigned true_bin, reco_bin, universe;
@@ -154,12 +193,8 @@ void make_response_matrix( const std::string& input_file_name ) {
   out_tree->Branch( "universe", &universe, "universe/i" );
   out_tree->Branch( "weight_id", &weight_id );
 
-  // TESTING CODE
   size_t num_true_bins = resp_mat.true_bins().size();
   size_t num_reco_bins = resp_mat.reco_bins().size();
-
-  // Add a special "unweighted" universe to the map of weight names
-  weight_names[ UNWEIGHTED_ID ] = 1u;
 
   for ( const auto& wn_pair : weight_names ) {
 
@@ -188,11 +223,23 @@ void make_response_matrix( const std::string& input_file_name ) {
 
         std::cout << "  true bin = " << true_bin << '\n';
 
-        const auto& tel = resp_mat.true_entry_lists().at( true_bin );
+        // If we're working with a data file, just zero out the
+        // summed event weights for each true bin. We can't fill
+        // those without truth information!
+        if ( nf_type == NtupleFileType::kOnBNB
+          || nf_type == NtupleFileType::kExtBNB )
+        {
+          swt = 0.;
+          swt_err2 = 0.;
+        }
+        // Otherwise, process the event weights in true space normally
+        else {
+          const auto& tel = resp_mat.true_entry_lists().at( true_bin );
 
-        // Get the sum of the event weights in the current true bin
-        sum_event_weights( input_chain, safe_cut_expr,
-          tel.get(), swt, swt_err2 );
+          // Get the sum of the event weights in the current true bin
+          sum_event_weights( input_chain, safe_cut_expr,
+            tel.get(), swt, swt_err2 );
+        }
 
         for ( reco_bin = 0u; reco_bin < num_reco_bins; ++reco_bin ) {
 
@@ -200,22 +247,33 @@ void make_response_matrix( const std::string& input_file_name ) {
 
           const auto& rel = resp_mat.reco_entry_lists().at( reco_bin );
 
-          // For the first true bin only (to avoid redundant function calls in
-          // later iterations of the reco bin loop), compute the sum of the
-          // event weights in the current reco bin.
-          if ( true_bin == 0u ) {
-            sum_event_weights( input_chain, safe_cut_expr,
-              rel.get(), swr, swr_err2 );
-          }
-
-          // Compute the intersection of the entry lists for the current true
-          // and reco bins
-          auto tr_el = tel * rel;
-
-          // Get the sum of the event weights in the current 2D bin
-          // in (true, reco) space
+          // Compute the sum of all of the event weights in the current reco
+          // bin.
           sum_event_weights( input_chain, safe_cut_expr,
-            tr_el.get(), smear, smear_err2 );
+            rel.get(), swr, swr_err2 );
+
+          // If we're working with a real data file, also zero out the smearing
+          // matrix entry, i.e., the summed event weights for the 2D bin in
+          // (true, reco) space.
+          if ( nf_type == NtupleFileType::kOnBNB
+            || nf_type == NtupleFileType::kExtBNB )
+          {
+            smear = 0.;
+            smear_err2 = 0.;
+          }
+          // Otherwise proceed normally with the summation of the event weights
+          else {
+            const auto& tel = resp_mat.true_entry_lists().at( true_bin );
+
+            // Compute the intersection of the entry lists for the current true
+            // and reco bins
+            auto tr_el = tel * rel;
+
+            // Get the sum of the event weights in the current 2D bin
+            // in (true, reco) space
+            sum_event_weights( input_chain, safe_cut_expr,
+              tr_el.get(), smear, smear_err2 );
+          }
 
           std::cout << "      smear = " << smear << '\n';
 
@@ -231,5 +289,7 @@ void make_response_matrix( const std::string& input_file_name ) {
 
 void test_rmm() {
   ROOT::EnableImplicitMT();
-  make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
+  //make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
+  //make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-run1_neutrinoselection_filt_numu_ALL.root" );
+  make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_overlay_DetVar_SCE_reco2_v08_00_00_38_run3b_reco2_reco2.root" );
 }

@@ -79,13 +79,32 @@ class FilePropertiesManager {
     inline const std::map< std::string, TriggersAndPOT >& data_norm_map() const
       { return data_norm_map_; }
 
-
     inline const std::map< int, std::map<NtupleFileType,
       std::set<std::string> > >& ntuple_file_map() const
       { return ntuple_file_map_; }
 
     inline const std::map< std::string, std::string >
       ntuple_to_weight_file_map() const { return ntuple_to_weight_file_map_; }
+
+    // NOTE: This function assumes that there are no duplicate entries in the
+    // nested ntuple file type map. That should always be the case, but beware
+    // any odd situations that might break the approach used here.
+    inline NtupleFileType get_ntuple_file_type(
+      const std::string& file_name ) const
+    {
+      for ( const auto& run_pair : ntuple_file_map_ ) {
+        const auto& type_map = run_pair.second;
+        for ( const auto& type_pair : type_map ) {
+          const auto& file_set = type_pair.second;
+          for ( const auto& name : file_set ) {
+            if ( file_name == name ) return type_pair.first;
+          }
+        }
+      }
+      throw std::runtime_error( "ntuple file not found" );
+      // Bogus value to satisfy the function signature requirements
+      return NtupleFileType::kOnBNB;
+    }
 
   private:
 
