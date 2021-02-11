@@ -143,6 +143,13 @@ class ResponseMatrixMaker {
     inline const auto& true_bins() const { return true_bins_; }
     inline const auto& reco_bins() const { return reco_bins_; }
 
+    // Access the entry lists
+    inline auto& true_entry_lists() { return true_entry_lists_; }
+    inline auto& reco_entry_lists() { return reco_entry_lists_; }
+
+    // Access the owned TChain
+    inline auto& input_chain() { return input_chain_; }
+
     // Populates the owned vectors of TEntryList objects using the input TChain
     // and the current bin configuration
     void build_entry_lists();
@@ -277,6 +284,9 @@ void ResponseMatrixMaker::build_entry_lists() {
     auto* temp_el = dynamic_cast<TEntryList*>(
       gDirectory->Get(entry_list_name.c_str()) );
 
+    // DEBUG
+    temp_el->Print();
+
     true_entry_lists_.emplace_back( temp_el );
 
     ++dummy_tb_counter;
@@ -296,76 +306,12 @@ void ResponseMatrixMaker::build_entry_lists() {
     auto* temp_el = dynamic_cast<TEntryList*>(
       gDirectory->Get(entry_list_name.c_str()) );
 
+    // DEBUG
+    temp_el->Print();
+
     reco_entry_lists_.emplace_back( temp_el );
 
     ++dummy_rb_counter;
-  }
-
-  // DEBUG
-  for ( const auto& tel : true_entry_lists_ ) {
-    std::cout << tel->GetName() << '\n';
-    tel->Print();
-    std::cout << '\n';
-  }
-
-  for ( const auto& rel : reco_entry_lists_ ) {
-    std::cout << rel->GetName() << '\n';
-    rel->Print();
-    std::cout << '\n';
-  }
-
-  for ( const auto& tel : true_entry_lists_ ) {
-    for ( const auto& rel : reco_entry_lists_ ) {
-      // Compute the intersection of the entry lists
-      auto inter_tr_el = tel * rel;
-      std::cout << '\"' << inter_tr_el->GetName() << "\"\n";
-      inter_tr_el->Print();
-      std::cout << '\n';
-    }
-  }
-
-}
-
-void ResponseMatrixMaker::build_response_matrices() {
-  // Create temporary storage for the systematic variation event weights
-  WeightHandler wh;
-
-  // Sync the branch addresses of the input TChain with the WeightHandler
-  // object
-  wh.set_branch_addresses( input_chain_ );
-
-  // TESTING CODE
-  for ( const auto& tel : true_entry_lists_ ) {
-    for ( const auto& rel : reco_entry_lists_ ) {
-
-      // Compute the intersection of the entry lists
-      auto inter_tr_el = tel * rel;
-      std::cout << '\"' << inter_tr_el->GetName() << "\"\n";
-      inter_tr_el->Print();
-      std::cout << '\n';
-
-      // Configure the TChain to use it
-      input_chain_.SetEntryList( inter_tr_el.get() );
-
-      long long num_entries = inter_tr_el->GetN();
-
-      // Sum the entries in the TChain for the relevant entries
-      double sum = 0.;
-
-      for ( long long e = 0; e < num_entries; ++e ) {
-        long long entryNumber = input_chain_.GetEntryNumber( e );
-        if ( entryNumber < 0 ) break;
-
-        input_chain_.GetEntry( entryNumber );
-
-        sum += wh.bug_fix_weight_map_
-          .at("weight_splines_general_Spline")->front();
-
-        std::cout << "  e = " << e << '\n';
-      }
-
-      std::cout << "sum = " << sum << '\n';
-    }
   }
 
 }
