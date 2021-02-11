@@ -550,23 +550,30 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   // If MC weights are available, prepare to store them in the output TTree
   if ( ev.mc_weights_map_ ) {
 
-    // Make separate branches for the various sets of systematic variation
-    // weights in the map
+    // Make separate branches for individual systematic variation
+    // weights in the map. This is hacky and results in tons of branches,
+    // but it helps to optimize response matrix evaluation downstream.
     for ( auto& pair : *ev.mc_weights_map_ ) {
 
-      // Prepend "weight_" to the name of the vector of weights in the map
-      std::string weight_branch_name = "weight_" + pair.first;
+      const auto& weight_name = pair.first;
+      auto& weight_vec = pair.second;
 
-      // NOTE: This assumes that the weight vectors are always the same size
-      // for every event (should be true if we have a consistent number of
-      // universes). We can therefore get away with storing a fixed-size array
-      // to boost downstream performance.
-      std::string leaf_spec = weight_branch_name + '['
-        + std::to_string( pair.second.size() ) + "]/D";
+      size_t num_weights = weight_vec.size();
+      for ( size_t w = 0u; w < num_weights; ++w ) {
 
-      // Set the branch address for this vector of weights
-      set_output_branch_address( out_tree, weight_branch_name,
-        pair.second.data(), create, leaf_spec );
+        // Prepend "weight_" to the name of the vector of weights in the map,
+        // and add the universe index to the branch name
+        std::string weight_branch_name = "weight_" + pair.first;
+        weight_branch_name += std::to_string( w );
+
+        auto* weight_ptr = &weight_vec.at( w );
+
+        std::string leaf_spec = weight_branch_name + "/D";
+
+        // Set the branch address for this vector of weights
+        set_output_branch_address( out_tree, weight_branch_name,
+          weight_ptr, create, leaf_spec );
+      }
     }
   }
 
