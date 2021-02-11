@@ -226,6 +226,10 @@ class AnalysisEvent {
 
     // General systematic weights
     MyPointer< std::map< std::string, std::vector<double> > > mc_weights_map_;
+    // Map of pointers used to set output branch addresses for the elements
+    // of the weights map. Hacky, but it works.
+    // TODO: revisit this to make something more elegant
+    std::map< std::string, std::vector<double>* > mc_weights_ptr_map_;
 
     // GENIE weights
     float spline_weight_ = DEFAULT_WEIGHT;
@@ -550,30 +554,21 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   // If MC weights are available, prepare to store them in the output TTree
   if ( ev.mc_weights_map_ ) {
 
-    // Make separate branches for individual systematic variation
-    // weights in the map. This is hacky and results in tons of branches,
-    // but it helps to optimize response matrix evaluation downstream.
+    // Make separate branches for the various sets of systematic variation
+    // weights in the map
     for ( auto& pair : *ev.mc_weights_map_ ) {
 
-      const auto& weight_name = pair.first;
-      auto& weight_vec = pair.second;
+      // Prepend "weight_" to the name of the vector of weights in the map
+      std::string weight_branch_name = "weight_" + pair.first;
 
-      size_t num_weights = weight_vec.size();
-      for ( size_t w = 0u; w < num_weights; ++w ) {
+      // Store a pointer to the vector of weights (needed to set the branch
+      // address properly) in the temporary map of pointers
+      ev.mc_weights_ptr_map_[ weight_branch_name ] = &pair.second;
 
-        // Prepend "weight_" to the name of the vector of weights in the map,
-        // and add the universe index to the branch name
-        std::string weight_branch_name = "weight_" + pair.first;
-        weight_branch_name += std::to_string( w );
-
-        auto* weight_ptr = &weight_vec.at( w );
-
-        std::string leaf_spec = weight_branch_name + "/D";
-
-        // Set the branch address for this vector of weights
-        set_output_branch_address( out_tree, weight_branch_name,
-          weight_ptr, create, leaf_spec );
-      }
+      // Set the branch address for this vector of weights
+      set_object_output_branch_address< std::vector<double> >( out_tree,
+        weight_branch_name, ev.mc_weights_ptr_map_.at(weight_branch_name),
+        create );
     }
   }
 
