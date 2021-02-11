@@ -1,6 +1,6 @@
 # Trigger counts and POT exposures are taken from the searching4nues
 # spreadsheet: tinyurl.com/pelee-nue-ntuples
-# file_name run file_type triggers POT
+# file_name run file_type triggers "POT (data) or weight_dump_file_name (non-detVar MC)"
 #
 # Open beam-on data
 # /uboone/data/users/gardiner/ntuples-stv/stv-data_bnb_mcc9.1_v08_00_00_25_reco2_C1_beam_good_reco2_5e19.root 1 onBNB 10080350 4.54e19
@@ -17,19 +17,19 @@
 /uboone/data/users/gardiner/ntuples-stv/stv-run3_neutrinoselection_filt_numu_ALL.root 3 onBNB 61012955 2.55e20
 #
 # Dirt MC samples
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root 1 dirtMC
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_dirt_overlay_v08_00_00_35_all_run2_reco2_reco2.root 2 dirtMC
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root 3 dirtMC
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root 1 dirtMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_dirt_overlay_v08_00_00_35_all_run2_reco2_reco2.root 2 dirtMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_dirt_overlay_v08_00_00_35_all_run2_reco2_reco2.root
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root 3 dirtMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_dirt_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root
 #
 # Intrinsic nue MC samples
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root 1 nueMC
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsic_nue_overlay_run2_v08_00_00_35_run2a_reco2_reco2.root 2 nueMC
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root 3 nueMC
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root 1 nueMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run1_reco2_reco2.root
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsic_nue_overlay_run2_v08_00_00_35_run2a_reco2_reco2.root 2 nueMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_intrinsic_nue_overlay_run2_v08_00_00_35_run2a_reco2_reco2.root
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root 3 nueMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_intrinsice_nue_uboone_overlay_mcc9.1_v08_00_00_26_run3_reco2_reco2.root
 #
 # numu MC samples
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root 1 numuMC
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root 2 numuMC
-/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root 3 numuMC
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root 1 numuMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root 2 numuMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root
+/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root 3 numuMC /uboone/data/users/gardiner/ntuples-stv/weight_dumps/weights-stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root
 #
 # detVar MC samples
 /uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_overlay_DetVar_CV_reco2_v08_00_00_38_run3b_reco2_reco2.root 3 detVarCV
