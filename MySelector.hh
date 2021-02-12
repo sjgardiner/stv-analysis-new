@@ -3,8 +3,9 @@
 // Standard library includes
 #include <cmath>
 
-// Needed for the MyPointer class template
-#include "TreeUtils.hh"
+// STV analysis includes
+#include "TreeUtils.hh" // Needed for the MyPointer class template
+#include "WeightHandler.hh"
 
 constexpr double MIN_WEIGHT = 0.;
 constexpr double MAX_WEIGHT = 30.;
@@ -20,8 +21,8 @@ class MySelector : public TSelector {
 
   public:
 
-    MySelector( const std::string& br_name ) : TSelector(),
-      branch_name_( br_name ) {}
+    MySelector( const std::vector<std::string>* branch_name_vec = nullptr )
+      : TSelector(), branch_names_( branch_name_vec ) {}
 
     // TSelector interface
     virtual void Begin( TTree* );
@@ -35,23 +36,34 @@ class MySelector : public TSelector {
 
   protected:
 
+    inline void GetBranchEntries( Long64_t entry ) {
+      for ( auto* br : input_branches_ ) {
+        br->GetEntry( entry );
+      }
+    }
+
+    void InitializeSumVectors();
+    void SetBranchPointers();
+
     // Input TTree or TChain (not owned by this class)
     TTree* chain_ = nullptr;
 
-    // Branches of interest for the analysis
-    TBranch* br_weight_vec_ = nullptr;
+    // Optional vector of branch names to include in the output
+    // (also not owned by this class)
+    const std::vector< std::string >* branch_names_;
 
-    // Temporary storage to use for reading from the TChain
-    MyPointer< std::vector<double> > weight_vec_;
+    // Pointers to branches of interest for the analysis
+    std::vector< TBranch* > input_branches_;
 
-    // Vector that holds summed event weights
-    std::vector< double > sums_of_weights_;
+    // Automatically manages temporary storage to use for reading event weights
+    // from the TChain
+    WeightHandler wh_;
 
-    // Vector that holds summed squares of event weights
-    std::vector< double > sums_of_weights2_;
+    // Map that holds summed event weights organized by TTree branch
+    std::map< std::string, std::vector<double> > sums_of_weights_;
 
-    // Name of the branch to be summed
-    std::string branch_name_;
+    // Map that holds summed squares of event weights organized by TTree branch
+    std::map< std::string, std::vector<double> > sums_of_weights2_;
 
 };
 
@@ -59,15 +71,21 @@ void MySelector::Init( TTree* tree ) {
 
   // The Init() function is called when the selector needs to initialize
   // a new tree or chain. Typically here the branch addresses of the tree
-  // will be set. It is normaly not necessary to make changes to the
-  // generated code, but the routine can be extended by the user if needed.
-  // Init() will be called many times when running with PROOF.
+  // will be set. Init() will be called many times when running with PROOF.
 
   if ( !tree ) return;
 
+  // Store the input TTree for later use
   chain_ = tree;
 
-  set_object_input_branch_address( *chain_, branch_name_, weight_vec_ );
+  // Set up the branch addresses
+  wh_.set_branch_addresses( *tree, branch_names_ );
+
+  // Get pointers to each branch of interest
+  this->SetBranchPointers();
+
+  // Get the vectors ready to store summed event weights
+  InitializeSumVectors();
 
 }
 
@@ -76,14 +94,8 @@ Bool_t MySelector::Notify() {
   // The Notify() function is called when a new file is opened. This
   // can be either for a new TTree in a TChain or when when a new TTree
   // is started when using PROOF. Typically here the branch pointers
-  // will be retrieved. It is normaly not necessary to make changes
-  // to the generated code, but the routine can be extended by the
-  // user if needed.
-
-  if ( chain_ ) {
-    // Get a pointer to the branch of interest
-    br_weight_vec_ = chain_->GetBranch( branch_name_.c_str() );
-  }
+  // will be retrieved.
+  this->SetBranchPointers();
 
   return kTRUE;
 }
@@ -107,30 +119,30 @@ Bool_t MySelector::Process( Long64_t entry ) {
   //  Assuming that fChain is the pointer to the TChain being processed,
   //  use fChain->GetTree()->GetEntry(entry).
 
-  // All we need is the single branch of interest. Get the current entry.
-  br_weight_vec_->GetEntry( entry );
+  // Get the current entry for all input TTree branches of interest
+  this->GetBranchEntries( entry );
 
-  // If we haven't initialized the sum vectors yet, we can do so now because
-  // we have the first entry (and therefore the needed size)
-  if ( sums_of_weights_.empty() ) {
-    // Initialize the sum vectors with the appropriate number of elements (all
-    // zero to start)
-    size_t num_elements = weight_vec_->size();
-    sums_of_weights_.assign( num_elements, 0. );
-    sums_of_weights2_.assign( num_elements, 0. );
-  }
+  for ( const auto& pair : wh_.weight_map() ) {
 
-  // Add the event weights in the current entry to the sum vectors
-  for ( size_t w = 0u; w < weight_vec_->size(); ++w ) {
-    // No need to use the slightly slower "at" here since we're directly
-    // looping over the weight vector
-    double wgt = weight_vec_->operator[]( w );
-    double safe_wgt = safe_weight( wgt );
+    const std::string& br_name = pair.first;
+    const auto& weight_vec = pair.second;
 
-    // Use "at" here, just in case
-    sums_of_weights_.at( w ) += safe_wgt;
-    sums_of_weights2_.at( w ) += safe_wgt;
-  }
+    auto& sum_vec = sums_of_weights_.at( br_name );
+    auto& sum2_vec = sums_of_weights2_.at( br_name );
+
+    // Add the event weights in the current entry to the sum vectors for
+    // the appropriate branch
+    for ( size_t w = 0u; w < weight_vec->size(); ++w ) {
+      // No need to use the slightly slower "at" here since we're directly
+      // looping over the weight vector
+      double wgt = weight_vec->operator[]( w );
+      double safe_wgt = safe_weight( wgt );
+
+      // Use "at" here, just in case
+      sum_vec.at( w ) += safe_wgt;
+      sum2_vec.at( w ) += safe_wgt;
+    } // universe loop
+  } // weight branch loop
 
   return kTRUE;
 }
@@ -143,9 +155,15 @@ void MySelector::SlaveBegin( TTree* tree ) {
   // Executes at start of query (on all worker nodes if using PROOF)
   // Make histograms here, etc. as needed
 
-  // Reset the owned vectors of summed event weights
-  sums_of_weights_.clear();
-  sums_of_weights2_.clear();
+  // Zero out the elements of all vectors of summed event weights
+  for ( auto& pair : sums_of_weights_ ) {
+    auto& sum_vec = pair.second;
+    for ( double& sum : sum_vec ) sum = 0.;
+  }
+  for ( auto& pair : sums_of_weights2_ ) {
+    auto& sum2_vec = pair.second;
+    for ( double& sum2 : sum2_vec ) sum2 = 0.;
+  }
 }
 
 void MySelector::SlaveTerminate() {
@@ -158,6 +176,39 @@ void MySelector::Terminate() {
   // The Terminate() function is the last function to be called during
   // a query. It always runs on the client, it can be used to present
   // the results graphically or save the results to file.
-  std::cout << sums_of_weights_.size() << ' '
-    << sums_of_weights_.front() << '\n';
+  for ( const auto& pair : sums_of_weights_ ) {
+    std::cout << pair.first << ' ' << pair.second.size()
+      << ' ' << pair.second.front() << '\n';
+  }
+}
+
+void MySelector::InitializeSumVectors() {
+  // Initialize the sum vectors with the appropriate number of elements (all
+  // zero to start). To get the sizes, load the first entry in each branch so
+  // that we have example vectors available. Here and elsewhere in this class,
+  // we assume that the vectors' sizes do not change throughout the TTree
+  // entries.
+  GetBranchEntries( 0 );
+
+  for ( auto& pair : wh_.weight_map() ) {
+    const std::string& br_name = pair.first;
+    const auto& weight_vec = pair.second;
+    size_t num_elements = weight_vec->size();
+
+    sums_of_weights_[ br_name ] = std::vector<double>( num_elements, 0. );
+    sums_of_weights2_[ br_name ] = std::vector<double>( num_elements, 0. );
+  }
+}
+
+void MySelector::SetBranchPointers() {
+  input_branches_.clear();
+
+  if ( chain_ ) {
+    // Get pointers to the branch(es) of interest
+    for ( const auto& pair : wh_.weight_map() ) {
+      const std::string& br_name = pair.first;
+      TBranch* br = chain_->GetBranch( br_name.c_str() );
+      input_branches_.push_back( br );
+    }
+  }
 }

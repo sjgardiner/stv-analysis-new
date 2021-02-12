@@ -3,6 +3,12 @@
 #include "ResponseMatrixMaker.hh"
 #include "TreeUtils.hh"
 
+void sum_event_weights( TTree& tree, MySelector& ms, TEntryList* el ) {
+  tree.SetEntryList( el );
+  tree.Process( &ms );
+  tree.SetEntryList( nullptr );
+}
+
 void make_response_matrix( const std::string& input_file_name ) {
 
   ResponseMatrixMaker resp_mat( "myconfig.txt" );
@@ -13,7 +19,8 @@ void make_response_matrix( const std::string& input_file_name ) {
   auto& input_chain = resp_mat.input_chain();
 
   std::vector< std::string > weight_names;
-  weight_names.push_back( "weight_All_UBGenie" );
+  weight_names.push_back( "weight_TunedCentralValue_UBGenie" );
+  //weight_names.push_back( "weight_All_UBGenie" );
   //weight_names.push_back( "weight_AxFFCCQEshape_UBGenie" );
 
   // Find relevant entries in the input TChain for each of the reco space bins
@@ -23,55 +30,45 @@ void make_response_matrix( const std::string& input_file_name ) {
   size_t num_true_bins = resp_mat.true_bins().size();
   size_t num_reco_bins = resp_mat.reco_bins().size();
 
-  for ( const auto& wn : weight_names ) {
+  MySelector selector( &weight_names );
 
-    MySelector selector( wn );
-    std::cout << wn << '\n';
+  for ( size_t true_bin = 0u; true_bin < num_true_bins; ++true_bin ) {
 
-    for ( size_t true_bin = 0u; true_bin < num_true_bins; ++true_bin ) {
+    std::cout << "  true bin = " << true_bin << '\n';
 
-      std::cout << "  true bin = " << true_bin << '\n';
+    const auto& tel = resp_mat.true_entry_lists().at( true_bin );
 
-      const auto& tel = resp_mat.true_entry_lists().at( true_bin );
-
-      // Get the sum of the event weights in the current true bin
-      input_chain.SetEntryList( tel.get() );
-      input_chain.Process( &selector );
-      input_chain.SetEntryList( nullptr );
-
-      for ( size_t reco_bin = 0u; reco_bin < num_reco_bins; ++reco_bin ) {
-
-        std::cout << "    reco bin = " << reco_bin << '\n';
-
-        const auto& rel = resp_mat.reco_entry_lists().at( reco_bin );
-
-        // Otherwise proceed normally with the summation of the event weights
-        const auto& tel = resp_mat.true_entry_lists().at( true_bin );
-
-        // Compute the intersection of the entry lists for the current true
-        // and reco bins
-        auto tr_el = tel * rel;
-
-        // Get the sum of the event weights in the current 2D bin
-        // in (true, reco) space
-        input_chain.SetEntryList( tr_el.get() );
-        input_chain.Process( &selector );
-        input_chain.SetEntryList( nullptr );
-      } // reco bin
-    } // true bin
+    // Get the sum of the event weights in the current true bin
+    sum_event_weights( input_chain, selector, tel.get() );
 
     for ( size_t reco_bin = 0u; reco_bin < num_reco_bins; ++reco_bin ) {
 
-      std::cout << "  reco bin = " << reco_bin << '\n';
+      std::cout << "    reco bin = " << reco_bin << '\n';
 
       const auto& rel = resp_mat.reco_entry_lists().at( reco_bin );
 
-      // Get the sum of the event weights in the current reco bin
-      input_chain.SetEntryList( rel.get() );
-      input_chain.Process( &selector );
-      input_chain.SetEntryList( nullptr );
+      // Otherwise proceed normally with the summation of the event weights
+      const auto& tel = resp_mat.true_entry_lists().at( true_bin );
+
+      // Compute the intersection of the entry lists for the current true
+      // and reco bins
+      auto tr_el = tel * rel;
+
+      // Get the sum of the event weights in the current 2D bin
+      // in (true, reco) space
+      sum_event_weights( input_chain, selector, tr_el.get() );
     } // reco bin
-  } // weight ID
+  } // true bin
+
+  for ( size_t reco_bin = 0u; reco_bin < num_reco_bins; ++reco_bin ) {
+
+    std::cout << "  reco bin = " << reco_bin << '\n';
+
+    const auto& rel = resp_mat.reco_entry_lists().at( reco_bin );
+
+    // Get the sum of the event weights in the current reco bin
+    sum_event_weights( input_chain, selector, rel.get() );
+  } // reco bin
 }
 
 void selector_test() {
