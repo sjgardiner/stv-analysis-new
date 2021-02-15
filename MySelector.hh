@@ -10,11 +10,27 @@
 constexpr double MIN_WEIGHT = 0.;
 constexpr double MAX_WEIGHT = 30.;
 
+// Branch names for special event weights
+const std::string SPLINE_WEIGHT_NAME = "weight_splines_general_Spline";
+const std::string TUNE_WEIGHT_NAME = "weight_TunedCentralValue_UBGenie";
+
 // Event weights that are below MIN_WEIGHT, above MAX_WEIGHT, infinite, or NaN
 // are reset to unity by this function. Other weights are returned unaltered.
 inline double safe_weight( double w ) {
   if ( std::isfinite(w) && w >= MIN_WEIGHT && w <= MAX_WEIGHT ) return w;
   else return 1.0;
+}
+
+// Utility function used to check endings of (trimmed) weight labels based on
+// branch names in the weights TTree
+bool string_has_end( const std::string& str, const std::string& end ) {
+  if ( str.length() >= end.length() ) {
+    int comp = str.compare( str.length() - end.length(),
+      end.length(), end );
+    bool test_result = ( comp == 0 );
+    return test_result;
+  }
+  return false;
 }
 
 class MySelector : public TSelector {
@@ -41,6 +57,9 @@ class MySelector : public TSelector {
         br->GetEntry( entry );
       }
     }
+
+    void apply_cv_correction_weights( const std::string& wgt_name, double& wgt,
+      double spline_weight, double tune_weight );
 
     void InitializeSumVectors();
     void SetBranchPointers();
@@ -81,6 +100,11 @@ void MySelector::Init( TTree* tree ) {
   // Set up the branch addresses
   wh_.set_branch_addresses( *tree, branch_names_ );
 
+  // Make sure that we always have branches set up for the CV correction
+  // weights, i.e., the spline and tune weights
+  wh_.add_branch( *tree, SPLINE_WEIGHT_NAME );
+  wh_.add_branch( *tree, TUNE_WEIGHT_NAME );
+
   // Get pointers to each branch of interest
   this->SetBranchPointers();
 
@@ -98,6 +122,28 @@ Bool_t MySelector::Notify() {
   this->SetBranchPointers();
 
   return kTRUE;
+}
+
+// Multiplies a given weight value by extra correction factors as appropriate.
+// TODO: include the rootino_fix weight as a correction to the central value
+void MySelector::apply_cv_correction_weights( const std::string& wgt_name,
+  double& wgt, double spline_weight, double tune_weight )
+{
+  if ( string_has_end(wgt_name, "UBGenie") ) {
+    wgt *= spline_weight;
+  }
+  else if ( wgt_name == "weight_flux_all"
+    || wgt_name == "weight_reint_all"
+    || wgt_name == "weight_xsr_scc_Fa3_SCC"
+    || wgt_name == "weight_xsr_scc_Fv3_SCC" )
+  {
+    wgt *= spline_weight * tune_weight;
+  }
+  else if ( wgt_name == SPLINE_WEIGHT_NAME ) {
+    // No extra weight factors needed
+    return;
+  }
+  else throw std::runtime_error( "Unrecognized weight name" );
 }
 
 Bool_t MySelector::Process( Long64_t entry ) {
@@ -122,6 +168,13 @@ Bool_t MySelector::Process( Long64_t entry ) {
   // Get the current entry for all input TTree branches of interest
   this->GetBranchEntries( entry );
 
+  // Get the CV correction weights here for potentially frequent re-use below
+  double spline_weight = wh_.weight_map().at(
+    SPLINE_WEIGHT_NAME )->front();
+
+  double tune_weight = wh_.weight_map().at(
+    TUNE_WEIGHT_NAME )->front();
+
   for ( const auto& pair : wh_.weight_map() ) {
 
     const std::string& br_name = pair.first;
@@ -136,6 +189,12 @@ Bool_t MySelector::Process( Long64_t entry ) {
       // No need to use the slightly slower "at" here since we're directly
       // looping over the weight vector
       double wgt = weight_vec->operator[]( w );
+
+      // Multiply by any needed CV correction weights
+      this->apply_cv_correction_weights( br_name, wgt,
+        spline_weight, tune_weight );
+
+      // Deal with NaNs, etc. to make a "safe weight" in all cases
       double safe_wgt = safe_weight( wgt );
 
       // Use "at" here, just in case
