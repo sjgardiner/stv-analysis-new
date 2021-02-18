@@ -399,10 +399,13 @@ void plots() {
   const std::string sel_CCincl = "sel_nu_mu_cc && sel_has_muon_candidate"
     " && sel_muon_above_threshold";
 
-  make_plots( "delta_pT", sel_CCNp, std::set<int>{1,2,3}, 0.,
-    0.8, 25, "#deltap_{T} [GeV]", "events", "Runs 1-3" );
+  // Drafts of selections for sidebands (need further refinement)
+  const std::string sel_NC = "sel_nu_mu_cc && sel_no_reco_showers && !sel_has_muon_candidate && sel_has_p_candidate && sel_passed_proton_pid_cut && sel_protons_contained && sel_lead_p_passed_mom_cuts";
 
-  //make_plots( "reco_nu_vtx_sce_z", sel_CCincl, std::set<int>{3}, FV_Z_MIN,
-  //  FV_Z_MAX, 40, "reco vertex z [cm]", "events", "Run " + std::to_string(3) );
+  const std::string sel_OOFV = "!sel_nu_mu_cc && sel_no_reco_showers && !sel_has_muon_candidate";
 
+  const std::string sel_CCNpi = "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate && sel_has_p_candidate && !sel_passed_proton_pid_cut && sel_protons_contained"; // && sel_lead_p_passed_mom_cuts";
+
+  make_plots( "reco_nu_vtx_sce_z", sel_CCNpi, std::set<int>{1}, FV_Z_MIN,
+    FV_Z_MAX, 40, "reco vertex z [cm]", "events", "Run 1" );
 }
