@@ -28,6 +28,57 @@
 R__LOAD_LIBRARY(libTreePlayer.so)
 #endif
 
+// Branch names for special event weights
+const std::string SPLINE_WEIGHT_NAME = "weight_splines_general_Spline";
+const std::string TUNE_WEIGHT_NAME = "weight_TunedCentralValue_UBGenie";
+
+// Special weight name to store the unweighted event counts
+const std::string UNWEIGHTED_NAME = "unweighted";
+
+constexpr double MIN_WEIGHT = 0.;
+constexpr double MAX_WEIGHT = 30.;
+
+// Event weights that are below MIN_WEIGHT, above MAX_WEIGHT, infinite, or NaN
+// are reset to unity by this function. Other weights are returned unaltered.
+inline double safe_weight( double w ) {
+  if ( std::isfinite(w) && w >= MIN_WEIGHT && w <= MAX_WEIGHT ) return w;
+  else return 1.0;
+}
+
+// Utility function used to check endings of (trimmed) weight labels based on
+// branch names in the weights TTree
+bool string_has_end( const std::string& str, const std::string& end ) {
+  if ( str.length() >= end.length() ) {
+    int comp = str.compare( str.length() - end.length(),
+      end.length(), end );
+    bool test_result = ( comp == 0 );
+    return test_result;
+  }
+  return false;
+}
+
+// Multiplies a given event weight by extra correction factors as appropriate.
+// TODO: include the rootino_fix weight as a correction to the central value
+void apply_cv_correction_weights( const std::string& wgt_name,
+  double& wgt, double spline_weight, double tune_weight )
+{
+  if ( string_has_end(wgt_name, "UBGenie") ) {
+    wgt *= spline_weight;
+  }
+  else if ( wgt_name == "weight_flux_all"
+    || wgt_name == "weight_reint_all"
+    || wgt_name == "weight_xsr_scc_Fa3_SCC"
+    || wgt_name == "weight_xsr_scc_Fv3_SCC" )
+  {
+    wgt *= spline_weight * tune_weight;
+  }
+  else if ( wgt_name == SPLINE_WEIGHT_NAME ) {
+    // No extra weight factors needed
+    return;
+  }
+  else throw std::runtime_error( "Unrecognized weight name" );
+}
+
 // Enum used to label bin types in true space
 enum TrueBinType {
 
@@ -173,6 +224,9 @@ class ResponseMatrixMaker {
     // various systematic universes
     void build_response_matrices();
 
+    // Writes the response matrix histograms to an output ROOT file
+    void save_histograms( const std::string& output_file_name );
+
   protected:
 
     // Prepares the TTreeFormula objects needed to test each entry for
@@ -310,9 +364,25 @@ void ResponseMatrixMaker::build_response_matrices() {
   WeightHandler wh;
   wh.set_branch_addresses( input_chain_ );
 
+  // Make sure that we always have branches set up for the CV correction
+  // weights, i.e., the spline and tune weights. Don't throw an exception if
+  // these are missing in the input TTree (we could be working with real data)
+  wh.add_branch( input_chain_, SPLINE_WEIGHT_NAME, false );
+  wh.add_branch( input_chain_, TUNE_WEIGHT_NAME, false );
+
   this->prepare_formulas();
 
-  bool need_to_prepare_universes = true;
+  // Set up storage for the "is_mc" boolean flag branch. If we're not working
+  // with MC events, then we shouldn't do anything with the true bin counts.
+  bool is_mc;
+  input_chain_.SetBranchAddress( "is_mc", &is_mc );
+
+  // Get the first TChain entry so that we can know the number of universes
+  // used in each vector of weights
+  input_chain_.GetEntry( 0 );
+
+  // Now prepare the vectors of Universe objects with the correct sizes
+  this->prepare_universes( wh );
 
   int treenumber = 0;
   for ( long long entry = 0; entry < input_chain_.GetEntries(); ++entry ) {
@@ -327,26 +397,37 @@ void ResponseMatrixMaker::build_response_matrices() {
       for ( auto& rbf : reco_bin_formulas_ ) rbf->Notify();
     }
 
-    std::vector< size_t > matched_true_bins;
+    // Find the reco bin(s) that should be filled for the current event
     std::vector< size_t > matched_reco_bins;
-
-    for ( size_t tb = 0u; tb < true_bin_formulas_.size(); ++tb ) {
-      auto& tbf = true_bin_formulas_.at( tb );
-      if ( tbf->EvalInstance() ) matched_true_bins.push_back( tb );
-    }
     for ( size_t rb = 0u; rb < reco_bin_formulas_.size(); ++rb ) {
       auto& rbf = reco_bin_formulas_.at( rb );
       if ( rbf->EvalInstance() ) matched_reco_bins.push_back( rb );
     }
 
     input_chain_.GetEntry( entry );
-
     std::cout << "Entry " << entry << '\n';
 
-    if ( need_to_prepare_universes ) {
-      this->prepare_universes( wh );
-      need_to_prepare_universes = false;
-    }
+    std::vector< size_t > matched_true_bins;
+    double spline_weight = 0.;
+    double tune_weight = 0.;
+
+    // If we're working with an MC sample, then find the true bin(s)
+    // that should be filled for the current event
+    if ( is_mc ) {
+      for ( size_t tb = 0u; tb < true_bin_formulas_.size(); ++tb ) {
+        auto& tbf = true_bin_formulas_.at( tb );
+        if ( tbf->EvalInstance() ) matched_true_bins.push_back( tb );
+      } // true bins
+
+      // If we have event weights in the map at all, then get the current
+      // event's CV correction weights here for potentially frequent re-use
+      // below
+      auto& wm = wh.weight_map();
+      if ( wm.size() > 0u ) {
+        spline_weight = wm.at( SPLINE_WEIGHT_NAME )->front();
+        tune_weight = wm.at( TUNE_WEIGHT_NAME )->front();
+      }
+    } // MC event
 
     for ( const auto& pair : wh.weight_map() ) {
       const std::string& wgt_name = pair.first;
@@ -356,33 +437,60 @@ void ResponseMatrixMaker::build_response_matrices() {
 
       for ( size_t u = 0u; u < wgt_vec->size(); ++u ) {
 
-        double w = wgt_vec->at( u );
+        // No need to use the slightly slower "at" here since we're directly
+        // looping over the weight vector
+        double w = wgt_vec->operator[]( u );
+
+        // Multiply by any needed CV correction weights
+        apply_cv_correction_weights( wgt_name, w, spline_weight, tune_weight );
+
+        // Deal with NaNs, etc. to make a "safe weight" in all cases
+        double safe_wgt = safe_weight( w );
+
+        // Get the universe object that should be filled with the processed
+        // event weight
         auto& universe = u_vec.at( u );
 
-        // DEBUG: need to process weight w
         for ( const int& tb : matched_true_bins ) {
-          universe.hist_true_->Fill( tb, w );
+          universe.hist_true_->Fill( tb, safe_wgt );
           for ( const int& rb : matched_reco_bins ) {
-            universe.hist_2d_->Fill( tb, rb, w );
+            universe.hist_2d_->Fill( tb, rb, safe_wgt );
           } // reco bins
         } // true bins
 
         for ( const int& rb : matched_reco_bins ) {
-          universe.hist_reco_->Fill( rb, w );
+          universe.hist_reco_->Fill( rb, safe_wgt );
         } // reco bins
       } // universes
     } // weight names
+
+    // Fill the unweighted histograms now that we're done with the
+    // weighted ones
+    auto& univ = universes_.at( UNWEIGHTED_NAME ).front();
+    for ( const int& tb : matched_true_bins ) {
+      univ.hist_true_->Fill( tb );
+      for ( const int& rb : matched_reco_bins ) {
+        univ.hist_2d_->Fill( tb, rb );
+      } // reco bins
+    } // true bins
+
+    for ( const int& rb : matched_reco_bins ) {
+      univ.hist_reco_->Fill( rb );
+    } // reco bins
+
   } // TChain entries
 
+  input_chain_.ResetBranchAddresses();
 }
 
 void ResponseMatrixMaker::prepare_universes( const WeightHandler& wh ) {
+
+  size_t num_true_bins = true_bins_.size();
+  size_t num_reco_bins = reco_bins_.size();
+
   for ( const auto& pair : wh.weight_map() ) {
     const std::string& weight_name = pair.first;
     size_t num_universes = pair.second->size();
-
-    size_t num_true_bins = true_bins_.size();
-    size_t num_reco_bins = reco_bins_.size();
 
     std::vector< Universe > u_vec;
 
@@ -392,4 +500,30 @@ void ResponseMatrixMaker::prepare_universes( const WeightHandler& wh ) {
 
     universes_[ weight_name ] = std::move( u_vec );
   }
+
+  // Add the special "unweighted" universe unconditionally
+  std::vector< Universe > temp_uvec;
+  temp_uvec.emplace_back( UNWEIGHTED_NAME, 0, num_true_bins, num_reco_bins );
+  universes_[ UNWEIGHTED_NAME ] = std::move( temp_uvec );
+
+}
+
+void ResponseMatrixMaker::save_histograms(
+  const std::string& output_file_name )
+{
+  TFile out_file( output_file_name.c_str(), "recreate" );
+  for ( auto& pair : universes_ ) {
+    auto& u_vec = pair.second;
+    for ( auto& univ : u_vec ) {
+      // Always save the reco histogram
+      univ.hist_reco_->Write();
+
+      // Save the others if the true histogram was filled at least once
+      // (used to infer that we have MC truth information)
+      if ( univ.hist_true_->GetEntries() > 0. ) {
+        univ.hist_true_->Write();
+        univ.hist_2d_->Write();
+      }
+    } // universes
+  } // weight names
 }
