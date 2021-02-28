@@ -10,35 +10,23 @@
 
 // ROOT includes
 #include "TChain.h"
-#include "TEntryList.h"
 #include "TH1D.h"
 #include "TH2D.h"
+#include "TTreeFormula.h"
 
 // STV analysis includes
 #include "TreeUtils.hh"
 #include "WeightHandler.hh"
 
-// Define the missing intersection operator for TEntryList objects. Work
-// with smart pointers because we're using them elsewhere.
-// See tinyurl.com/79q6ztbt for details.
-std::unique_ptr< TEntryList > operator*( const std::unique_ptr<TEntryList>& t1,
-  const std::unique_ptr<TEntryList>& t2 )
-{
-  std::string merged_name = t1->GetName();
-  merged_name += "_and_";
-  merged_name += t2->GetName();
-
-  auto intersection = std::make_unique< TEntryList >( *t1 );
-  auto temp_copy_t1 = std::make_unique< TEntryList >( *t1 );
-  temp_copy_t1->Subtract( t2.get() );
-  intersection->Subtract( temp_copy_t1.get() );
-  intersection->SetName( merged_name.c_str() );
-  temp_copy_t1->SetName( (merged_name + "_temp_copy_").c_str() );
-
-  //intersection->SetDirectory( nullptr );
-
-  return intersection;
-}
+// Only load the library in this way if we're using this code from inside the
+// ROOT C++ interpreter. We could check for __CINT__ as well, but the specific
+// R__LOAD_LIBRARY approach used here only works with ROOT 6.
+#ifdef __CLING__
+// Pre-load the definition of the TTreeFormula::EvalInstance function from the
+// TreePlayer shared library. This approach is based on the trick mentioned
+// here: https://tinyurl.com/2s4yuzxm
+R__LOAD_LIBRARY(libTreePlayer.so)
+#endif
 
 // Enum used to label bin types in true space
 enum TrueBinType {
@@ -141,29 +129,18 @@ class ResponseMatrixMaker {
     inline const auto& true_bins() const { return true_bins_; }
     inline const auto& reco_bins() const { return reco_bins_; }
 
-    // Access the entry lists
-    inline auto& true_entry_lists() { return true_entry_lists_; }
-    inline auto& reco_entry_lists() { return reco_entry_lists_; }
-
     // Access the owned TChain
     inline auto& input_chain() { return input_chain_; }
 
-    // Populates the owned vector of TEntryList objects using the input TChain
-    // and the current true bin configuration
-    void build_true_entry_lists();
-
-    // Populates the owned vector of TEntryList objects using the input TChain
-    // and the current reco bin configuration
-    void build_reco_entry_lists();
-
-    //// Does the actual calculation of response matrix elements across the
-    //// various systematic universes
-    //void build_response_matrices();
-
-    std::unique_ptr< TEntryList > get_intersection_entry_list( size_t true_bin,
-      size_t reco_bin );
+    // Does the actual calculation of response matrix elements across the
+    // various systematic universes
+    void build_response_matrices();
 
   protected:
+
+    // Prepares the TTreeFormula objects needed to test each entry for
+    // membership in each bin
+    void prepare_formulas();
 
     // Bin definitions in true space
     std::vector< TrueBin > true_bins_;
@@ -175,14 +152,13 @@ class ResponseMatrixMaker {
     // response matrix elements
     TChain input_chain_;
 
-    // Each list in the vector stores the entries in the input TChain which
-    // fall into the corresponding true bin
-    std::vector< std::unique_ptr<TEntryList> > true_entry_lists_;
+    // TTreeFormula objects used to test whether the current TChain entry falls
+    // into each true bin
+    std::vector< std::unique_ptr<TTreeFormula> > true_bin_formulas_;
 
-    // Each list in the vector stores the entries in the input TChain which
-    // fall into the corresponding reco bin
-    std::vector< std::unique_ptr<TEntryList> > reco_entry_lists_;
-
+    // TTreeFormula objects used to test whether the current TChain entry falls
+    // into each reco bin
+    std::vector< std::unique_ptr<TTreeFormula> > reco_bin_formulas_;
 };
 
 ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
@@ -195,10 +171,6 @@ ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
 
   // Initialize the owned input TChain with the configured TTree name
   input_chain_.SetName( ttree_name.c_str() );
-
-  // DEBUG: limit the maximum entries to process in TTree::Draw
-  // (NOTE: This value is ignored by TTree::Process)
-  //input_chain_.SetMaxEntryLoop( 100000 );
 
   // Load the true bin definitions
   size_t num_true_bins;
@@ -249,108 +221,74 @@ void ResponseMatrixMaker::add_input_file( const std::string& input_file_name )
   input_chain_.AddFile( input_file_name.c_str() );
 }
 
-void ResponseMatrixMaker::build_true_entry_lists() {
+void ResponseMatrixMaker::prepare_formulas() {
+  // Remove any pre-existing
+  true_bin_formulas_.clear();
+  reco_bin_formulas_.clear();
 
-  // Remove any existing TEntryList objects from the owned vector. Since we're
-  // working with smart pointers to handle storage, pre-existing objects will
-  // be automatically deleted.
-  true_entry_lists_.clear();
+  // Create one TTreeFormula for each true bin definition
+  for ( size_t tb = 0u; tb < true_bins_.size(); ++tb ) {
+    const auto& bin_def = true_bins_.at( tb );
+    std::string formula_name = "true_formula_" + std::to_string( tb );
 
-  // Using these counters is a hacky way to ensure that every TEntryList that
-  // is automatically generated by this function has a unique ROOT name. Since
-  // TTree::Draw relies on this name to create the list, I think it makes sense
-  // to play things safe.
-  int dummy_tb_counter = 0;
+    auto tbf = std::make_unique< TTreeFormula >( formula_name.c_str(),
+      bin_def.signal_cuts_.c_str(), &input_chain_ );
 
-  // Create one entry list for each true bin
-  for ( const auto& tb : true_bins_ ) {
+    tbf->SetQuickLoad( true );
 
-    std::string entry_list_name = "tb_entry_list"
-      + std::to_string( dummy_tb_counter );
+    true_bin_formulas_.emplace_back( std::move(tbf) );
+  }
 
-    std::string temp_var_expr = ">> " + entry_list_name;
+  // Create one TTreeFormula for each reco bin definition
+  for ( size_t rb = 0u; rb < reco_bins_.size(); ++rb ) {
+    const auto& bin_def = reco_bins_.at( rb );
+    std::string formula_name = "reco_formula_" + std::to_string( rb );
 
-    input_chain_.Draw( temp_var_expr.c_str(),
-      tb.signal_cuts_.c_str(), "entrylist" );
+    auto rbf = std::make_unique< TTreeFormula >( formula_name.c_str(),
+      bin_def.selection_cuts_.c_str(), &input_chain_ );
 
-    auto* temp_el = dynamic_cast<TEntryList*>(
-      gDirectory->Get(entry_list_name.c_str()) );
+    rbf->SetQuickLoad( true );
 
-    temp_el->SetDirectory( nullptr );
-
-    // DEBUG
-    temp_el->Print();
-
-    true_entry_lists_.emplace_back( temp_el );
-
-    ++dummy_tb_counter;
+    reco_bin_formulas_.emplace_back( std::move(rbf) );
   }
 
 }
 
-void ResponseMatrixMaker::build_reco_entry_lists() {
+void ResponseMatrixMaker::build_response_matrices() {
 
-  // Remove any existing TEntryList objects from the owned vector. Since we're
-  // working with smart pointers to handle storage, pre-existing objects will
-  // be automatically deleted.
-  reco_entry_lists_.clear();
-
-  // Using these counters is a hacky way to ensure that every TEntryList that
-  // is automatically generated by this function has a unique ROOT name. Since
-  // TTree::Draw relies on this name to create the list, I think it makes sense
-  // to play things safe.
-  int dummy_rb_counter = 0;
-
-  // Create one entry list for each reco bin
-  for ( const auto& rb : reco_bins_ ) {
-
-    std::string entry_list_name = "rb_entry_list"
-      + std::to_string( dummy_rb_counter );
-
-    std::string temp_var_expr = ">> " + entry_list_name;
-
-    input_chain_.Draw( temp_var_expr.c_str(),
-      rb.selection_cuts_.c_str(), "entrylist" );
-
-    auto* temp_el = dynamic_cast<TEntryList*>(
-      gDirectory->Get(entry_list_name.c_str()) );
-
-    temp_el->SetDirectory( nullptr );
-
-    // DEBUG
-    temp_el->Print();
-
-    reco_entry_lists_.emplace_back( temp_el );
-
-    ++dummy_rb_counter;
+  int num_input_files = input_chain_.GetListOfFiles()->GetEntries();
+  if ( num_input_files < 1 ) {
+    std::cout << "ERROR: The ResponseMatrixMaker object has not been"
+      " initialized with any input files yet.\n";
+    return;
   }
 
-}
+  this->prepare_formulas();
 
-std::unique_ptr< TEntryList > ResponseMatrixMaker
-  ::get_intersection_entry_list( size_t true_bin, size_t reco_bin )
-{
-  const auto& tel = true_entry_lists_.at( true_bin );
-  const auto& rel = reco_entry_lists_.at( reco_bin );
+  int treenumber = 0;
+  for ( long long entry = 0; entry < input_chain_.GetEntries(); ++entry ) {
+    // Load the TTree for the current TChain entry
+    input_chain_.LoadTree( entry );
 
-  std::string merged_name = tel->GetName();
-  merged_name += "_and_";
-  merged_name += rel->GetName();
+    // If the current entry is in a new TTree, then have all of the
+    // TTreeFormula objects make the necessary updates
+    if ( treenumber != input_chain_.GetTreeNumber() ) {
+      treenumber = input_chain_.GetTreeNumber();
+      for ( auto& tbf : true_bin_formulas_ ) tbf->Notify();
+      for ( auto& rbf : reco_bin_formulas_ ) rbf->Notify();
+    }
 
-  std::string temp_var_expr = ">> " + merged_name;
+    std::cout << "Entry " << entry << "\n  true bins:";
+    for ( size_t tb = 0u; tb < true_bin_formulas_.size(); ++tb ) {
+      auto& tbf = true_bin_formulas_.at( tb );
+      if ( tbf->EvalInstance() ) std::cout << ' ' << tb;
+    }
+    std::cout << "\n  reco bins:";
+    for ( size_t rb = 0u; rb < reco_bin_formulas_.size(); ++rb ) {
+      auto& rbf = reco_bin_formulas_.at( rb );
+      if ( rbf->EvalInstance() ) std::cout << ' ' << rb;
+    }
+    std::cout << '\n';
+  }
 
-  std::string temp_cuts = true_bins_.at( true_bin ).signal_cuts_;
-
-  input_chain_.SetEntryList( rel.get() );
-  input_chain_.Draw( temp_var_expr.c_str(), temp_cuts.c_str(), "entrylist" );
-  input_chain_.SetEntryList( nullptr );
-
-  auto* temp_el = dynamic_cast<TEntryList*>(
-    gDirectory->Get(merged_name.c_str()) );
-
-  temp_el->SetDirectory( nullptr );
-
-  // DEBUG
-  temp_el->Print();
-  return std::unique_ptr< TEntryList >( temp_el );
 }
