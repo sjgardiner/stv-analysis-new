@@ -114,6 +114,43 @@ inline std::istream& operator>>( std::istream& in, RecoBin& rb ) {
   return in;
 }
 
+// Provides a set of histograms used to store summed bin counts (with
+// associated MC statistical uncertainties) in a given systematic variation
+// universe
+class Universe {
+
+  public:
+
+    Universe( const std::string& universe_name,
+      size_t universe_index, int num_true_bins, int num_reco_bins )
+    {
+      std::string hist_name_prefix = universe_name + '_'
+        + std::to_string( universe_index );
+
+      hist_true_ = std::make_unique< TH1D >(
+        (hist_name_prefix + "_true").c_str(), "; true bin number; events",
+        num_true_bins, 0., num_true_bins );
+
+      hist_reco_ = std::make_unique< TH1D >(
+        (hist_name_prefix + "_reco").c_str(), "; reco bin number; events",
+        num_reco_bins, 0., num_reco_bins );
+
+      hist_2d_ = std::make_unique< TH2D >( (hist_name_prefix + "_2d").c_str(),
+        "; true bin number; reco bin number; counts", num_true_bins, 0.,
+        num_true_bins, num_reco_bins, 0., num_reco_bins );
+
+      // Store summed squares of event weights (for calculations of the MC
+      // statistical uncertainty on bin contents)
+      hist_true_->Sumw2();
+      hist_reco_->Sumw2();
+      hist_2d_->Sumw2();
+    }
+
+    std::unique_ptr< TH1D > hist_true_;
+    std::unique_ptr< TH1D > hist_reco_;
+    std::unique_ptr< TH2D > hist_2d_;
+};
+
 class ResponseMatrixMaker {
 
   public:
@@ -142,6 +179,10 @@ class ResponseMatrixMaker {
     // membership in each bin
     void prepare_formulas();
 
+    // Prepares the Universe objects needed to store summed event weights for
+    // each bin in each systematic variation universe
+    void prepare_universes( const WeightHandler& wh );
+
     // Bin definitions in true space
     std::vector< TrueBin > true_bins_;
 
@@ -159,6 +200,9 @@ class ResponseMatrixMaker {
     // TTreeFormula objects used to test whether the current TChain entry falls
     // into each reco bin
     std::vector< std::unique_ptr<TTreeFormula> > reco_bin_formulas_;
+
+    // Stores Universe objects used to accumulate event weights
+    std::map< std::string, std::vector<Universe> > universes_;
 };
 
 ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
@@ -222,7 +266,7 @@ void ResponseMatrixMaker::add_input_file( const std::string& input_file_name )
 }
 
 void ResponseMatrixMaker::prepare_formulas() {
-  // Remove any pre-existing
+  // Remove any pre-existing TTreeFormula objects from the owned vectors
   true_bin_formulas_.clear();
   reco_bin_formulas_.clear();
 
@@ -268,6 +312,8 @@ void ResponseMatrixMaker::build_response_matrices() {
 
   this->prepare_formulas();
 
+  bool need_to_prepare_universes = true;
+
   int treenumber = 0;
   for ( long long entry = 0; entry < input_chain_.GetEntries(); ++entry ) {
     // Load the TTree for the current TChain entry
@@ -281,26 +327,69 @@ void ResponseMatrixMaker::build_response_matrices() {
       for ( auto& rbf : reco_bin_formulas_ ) rbf->Notify();
     }
 
-    std::cout << "Entry " << entry << "\n  true bins:";
+    std::vector< size_t > matched_true_bins;
+    std::vector< size_t > matched_reco_bins;
+
     for ( size_t tb = 0u; tb < true_bin_formulas_.size(); ++tb ) {
       auto& tbf = true_bin_formulas_.at( tb );
-      if ( tbf->EvalInstance() ) std::cout << ' ' << tb;
+      if ( tbf->EvalInstance() ) matched_true_bins.push_back( tb );
     }
-    std::cout << "\n  reco bins:";
     for ( size_t rb = 0u; rb < reco_bin_formulas_.size(); ++rb ) {
       auto& rbf = reco_bin_formulas_.at( rb );
-      if ( rbf->EvalInstance() ) std::cout << ' ' << rb;
+      if ( rbf->EvalInstance() ) matched_reco_bins.push_back( rb );
     }
-    std::cout << '\n';
 
     input_chain_.GetEntry( entry );
 
-    for ( const auto& wt : wh.weight_map() ) {
-      std::cout << wt.first << '\n';
-    }
-    return;
-    std::cout << "  tuned CV weight = " << wh.weight_map().at(
-      "weight_TunedCentralValue_UBGenie" )->front() << '\n';
-  }
+    std::cout << "Entry " << entry << '\n';
 
+    if ( need_to_prepare_universes ) {
+      this->prepare_universes( wh );
+      need_to_prepare_universes = false;
+    }
+
+    for ( const auto& pair : wh.weight_map() ) {
+      const std::string& wgt_name = pair.first;
+      const auto& wgt_vec = pair.second;
+
+      auto& u_vec = universes_.at( wgt_name );
+
+      for ( size_t u = 0u; u < wgt_vec->size(); ++u ) {
+
+        double w = wgt_vec->at( u );
+        auto& universe = u_vec.at( u );
+
+        // DEBUG: need to process weight w
+        for ( const int& tb : matched_true_bins ) {
+          universe.hist_true_->Fill( tb, w );
+          for ( const int& rb : matched_reco_bins ) {
+            universe.hist_2d_->Fill( tb, rb, w );
+          } // reco bins
+        } // true bins
+
+        for ( const int& rb : matched_reco_bins ) {
+          universe.hist_reco_->Fill( rb, w );
+        } // reco bins
+      } // universes
+    } // weight names
+  } // TChain entries
+
+}
+
+void ResponseMatrixMaker::prepare_universes( const WeightHandler& wh ) {
+  for ( const auto& pair : wh.weight_map() ) {
+    const std::string& weight_name = pair.first;
+    size_t num_universes = pair.second->size();
+
+    size_t num_true_bins = true_bins_.size();
+    size_t num_reco_bins = reco_bins_.size();
+
+    std::vector< Universe > u_vec;
+
+    for ( size_t u = 0u; u < num_universes; ++u ) {
+      u_vec.emplace_back( weight_name, u, num_true_bins, num_reco_bins );
+    }
+
+    universes_[ weight_name ] = std::move( u_vec );
+  }
 }
