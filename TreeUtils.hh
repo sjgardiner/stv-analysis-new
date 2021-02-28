@@ -1,5 +1,8 @@
 #pragma once
 
+// ROOT includes
+#include "TTree.h"
+
 // **** Helper code to facilitate setting TTree branch addresses, etc. ****
 
 // A std::unique_ptr with redundant storage of a bare pointer to the managed

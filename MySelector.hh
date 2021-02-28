@@ -2,6 +2,11 @@
 
 // Standard library includes
 #include <cmath>
+#include <iostream>
+
+// ROOT includes
+#include "TFile.h"
+#include "TSelector.h"
 
 // STV analysis includes
 #include "TreeUtils.hh" // Needed for the MyPointer class template
@@ -50,6 +55,13 @@ class MySelector : public TSelector {
     virtual void Terminate();
     inline virtual int Version() const { return 2; }
 
+    // Accessors
+    inline const auto& sums_of_weights() const { return sums_of_weights_; }
+    inline auto& sums_of_weights() { return sums_of_weights_; }
+
+    inline const auto& sums_of_weights2() const { return sums_of_weights2_; }
+    inline auto& sums_of_weights2() { return sums_of_weights2_; }
+
   protected:
 
     inline void GetBranchEntries( Long64_t entry ) {
@@ -79,10 +91,10 @@ class MySelector : public TSelector {
     WeightHandler wh_;
 
     // Map that holds summed event weights organized by TTree branch
-    std::map< std::string, std::vector<double> > sums_of_weights_;
+    std::map< std::string, MyPointer< std::vector<double> > > sums_of_weights_;
 
     // Map that holds summed squares of event weights organized by TTree branch
-    std::map< std::string, std::vector<double> > sums_of_weights2_;
+    std::map< std::string, MyPointer< std::vector<double> > > sums_of_weights2_;
 
 };
 
@@ -101,9 +113,10 @@ void MySelector::Init( TTree* tree ) {
   wh_.set_branch_addresses( *tree, branch_names_ );
 
   // Make sure that we always have branches set up for the CV correction
-  // weights, i.e., the spline and tune weights
-  wh_.add_branch( *tree, SPLINE_WEIGHT_NAME );
-  wh_.add_branch( *tree, TUNE_WEIGHT_NAME );
+  // weights, i.e., the spline and tune weights. Don't throw an exception if
+  // these are missing in the input TTree (we could be working with real data)
+  wh_.add_branch( *tree, SPLINE_WEIGHT_NAME, false );
+  wh_.add_branch( *tree, TUNE_WEIGHT_NAME, false );
 
   // Get pointers to each branch of interest
   this->SetBranchPointers();
@@ -185,7 +198,8 @@ Bool_t MySelector::Process( Long64_t entry ) {
 
     // Add the event weights in the current entry to the sum vectors for
     // the appropriate branch
-    for ( size_t w = 0u; w < weight_vec->size(); ++w ) {
+    size_t num_universes = weight_vec->size();
+    for ( size_t w = 0u; w < num_universes; ++w ) {
       // No need to use the slightly slower "at" here since we're directly
       // looping over the weight vector
       double wgt = weight_vec->operator[]( w );
@@ -198,8 +212,8 @@ Bool_t MySelector::Process( Long64_t entry ) {
       double safe_wgt = safe_weight( wgt );
 
       // Use "at" here, just in case
-      sum_vec.at( w ) += safe_wgt;
-      sum2_vec.at( w ) += safe_wgt;
+      sum_vec->at( w ) += safe_wgt;
+      sum2_vec->at( w ) += safe_wgt;
     } // universe loop
   } // weight branch loop
 
@@ -216,11 +230,11 @@ void MySelector::SlaveBegin( TTree* tree ) {
 
   // Zero out the elements of all vectors of summed event weights
   for ( auto& pair : sums_of_weights_ ) {
-    auto& sum_vec = pair.second;
+    auto& sum_vec = *pair.second;
     for ( double& sum : sum_vec ) sum = 0.;
   }
   for ( auto& pair : sums_of_weights2_ ) {
-    auto& sum2_vec = pair.second;
+    auto& sum2_vec = *pair.second;
     for ( double& sum2 : sum2_vec ) sum2 = 0.;
   }
 }
@@ -236,8 +250,8 @@ void MySelector::Terminate() {
   // a query. It always runs on the client, it can be used to present
   // the results graphically or save the results to file.
   for ( const auto& pair : sums_of_weights_ ) {
-    std::cout << pair.first << ' ' << pair.second.size()
-      << ' ' << pair.second.front() << '\n';
+    std::cout << pair.first << ' ' << pair.second->size()
+      << ' ' << pair.second->front() << '\n';
   }
 }
 
@@ -254,8 +268,8 @@ void MySelector::InitializeSumVectors() {
     const auto& weight_vec = pair.second;
     size_t num_elements = weight_vec->size();
 
-    sums_of_weights_[ br_name ] = std::vector<double>( num_elements, 0. );
-    sums_of_weights2_[ br_name ] = std::vector<double>( num_elements, 0. );
+    sums_of_weights_[ br_name ]->assign( num_elements, 0. );
+    sums_of_weights2_[ br_name ]->assign( num_elements, 0. );
   }
 }
 

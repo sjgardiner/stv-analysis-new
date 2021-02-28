@@ -1,6 +1,7 @@
 #pragma once
 
 // Standard library includes
+#include <algorithm>
 #include <array>
 #include <map>
 #include <string>
@@ -27,7 +28,8 @@ class WeightHandler {
 
     // Add a single branch from the input TTree with the specified name.
     // This function also sets the branch address appropriately.
-    void add_branch( TTree& in_tree, const std::string& branch_name );
+    void add_branch( TTree& in_tree, const std::string& branch_name,
+      bool throw_when_missing = true );
 
     // Overloaded version that allows for easy configuration of a single input
     // branch
@@ -64,8 +66,8 @@ void WeightHandler::set_branch_addresses( TTree& in_tree,
     if ( branch_names ) {
       // Include the branch if its name can be found in the user-supplied
       // vector
-      auto iter = std::find( branch_names->begin(), branch_names->end(),
-        br_name );
+      auto iter = std::find( branch_names->begin(),
+        branch_names->end(), br_name );
       include_branch = ( iter != branch_names->end() );
     }
     else {
@@ -104,7 +106,7 @@ void WeightHandler::set_branch_addresses( TTree& in_tree,
 
 // Allow the user to manually add a new branch
 void WeightHandler::add_branch( TTree& in_tree,
-  const std::string& branch_name )
+  const std::string& branch_name, bool throw_when_missing )
 {
   // If we already have an entry in the map for this branch, just return
   // without doing anything
@@ -115,7 +117,8 @@ void WeightHandler::add_branch( TTree& in_tree,
   // input TTree
   TBranch* br = in_tree.GetBranch( branch_name.c_str() );
   if ( !br ) {
-    throw std::runtime_error( "Missing TTree branch " + branch_name );
+    if ( throw_when_missing ) throw std::runtime_error(
+      "Missing TTree branch " + branch_name );
     return;
   }
 

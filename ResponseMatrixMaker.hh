@@ -1,14 +1,16 @@
 #pragma once
 
 // Standard library includes
-#include <memory>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 // ROOT includes
+#include "TChain.h"
+#include "TEntryList.h"
 #include "TH1D.h"
 #include "TH2D.h"
 
@@ -22,16 +24,19 @@
 std::unique_ptr< TEntryList > operator*( const std::unique_ptr<TEntryList>& t1,
   const std::unique_ptr<TEntryList>& t2 )
 {
-  auto intersection = std::make_unique< TEntryList >( *t1 );
-  auto temp_copy_t1 = std::make_unique< TEntryList >( *t1 );
-  temp_copy_t1->Subtract( t2.get() );
-  intersection->Subtract( temp_copy_t1.get() );
-
   std::string merged_name = t1->GetName();
   merged_name += "_and_";
   merged_name += t2->GetName();
 
+  auto intersection = std::make_unique< TEntryList >( *t1 );
+  auto temp_copy_t1 = std::make_unique< TEntryList >( *t1 );
+  temp_copy_t1->Subtract( t2.get() );
+  intersection->Subtract( temp_copy_t1.get() );
   intersection->SetName( merged_name.c_str() );
+  temp_copy_t1->SetName( (merged_name + "_temp_copy_").c_str() );
+
+  //intersection->SetDirectory( nullptr );
+
   return intersection;
 }
 
@@ -155,6 +160,9 @@ class ResponseMatrixMaker {
     //// various systematic universes
     //void build_response_matrices();
 
+    std::unique_ptr< TEntryList > get_intersection_entry_list( size_t true_bin,
+      size_t reco_bin );
+
   protected:
 
     // Bin definitions in true space
@@ -187,6 +195,10 @@ ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
 
   // Initialize the owned input TChain with the configured TTree name
   input_chain_.SetName( ttree_name.c_str() );
+
+  // DEBUG: limit the maximum entries to process in TTree::Draw
+  // (NOTE: This value is ignored by TTree::Process)
+  //input_chain_.SetMaxEntryLoop( 100000 );
 
   // Load the true bin definitions
   size_t num_true_bins;
@@ -264,6 +276,8 @@ void ResponseMatrixMaker::build_true_entry_lists() {
     auto* temp_el = dynamic_cast<TEntryList*>(
       gDirectory->Get(entry_list_name.c_str()) );
 
+    temp_el->SetDirectory( nullptr );
+
     // DEBUG
     temp_el->Print();
 
@@ -301,6 +315,8 @@ void ResponseMatrixMaker::build_reco_entry_lists() {
     auto* temp_el = dynamic_cast<TEntryList*>(
       gDirectory->Get(entry_list_name.c_str()) );
 
+    temp_el->SetDirectory( nullptr );
+
     // DEBUG
     temp_el->Print();
 
@@ -309,4 +325,32 @@ void ResponseMatrixMaker::build_reco_entry_lists() {
     ++dummy_rb_counter;
   }
 
+}
+
+std::unique_ptr< TEntryList > ResponseMatrixMaker
+  ::get_intersection_entry_list( size_t true_bin, size_t reco_bin )
+{
+  const auto& tel = true_entry_lists_.at( true_bin );
+  const auto& rel = reco_entry_lists_.at( reco_bin );
+
+  std::string merged_name = tel->GetName();
+  merged_name += "_and_";
+  merged_name += rel->GetName();
+
+  std::string temp_var_expr = ">> " + merged_name;
+
+  std::string temp_cuts = true_bins_.at( true_bin ).signal_cuts_;
+
+  input_chain_.SetEntryList( rel.get() );
+  input_chain_.Draw( temp_var_expr.c_str(), temp_cuts.c_str(), "entrylist" );
+  input_chain_.SetEntryList( nullptr );
+
+  auto* temp_el = dynamic_cast<TEntryList*>(
+    gDirectory->Get(merged_name.c_str()) );
+
+  temp_el->SetDirectory( nullptr );
+
+  // DEBUG
+  temp_el->Print();
+  return std::unique_ptr< TEntryList >( temp_el );
 }

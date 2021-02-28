@@ -1,9 +1,9 @@
 // KEY: TParameter<float> summed_pot;1
 // KEY: TTree    stv_tree;2      STV analysis tree
 
-constexpr int NUM_BINS = 20;
+constexpr int NUM_BINS = 15;
 constexpr double X_MIN = 0.;
-constexpr double X_MAX = 1.;
+constexpr double X_MAX = 0.8;
 
 struct HistInfo {
   HistInfo() {}
@@ -90,9 +90,18 @@ void detSyst() {
     else color += 10;
   }
 
+  auto* cv_hist = var_map.at( "CV" ).hist_;
+  cv_hist->SetTitle( "; reco #deltap_{T} [GeV]; detVar CV events (run 3)" );
+
   // Draw all of the histograms on the same plot
   TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
-  var_map.at( "CV" ).hist_->Draw( "hist e" );
+  cv_hist->Draw( "hist e" );
+  cv_hist->GetYaxis()->SetRangeUser( 0., 750. );
+  cv_hist->GetYaxis()->SetTitleOffset( 1.05 );
+  cv_hist->GetYaxis()->SetTitleSize( 0.045 );
+  cv_hist->GetXaxis()->SetTitleOffset( 1.0 );
+  cv_hist->GetXaxis()->SetTitleSize( 0.045 );
+
   for ( auto& pair : var_map ) {
     auto* hist = pair.second.hist_;
     hist->Draw( "same e" );
@@ -100,5 +109,35 @@ void detSyst() {
   }
 
   lg->Draw( "same" );
+
+  //// Add fractional uncertainties in quadrature for each bin
+  //TH1D* frac_sigmas = new TH1D( "frac_sigmas", "frac_sigmas",
+  //  NUM_BINS, X_MIN, X_MAX );
+
+  //auto& cv_hist_info = var_map.at( "CV" );
+  //for ( const auto& pair : var_map ) {
+  //  std::string label = pair.first;
+  //  auto& info = pair.second;
+
+  //  for ( int b = 1; b <= NUM_BINS; ++b ) {
+  //    double cv = cv_hist_info.hist_->GetBinContent( b );
+  //    double var = info.hist_->GetBinContent( b );
+  //    double sigma2 = std::pow( var - cv, 2 );
+
+  //    frac_sigmas->Fill( frac_sigmas->GetBinLowEdge(b), sigma2 );
+  //  }
+  //}
+
+  //for ( int b = 1; b <= NUM_BINS; ++b ) {
+  //  double cv = cv_hist_info.hist_->GetBinContent( b );
+  //  double sum_sigma2 = frac_sigmas->GetBinContent( b );
+  //  std::cout << sum_sigma2 << '\n';
+
+  //  double frac_err = std::sqrt( sum_sigma2 ) / cv;
+  //  frac_sigmas->SetBinContent( b, frac_err );
+  //}
+
+  //TCanvas* cfrac = new TCanvas;
+  //frac_sigmas->Draw( "hist" );
 
 }

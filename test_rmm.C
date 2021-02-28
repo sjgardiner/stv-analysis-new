@@ -144,6 +144,10 @@ void make_response_matrix( const std::string& input_file_name ) {
     // manipulation of both
     input_chain.AddFriend( &weights_ch );
 
+    //// DEBUG: test with CV and unweighted only
+    //weight_names.clear();
+    //weight_names[ "weight_TunedCentralValue_UBGenie" ] = 1u;
+
   } // MC event weights are needed
 
   // Unconditionally add a special "unweighted" universe to the map of weight
@@ -204,9 +208,6 @@ void make_response_matrix( const std::string& input_file_name ) {
     std::string cut_base = get_weight_cut_expr( weight_id );
 
     for ( universe = 0u; universe < num_universes; ++universe ) {
-
-      // DEBUG
-      if ( universe > 2 ) break;
 
       std::cout << weight_id << ' ' <<  universe << '\n';
 
@@ -291,5 +292,11 @@ void test_rmm() {
   ROOT::EnableImplicitMT();
   //make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
   //make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-run1_neutrinoselection_filt_numu_ALL.root" );
-  make_response_matrix( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_overlay_DetVar_SCE_reco2_v08_00_00_38_run3b_reco2_reco2.root" );
+
+  std::ifstream list_file( "foo2" );
+  std::string file_name;
+  while ( std::getline(list_file, file_name, '\n') ) {
+    make_response_matrix( file_name );
+  }
+
 }
