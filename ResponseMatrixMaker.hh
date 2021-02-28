@@ -263,6 +263,9 @@ void ResponseMatrixMaker::build_response_matrices() {
     return;
   }
 
+  WeightHandler wh;
+  wh.set_branch_addresses( input_chain_ );
+
   this->prepare_formulas();
 
   int treenumber = 0;
@@ -289,6 +292,15 @@ void ResponseMatrixMaker::build_response_matrices() {
       if ( rbf->EvalInstance() ) std::cout << ' ' << rb;
     }
     std::cout << '\n';
+
+    input_chain_.GetEntry( entry );
+
+    for ( const auto& wt : wh.weight_map() ) {
+      std::cout << wt.first << '\n';
+    }
+    return;
+    std::cout << "  tuned CV weight = " << wh.weight_map().at(
+      "weight_TunedCentralValue_UBGenie" )->front() << '\n';
   }
 
 }
