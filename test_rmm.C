@@ -1,3 +1,7 @@
+// ROOT includes
+#include "TROOT.h"
+
+// STV analysis includes
 #include "FilePropertiesManager.hh"
 #include "ResponseMatrixMaker.hh"
 
@@ -31,5 +35,9 @@ void test_rmm() {
   while ( std::getline(list_file, file_name, '\n') ) {
     make_response_matrix( file_name );
   }
+}
 
+int main() {
+  test_rmm();
+  return 0;
 }

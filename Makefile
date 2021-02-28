@@ -1,7 +1,7 @@
-selector:
-	$(CXX) $(shell root-config --cflags --libs) -O3 -o $@ selector_test.C
+rmm:
+	$(CXX) $(shell root-config --cflags --libs) -O3 -o $@ test_rmm.C
 
 .PHONY: clean
 
 clean:
-	$(RM) selector
+	$(RM) rmm
