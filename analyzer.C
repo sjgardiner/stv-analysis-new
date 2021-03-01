@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 10 December 2020
+// Updated 1 March 2021
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -82,9 +82,17 @@ double PCV_Z_MAX = 1030.;
 constexpr double TARGET_MASS = 37.215526; // 40Ar, GeV
 constexpr double NEUTRON_MASS = 0.93956541; // GeV
 constexpr double PROTON_MASS = 0.93827208; // GeV
-constexpr double BINDING_ENERGY = 0.0295; // 40Ar, GeV
 constexpr double MUON_MASS = 0.10565837; // GeV
 constexpr double PI_PLUS_MASS = 0.13957000; // GeV
+
+// This binding energy value is used in GENIE v3.0.6
+//constexpr double BINDING_ENERGY = 0.0295; // 40Ar, GeV
+
+// This value is the shell-occupancy-weighted mean of the $E_{\alpha}$ values
+// listed for 40Ar in Table II of arXiv:1609.03530. MINERvA uses an identical
+// procedure for 12C to obtain the binding energy value of 27.13 MeV, which is
+// adopted in their STV analysis described in arXiv:1910.08658.
+constexpr double BINDING_ENERGY = 0.02478; // 40Ar, GeV
 
 // Class used to hold information from the searchingfornues TTree branches and
 // process it for our analysis
