@@ -261,19 +261,33 @@ class AnalysisEvent {
 
     // **** Reco selection requirements ****
 
-    // Whether the event passed the upstream numu CC selection (by Wouter)
+    // Whether the event passed the numu CC selection (a subset of the cuts
+    // used for the full analysis)
     bool sel_nu_mu_cc_ = false;
-    // False if at least one generation == 2 shower was reconstructed
-    bool sel_no_reco_showers_ = false;
-    // True if exactly one generation == 2 muon candidate was identified
+
+    // Whether the reconstructed neutrino vertex lies within the fiducial
+    // volume
+    bool sel_reco_vertex_in_FV_ = false;
+    // Whether the event passed the topological score cut
+    bool sel_topo_cut_passed_ = false;
+    // Whether the event passed the cosmic impact parameter cut
+    bool sel_cosmic_ip_cut_passed_ = false;
+    // Whether the start points for all PFParticles lie within the
+    // proton containment volume
+    bool sel_pfp_starts_in_PCV_ = false;
+
+    // True if a generation == 2 muon candidate was identified
     bool sel_has_muon_candidate_ = false;
     // Whether the muon candidate has a reco momentum above threshold
     bool sel_muon_above_threshold_ = false;
+
+    // False if at least one generation == 2 shower was reconstructed
+    bool sel_no_reco_showers_ = false;
     // Whether at least one generation == 2 reco track exists that is not the
     // muon candidate
     bool sel_has_p_candidate_ = false;
-    // Whether all proton candidates with at least HITS_Y_CUT collection plane
-    // hits pass the proton PID cut (chi^2_proton <= PROTON_CHI2_CUT)
+    // Whether all proton candidates (i.e., all tracks which are not the muon
+    // candidate) pass the proton PID cut or not
     bool sel_passed_proton_pid_cut_ = false;
     // Whether all proton candidates have track end coordinates that lie within
     // the "containment volume"
@@ -602,6 +616,18 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   // CCNp0pi selection criteria
   set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
     create, "sel_nu_mu_cc/O" );
+
+  set_output_branch_address( out_tree, "sel_reco_vertex_in_FV",
+    &ev.sel_reco_vertex_in_FV_, create, "sel_reco_vertex_in_FV/O" );
+
+  set_output_branch_address( out_tree, "sel_topo_cut_passed",
+    &ev.sel_topo_cut_passed_, create, "sel_topo_cut_passed/O" );
+
+  set_output_branch_address( out_tree, "sel_cosmic_ip_cut_passed",
+    &ev.sel_cosmic_ip_cut_passed_, create, "sel_cosmic_ip_cut_passed/O" );
+
+  set_output_branch_address( out_tree, "sel_pfp_starts_in_PCV",
+    &ev.sel_pfp_starts_in_PCV_, create, "sel_pfp_starts_in_PCV/O" );
 
   set_output_branch_address( out_tree, "sel_no_reco_showers",
     &ev.sel_no_reco_showers_, create, "sel_no_reco_showers/O" );
@@ -1083,13 +1109,13 @@ EventCategory AnalysisEvent::categorize_event() {
 
 void AnalysisEvent::apply_numu_CC_selection() {
 
-  bool reco_vertex_ok = this->reco_vertex_inside_FV();
-  bool topo_ok = topological_score_ > TOPO_SCORE_CUT;
-  bool cip_ok = cosmic_impact_parameter_ > COSMIC_IP_CUT;
+  sel_reco_vertex_in_FV_ = this->reco_vertex_inside_FV();
+  sel_topo_cut_passed_ = topological_score_ > TOPO_SCORE_CUT;
+  sel_cosmic_ip_cut_passed_ = cosmic_impact_parameter_ > COSMIC_IP_CUT;
 
   // Apply the containment cut to the starting positions of all
   // reconstructed tracks and showers. Pass this cut by default.
-  bool pfp_starts_ok = true;
+  sel_pfp_starts_in_PCV_ = true;
 
   // Loop over each PFParticle in the event
   for ( int p = 0; p < num_pf_particles_; ++p ) {
@@ -1126,10 +1152,15 @@ void AnalysisEvent::apply_numu_CC_selection() {
     // positions. See https://stackoverflow.com/a/2488507 for an explanation
     // of the use of &= here. Don't worry, it's type-safe since both operands
     // are bool.
-    pfp_starts_ok &= in_proton_containment_vol( x, y, z );
+    sel_pfp_starts_in_PCV_ &= in_proton_containment_vol( x, y, z );
   }
 
-  sel_nu_mu_cc_ = reco_vertex_ok && topo_ok && cip_ok && pfp_starts_ok;
+  // Sets the sel_has_muon_candidate_ flag as appropriate. The threshold check
+  // is handled later.
+  this->find_muon_candidate();
+
+  sel_nu_mu_cc_ = sel_reco_vertex_in_FV_ && sel_pfp_starts_in_PCV_
+    && sel_has_muon_candidate_;
 }
 
 // Sets the index of the muon candidate in the track vectors, or BOGUS_INDEX if
@@ -1192,8 +1223,6 @@ void AnalysisEvent::apply_selection() {
 
   // Set sel_nu_mu_cc_ by applying those criteria
   this->apply_numu_CC_selection();
-
-  this->find_muon_candidate();
 
   // Fail the shower cut if any showers were reconstructed
   // NOTE: We could do this quicker like this,
@@ -1305,7 +1334,7 @@ void AnalysisEvent::apply_selection() {
   // whether all were passed (and thus the event is selected as a CCNp0pi
   // candidate)
   sel_CCNp0pi_ = sel_nu_mu_cc_ && sel_no_reco_showers_
-    && sel_has_muon_candidate_ && sel_muon_above_threshold_
+    && sel_muon_above_threshold_
     && sel_has_p_candidate_ && sel_passed_proton_pid_cut_
     && sel_protons_contained_ && sel_lead_p_passed_mom_cuts_;
 }
