@@ -36,7 +36,6 @@ void compute_eff_pur( TTree& stv_tree, const std::string& signal_cuts,
 const std::string signal_cuts = "mc_is_signal";
 const std::string selection_cuts = "sel_CCNp0pi";
 
-
 void effpur() {
 
   const std::vector< std::string > signal_defs = { "1",
@@ -50,23 +49,25 @@ void effpur() {
     "mc_is_signal" };
 
   const std::vector< std::string > selection_defs = { "1",
+  "sel_reco_vertex_in_FV",
+  "sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV",
   "sel_nu_mu_cc",
-  "sel_nu_mu_cc && sel_no_reco_showers",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
-    " && sel_muon_above_threshold",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
+  "sel_nu_mu_cc && sel_muon_above_threshold",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold",
+  "sel_nu_mu_cc && sel_no_reco_showers"
     " && sel_muon_above_threshold && sel_has_p_candidate",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained ",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained && sel_passed_proton_pid_cut",
-  "sel_CCNp0pi" };
+  "sel_CCNp0pi",
+  "sel_CCNp0pi && sel_cosmic_ip_cut_passed",
+  "sel_CCNp0pi && sel_cosmic_ip_cut_passed && sel_topo_cut_passed" };
 
   TChain stv_ch( "stv_tree" );
-  stv_ch.Add( "*stv.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv/out.root" );
 
   size_t num_points = selection_defs.size();
   TGraph* eff_graph = new TGraph( num_points );
