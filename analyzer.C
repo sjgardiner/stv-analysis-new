@@ -53,10 +53,10 @@ constexpr int PI_PLUS = 211;
 
 // Values of parameters to use in analysis cuts
 constexpr float PROTON_PID_CUT = 0.2;
-constexpr float LEAD_P_MIN_MOM_CUT = 0.200; // GeV/c
+constexpr float LEAD_P_MIN_MOM_CUT = 0.250; // GeV/c
 constexpr float LEAD_P_MAX_MOM_CUT = 1.200; // GeV/c
 constexpr float MUON_MOM_CUT = 0.100; // GeV/c
-constexpr float CHARGED_PI_MOM_CUT = 0.070; // GeV/c
+constexpr float CHARGED_PI_MOM_CUT = 0.; // GeV/c
 
 constexpr float TOPO_SCORE_CUT = 0.1;
 constexpr float COSMIC_IP_CUT = 10.; // cm
