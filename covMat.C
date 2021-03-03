@@ -268,12 +268,14 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
   // Prepare histograms of the CV expected counts for signal and background in
   // each reco bin
   TH1D* reco_cv_signal = new TH1D( ("reco_cv_signal_" + cov_mat_name).c_str(),
-    "reco signal event counts", num_reco_bins, 0., num_reco_bins );
+    "reco signal event counts; reco bin; events", num_reco_bins, 0.,
+    num_reco_bins );
   reco_cv_signal->SetDirectory( nullptr );
   reco_cv_signal->SetStats( false );
 
   TH1D* reco_cv_bkgd = new TH1D( ("reco_cv_bkgd_" + cov_mat_name).c_str(),
-    "reco background event counts", num_reco_bins, 0., num_reco_bins );
+    "reco background event counts; reco bin; events", num_reco_bins, 0.,
+    num_reco_bins );
   reco_cv_bkgd->SetDirectory( nullptr );
   reco_cv_bkgd->SetStats( false );
 
@@ -323,10 +325,10 @@ void covMat() {
   const std::string respmat_folder = "/uboone/data/users/gardiner/"
     "old-ntuples-stv/resp-all-backup";
 
-  std::string cv_file_name = sample_to_respmat_file_name( DETVAR_CV_NAME,
-    respmat_folder );
+  std::string detvar_cv_file_name = sample_to_respmat_file_name(
+    DETVAR_CV_NAME, respmat_folder );
 
-  FileNamecycle detvar_cv_spec( cv_file_name, "unweighted_0" );
+  FileNamecycle detvar_cv_spec( detvar_cv_file_name, "unweighted_0" );
 
   std::vector< FileNamecycle > detvar_universes;
   for ( const auto& sample : DETVAR_SAMPLE_NAMES ) {
@@ -338,13 +340,72 @@ void covMat() {
   CovMatResults detVarResults = make_cov_mat( "detVar_total", rmm,
     detvar_cv_spec, detvar_universes, true, false );
 
-  TH2D* signal_cm = detVarResults.signal_cov_mat_.release();
-  TH1D* signal_reco = detVarResults.reco_signal_cv_.release();
+  //TH2D* signal_cm = detVarResults.signal_cov_mat_.release();
+  //TH1D* signal_reco = detVarResults.reco_signal_cv_.release();
+
+  //TCanvas* c1 = new TCanvas;
+  //signal_cm->Draw( "colz" );
+  //TCanvas* c2 = new TCanvas;
+  //signal_reco->Draw( "hist e" );
+
+  std::string test_file = "/uboone/data/users/gardiner/old-ntuples-stv/"
+    "resp-all-backup/respmat-stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_"
+    "v08_00_00_26_filter_run1_reco2_reco2.root";
+
+  std::string genie_cv_name = "weight_TunedCentralValue_UBGenie_0";
+
+  FileNamecycle test_cv_spec( test_file, genie_cv_name );
+
+  std::vector< FileNamecycle > test_univ_spec;
+  for ( size_t u = 0u; u < 500u; ++u ) {
+    test_univ_spec.emplace_back( test_file,
+      "weight_All_UBGenie_" + std::to_string(u) );
+  }
+
+  CovMatResults testResults = make_cov_mat( "genie_All", rmm,
+    test_cv_spec, test_univ_spec, true, true );
+
+  //TH2D* signal_cm = testResults.signal_cov_mat_.release();
+  //TH1D* signal_reco = testResults.reco_signal_cv_.release();
+
+  //TH2D* bkgd_cm = testResults.bkgd_cov_mat_.release();
+  //TH1D* bkgd_reco = testResults.reco_bkgd_cv_.release();
+
+  //TCanvas* c1 = new TCanvas;
+  //signal_cm->Draw( "colz" );
+  //TCanvas* c2 = new TCanvas;
+  //signal_reco->Draw( "hist e" );
+  //bkgd_reco->Draw( "hist e same" );
+
+  //TCanvas* c3 = new TCanvas;
+  //bkgd_cm->Draw( "colz" );
+
+  std::vector< FileNamecycle > test_univ_spec2;
+  for ( size_t u = 0u; u < 1000u; ++u ) {
+    test_univ_spec.emplace_back( test_file,
+      "weight_flux_all_" + std::to_string(u) );
+  }
+
+  CovMatResults testResults2 = make_cov_mat( "reinteractions", rmm,
+    test_cv_spec, test_univ_spec, true, true );
+
+  TH2D* signal_cm = testResults2.signal_cov_mat_.release();
+  TH1D* signal_reco = testResults2.reco_signal_cv_.release();
+
+  TH2D* bkgd_cm = testResults2.bkgd_cov_mat_.release();
+  TH1D* bkgd_reco = testResults2.reco_bkgd_cv_.release();
 
   TCanvas* c1 = new TCanvas;
   signal_cm->Draw( "colz" );
   TCanvas* c2 = new TCanvas;
   signal_reco->Draw( "hist e" );
+  bkgd_reco->Draw( "hist e same" );
+
+  TCanvas* c3 = new TCanvas;
+  bkgd_cm->Draw( "colz" );
+  TCanvas* c4 = new TCanvas;
+  bkgd_reco->Draw( "hist e" );
+
 }
 
 // std::string var_name = detvar_sample_to_label( sample_name );
