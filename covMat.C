@@ -58,106 +58,118 @@ TH2D* make_covariance_matrix_histogram( const std::string& hist_name,
   return hist;
 }
 
-void covMat() {
+struct FileNamecycle {
 
-  // The response matrices in each universe have already been made. However,
-  // we'll re-create the object used to make them. It provides an easy
-  // interface for interpreting the bin structure that was used.
-  // TODO: consider refactoring this to have a "read-only" version. Also, be
-  // careful. With the current approach, if you use the wrong configuration file
-  // here, all of your covariance matrices could be invalid.
-  ResponseMatrixMaker resp_mat( "myconfig.txt" );
+  FileNamecycle( const std::string& f, const std::string n )
+    : file_( f ), namecycle_( n ) {}
 
+  std::string file_;
+  std::string namecycle_;
+};
+
+struct CovMatResults {
+
+  CovMatResults( TH2D* signal_cm, TH2D* bkgd_cm, TH1D* rc_signal_cv,
+    TH1D* rc_bkgd_cv, bool frac ) : signal_cov_mat_( signal_cm ),
+    bkgd_cov_mat_( bkgd_cm ), reco_signal_cv_( rc_signal_cv ),
+    reco_bkgd_cv_( rc_bkgd_cv ), fractional_( frac ) {}
+
+  std::unique_ptr< TH2D > signal_cov_mat_;
+  std::unique_ptr< TH2D > bkgd_cov_mat_;
+
+  std::unique_ptr< TH1D > reco_signal_cv_;
+  std::unique_ptr< TH1D > reco_bkgd_cv_;
+
+  bool fractional_;
+
+};
+
+CovMatResults make_cov_mat( const std::string& cov_mat_name,
+  const ResponseMatrixMaker& resp_mat, const FileNamecycle& cv_spec,
+  const std::vector< FileNamecycle >& universe_spec,
+  bool fractional,
+  bool average_over_universes )
+{
   // Get the total number of true and reco bins for later reference
   size_t num_true_bins = resp_mat.true_bins().size();
   size_t num_reco_bins = resp_mat.reco_bins().size();
 
-  const std::string respmat_folder = "/uboone/data/users/gardiner/"
-    "old-ntuples-stv/resp-all-backup";
-
-  // Load detVar_CV histograms
-  std::string detVar_CV_file_name = sample_to_respmat_file_name( DETVAR_CV_NAME,
-    respmat_folder );
-
-  std::unique_ptr< TFile > cv_file( new TFile(detVar_CV_file_name.c_str(), "read") );
+  std::unique_ptr< TFile > cv_file( new TFile(cv_spec.file_.c_str(), "read") );
 
   std::unique_ptr< TH1D > cv_true_hist( dynamic_cast<TH1D*>(
-    cv_file->Get("unweighted_0_true")) );
+    cv_file->Get((cv_spec.namecycle_ + "_true").c_str()) )
+  );
 
   std::unique_ptr< TH2D > cv_2d_hist( dynamic_cast<TH2D*>(
-    cv_file->Get("unweighted_0_2d")) );
+    cv_file->Get((cv_spec.namecycle_ + "_2d").c_str()) )
+  );
 
-  // Prepare the total covariance matrices for detector variation systematics
-  // on the signal and on the backgrounds
-  TH2D* covMat_DetVar_total_signal = make_covariance_matrix_histogram(
-    "covMat_DetVar_total_signal", "DetVar_total_signal", num_reco_bins );
+  // Get the expected signal and background event counts in each
+  // reco bin in the CV universe
+  std::vector< double > cv_signal_events( num_reco_bins, 0. );
+  std::vector< double > cv_bkgd_events( num_reco_bins, 0. );
 
-  TH2D* covMat_DetVar_total_bkgd = make_covariance_matrix_histogram(
-    "covMat_DetVar_total_bkgd", "DetVar_total_bkgd", num_reco_bins );
+  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+    // We need to sum the contributions of the various true bins,
+    // so loop over them while checking whether each one is associated
+    // with either signal or background
+    for ( size_t tb = 0u; tb < num_true_bins; ++tb ) {
+      const auto& tbin = resp_mat.true_bins().at( tb );
 
-  // Create the covariance matrices for detector variation systematics
-  for ( const auto& sample_name : DETVAR_SAMPLE_NAMES ) {
+      // For the CV universe, we don't have to worry about
+      // computing the smearceptance matrix element explicitly
+      // because the denominator cancels out when multiplying by
+      // the CV prediction in the current true bin. We can therefore
+      // use a similar recipe in this loop for both the signal and
+      // background predictions in each reco bin.
+      if ( tbin.type_ == kSignalTrueBin ) {
+        // Note that ROOT histogram bin numbers are one-based (bin zero is
+        // always the underflow bin). Our zero-based bin indices therefore
+        // need to be offset by +1 in all cases here.
+        double signal = cv_2d_hist->GetBinContent( tb + 1, rb + 1 );
+        cv_signal_events.at( rb ) += signal;
+      }
+      else if ( tbin.type_ == kBackgroundTrueBin ) {
+        double background = cv_2d_hist->GetBinContent( tb + 1, rb + 1 );
+        cv_bkgd_events.at( rb ) += background;
+      }
+    } // true bins
+  } // reco bins
 
-    // Load the input histograms for the current detector variation sample
-    std::string sample_file_name = sample_to_respmat_file_name( sample_name,
-      respmat_folder );
+  // Prepare the covariance matrices for systematic variations on the signal
+  // and on the backgrounds
+  TH2D* covMat_signal = make_covariance_matrix_histogram(
+    (cov_mat_name + "_signal").c_str(), "signal covariance", num_reco_bins );
 
-    std::unique_ptr< TFile > sample_file( new TFile(sample_file_name.c_str(),
-      "read") );
+  TH2D* covMat_bkgd = make_covariance_matrix_histogram(
+    (cov_mat_name + "_bkgd").c_str(), "background covariance", num_reco_bins );
 
-    std::unique_ptr< TH1D > sample_true_hist( dynamic_cast<TH1D*>(
-      sample_file->Get("unweighted_0_true")) );
+  // Prepare a TFile smart pointer to use to access the histograms in each
+  // universe
+  std::unique_ptr< TFile > univ_file;
 
-    std::unique_ptr< TH2D > sample_2d_hist( dynamic_cast<TH2D*>(
-      sample_file->Get("unweighted_0_2d")) );
+  // Loop over universes
+  for ( const auto& univ_info : universe_spec ) {
 
-    // Create new covariance matrices for signal and background
-    std::string var_name = detvar_sample_to_label( sample_name );
+    // Check whether we need to open a new file for this universe. This
+    // can happen either if we haven't opened one previously or if the
+    // current universe's file name differs from the previous one.
+    if ( !univ_file || univ_file->GetName() != univ_info.file_ ) {
+      univ_file.reset( new TFile(univ_info.file_.c_str(), "read") );
+    }
 
-    TH2D* covMat_sample_signal = make_covariance_matrix_histogram(
-      "covMat_" + var_name + "_signal", var_name + "_signal", num_reco_bins );
+    std::unique_ptr< TH1D > univ_true_hist( dynamic_cast<TH1D*>(
+      univ_file->Get((univ_info.namecycle_ + "_true").c_str()) )
+    );
 
-    TH2D* covMat_sample_bkgd = make_covariance_matrix_histogram(
-      "covMat_" + var_name + "_bkgd", var_name + "_bkgd", num_reco_bins );
+    std::unique_ptr< TH2D > univ_2d_hist( dynamic_cast<TH2D*>(
+      univ_file->Get((univ_info.namecycle_ + "_2d").c_str()) )
+    );
 
-    // Get the expected signal and background event counts in each
-    // reco bin in the CV universe
-    std::vector< double > cv_signal_events( num_reco_bins, 0. );
-    std::vector< double > cv_bkgd_events( num_reco_bins, 0. );
-
-    for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
-      // We need to sum the contributions of the various true bins,
-      // so loop over them while checking whether each one is associated
-      // with either signal or background
-      for ( size_t tb = 0u; tb < num_true_bins; ++tb ) {
-        const auto& tbin = resp_mat.true_bins().at( tb );
-
-        // For the CV universe, we don't have to worry about
-        // computing the smearceptance matrix element explicitly
-        // because the denominator cancels out when multiplying by
-        // the CV prediction in the current true bin. We can therefore
-        // use a similar recipe in this loop for both the signal and
-        // background predictions in each reco bin.
-        if ( tbin.type_ == kSignalTrueBin ) {
-          // Note that ROOT histogram bin numbers are one-based (bin zero is
-          // always the underflow bin). Our zero-based bin indices therefore
-          // need to be offset by +1 in all cases here.
-          double signal = cv_2d_hist->GetBinContent( tb + 1, rb + 1 );
-          cv_signal_events.at( rb ) += signal;
-        }
-        else if ( tbin.type_ == kBackgroundTrueBin ) {
-          double background = cv_2d_hist->GetBinContent( tb + 1, rb + 1 );
-          cv_bkgd_events.at( rb ) += background;
-        }
-      } // true bins
-    } // reco bins
-
-
-    // Now get the expected signal and background event counts in
-    // each reco bin in each universe.
-    // TODO: loop over universes
-    std::vector< double > sample_signal_events( num_reco_bins, 0. );
-    std::vector< double > sample_bkgd_events( num_reco_bins, 0. );
+    // Get the expected signal and background event counts in
+    // each reco bin in the current universe.
+    std::vector< double > univ_signal_events( num_reco_bins, 0. );
+    std::vector< double > univ_bkgd_events( num_reco_bins, 0. );
 
     for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
       // We need to sum the contributions of the various true bins,
@@ -175,8 +187,8 @@ void covMat() {
           // NOTE: ROOT histogram bin numbers are one-based (bin zero is always
           // the underflow bin). Our bin indices therefore need to be offset by
           // +1 in all cases here.
-          double numer = sample_2d_hist->GetBinContent( tb + 1, rb + 1 );
-          double denom = sample_true_hist->GetBinContent( tb + 1 );
+          double numer = univ_2d_hist->GetBinContent( tb + 1, rb + 1 );
+          double denom = univ_true_hist->GetBinContent( tb + 1 );
           // If the denominator is nonzero actually calculate the fraction.
           // Otherwise, just leave it zeroed out.
           // TODO: revisit this, think about MC statistical uncertainties
@@ -189,13 +201,13 @@ void covMat() {
 
           // Compute the expected signal events in the current reco bin
           // with the varied smearceptance matrix
-          sample_signal_events.at( rb ) += smearcept * denom_CV;
+          univ_signal_events.at( rb ) += smearcept * denom_CV;
         }
         else if ( tbin.type_ == kBackgroundTrueBin ) {
           // For background events, we can use the same procedure as
           // in the CV universe
-          double background = sample_2d_hist->GetBinContent( tb + 1, rb + 1 );
-          sample_bkgd_events.at( rb ) += background;
+          double background = univ_2d_hist->GetBinContent( tb + 1, rb + 1 );
+          univ_bkgd_events.at( rb ) += background;
         }
       } // true bins
     } // reco bins
@@ -211,19 +223,19 @@ void covMat() {
       double Sa_CV = cv_signal_events.at( a );
       double Ba_CV = cv_bkgd_events.at( a );
 
-      double Sa_sample = sample_signal_events.at( a );
-      double Ba_sample = sample_bkgd_events.at( a );
+      double Sa_univ = univ_signal_events.at( a );
+      double Ba_univ = univ_bkgd_events.at( a );
 
       for ( size_t b = 0u; b < num_reco_bins; ++b ) {
 
         double Sb_CV = cv_signal_events.at( b );
         double Bb_CV = cv_bkgd_events.at( b );
 
-        double Sb_sample = sample_signal_events.at( b );
-        double Bb_sample = sample_bkgd_events.at( b );
+        double Sb_univ = univ_signal_events.at( b );
+        double Bb_univ = univ_bkgd_events.at( b );
 
-        double cov_signal = ( Sa_CV - Sa_sample ) * ( Sb_CV - Sb_sample );
-        double cov_bkgd   = ( Ba_CV - Ba_sample ) * ( Bb_CV - Bb_sample );
+        double cov_signal = ( Sa_CV - Sa_univ ) * ( Sb_CV - Sb_univ );
+        double cov_bkgd   = ( Ba_CV - Ba_univ ) * ( Bb_CV - Bb_univ );
 
         // Renormalize to get the *fractional* covariance matrix
         // TODO: make this conditional
@@ -238,27 +250,101 @@ void covMat() {
         // indices and the covariance as the weight yields the desired behavior
         // (increment the existing element by the current covariance value) in
         // an easy-to-read (if slightly evil) way.
-        covMat_sample_signal->Fill( a, b, cov_signal );
-        covMat_sample_bkgd->Fill( a, b, cov_bkgd );
+        covMat_signal->Fill( a, b, cov_signal );
+        covMat_bkgd->Fill( a, b, cov_bkgd );
       } // reco bin index b
     } // reco bin index a
 
-    //TCanvas* c1 = new TCanvas;
-    //covMat_sample_signal->Draw( "colz" );
-    //TCanvas* c2 = new TCanvas;
-    //covMat_sample_bkgd->Draw( "colz" );
+  } // universe
 
-    covMat_DetVar_total_signal->Add( covMat_sample_signal );
-    covMat_DetVar_total_bkgd->Add( covMat_sample_bkgd );
+  // If requested, average the final covariance matrix elements over all
+  // universes
+  if ( average_over_universes ) {
+    size_t num_universes = universe_spec.size();
+    covMat_signal->Scale( 1. / num_universes );
+    covMat_bkgd->Scale( 1. / num_universes );
+  }
 
-  } // detVar sample
+  // Prepare histograms of the CV expected counts for signal and background in
+  // each reco bin
+  TH1D* reco_cv_signal = new TH1D( ("reco_cv_signal_" + cov_mat_name).c_str(),
+    "reco signal event counts", num_reco_bins, 0., num_reco_bins );
+  reco_cv_signal->SetDirectory( nullptr );
+  reco_cv_signal->SetStats( false );
 
-  TCanvas* c1 = new TCanvas;
-  covMat_DetVar_total_signal->Draw( "colz" );
-  TCanvas* c2 = new TCanvas;
-  covMat_DetVar_total_bkgd->Draw( "colz" );
+  TH1D* reco_cv_bkgd = new TH1D( ("reco_cv_bkgd_" + cov_mat_name).c_str(),
+    "reco background event counts", num_reco_bins, 0., num_reco_bins );
+  reco_cv_bkgd->SetDirectory( nullptr );
+  reco_cv_bkgd->SetStats( false );
+
+  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+    double S_CV = cv_signal_events.at( rb );
+    double B_CV = cv_bkgd_events.at( rb );
+
+    reco_cv_signal->SetBinContent( rb + 1, S_CV );
+    reco_cv_bkgd->SetBinContent( rb + 1, B_CV );
+
+    // Set error bars on the CV histograms based on the diagonal covariance
+    // matrix elements (i.e., the variances)
+    double signal_var = covMat_signal->GetBinContent( rb + 1, rb + 1 );
+    double bkgd_var = covMat_bkgd->GetBinContent( rb + 1, rb + 1 );
+
+    // If we've generated a fractional covariance matrix, then correct
+    // for this
+    if ( fractional ) {
+      signal_var *= std::pow( S_CV, 2 );
+      bkgd_var *= std::pow( B_CV, 2 );
+    }
+
+    reco_cv_signal->SetBinError( rb + 1, std::sqrt(signal_var) );
+    reco_cv_bkgd->SetBinError( rb + 1, std::sqrt(bkgd_var) );
+  }
+
+  CovMatResults result( covMat_signal, covMat_bkgd, reco_cv_signal,
+    reco_cv_bkgd, fractional );
+
+  return result;
 
   //KEY: TH1D     unweighted_0_reco;1
   //KEY: TH1D     unweighted_0_true;1
   //KEY: TH2D     unweighted_0_2d;1
 }
+
+void covMat() {
+
+  // The response matrices in each universe have already been made. However,
+  // we'll re-create the object used to make them. It provides an easy
+  // interface for interpreting the bin structure that was used.
+  // TODO: consider refactoring this to have a "read-only" version. Also, be
+  // careful. With the current approach, if you use the wrong configuration
+  // file here, all of your covariance matrices could be invalid.
+  ResponseMatrixMaker rmm( "myconfig.txt" );
+
+  const std::string respmat_folder = "/uboone/data/users/gardiner/"
+    "old-ntuples-stv/resp-all-backup";
+
+  std::string cv_file_name = sample_to_respmat_file_name( DETVAR_CV_NAME,
+    respmat_folder );
+
+  FileNamecycle detvar_cv_spec( cv_file_name, "unweighted_0" );
+
+  std::vector< FileNamecycle > detvar_universes;
+  for ( const auto& sample : DETVAR_SAMPLE_NAMES ) {
+    std::string sample_file_name = sample_to_respmat_file_name( sample,
+      respmat_folder );
+    detvar_universes.emplace_back( sample_file_name, "unweighted_0" );
+  }
+
+  CovMatResults detVarResults = make_cov_mat( "detVar_total", rmm,
+    detvar_cv_spec, detvar_universes, true, false );
+
+  TH2D* signal_cm = detVarResults.signal_cov_mat_.release();
+  TH1D* signal_reco = detVarResults.reco_signal_cv_.release();
+
+  TCanvas* c1 = new TCanvas;
+  signal_cm->Draw( "colz" );
+  TCanvas* c2 = new TCanvas;
+  signal_reco->Draw( "hist e" );
+}
+
+// std::string var_name = detvar_sample_to_label( sample_name );
