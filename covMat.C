@@ -6,6 +6,7 @@
 #include <vector>
 
 // STV analysis includes
+#include "IntegratedFluxUniverseManager.hh"
 #include "ResponseMatrixMaker.hh"
 
 const std::string DETVAR_CV_NAME = "prodgenie_bnb_nu_overlay_DetVar_CV_reco2"
@@ -87,8 +88,7 @@ struct CovMatResults {
 CovMatResults make_cov_mat( const std::string& cov_mat_name,
   const ResponseMatrixMaker& resp_mat, const FileNamecycle& cv_spec,
   const std::vector< FileNamecycle >& universe_spec,
-  bool fractional,
-  bool average_over_universes )
+  bool fractional, bool average_over_universes, bool is_flux_variation )
 {
   // Get the total number of true and reco bins for later reference
   size_t num_true_bins = resp_mat.true_bins().size();
@@ -149,7 +149,9 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
   std::unique_ptr< TFile > univ_file;
 
   // Loop over universes
-  for ( const auto& univ_info : universe_spec ) {
+  size_t num_universes = universe_spec.size();
+  for ( size_t univ_idx = 0u; univ_idx < num_universes; ++univ_idx ) {
+    const auto& univ_info = universe_spec.at( univ_idx );
 
     // Check whether we need to open a new file for this universe. This
     // can happen either if we haven't opened one previously or if the
@@ -199,9 +201,26 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
           // Get the CV event count for the current true bin
           double denom_CV = cv_true_hist->GetBinContent( tb + 1 );
 
+          // Compute the expected signal events in this universe
+          // by multiplying the varied smearceptance matrix element
+          // by the unaltered CV prediction in the current true bin.
+          double expected_CV = smearcept * denom_CV;
+
+          // If we're working with flux variations, then we also need
+          // to account for the (correlated) changes to the integrated
+          // flux. We can do this by multiplying by the scaling factor
+          // given here, which is the ratio of the integrated numu flux
+          // in the current universe to the CV numu flux.
+          if ( is_flux_variation ) {
+            const auto& ifum = IntegratedFluxUniverseManager::Instance();
+            double scale_factor = ifum.flux_factor( univ_idx );
+            expected_CV *= scale_factor;
+          }
+
           // Compute the expected signal events in the current reco bin
-          // with the varied smearceptance matrix
-          univ_signal_events.at( rb ) += smearcept * denom_CV;
+          // with the varied smearceptance matrix (and, for flux universes,
+          // the varied integrated flux)
+          univ_signal_events.at( rb ) += expected_CV;
         }
         else if ( tbin.type_ == kBackgroundTrueBin ) {
           // For background events, we can use the same procedure as
@@ -260,7 +279,6 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
   // If requested, average the final covariance matrix elements over all
   // universes
   if ( average_over_universes ) {
-    size_t num_universes = universe_spec.size();
     covMat_signal->Scale( 1. / num_universes );
     covMat_bkgd->Scale( 1. / num_universes );
   }
@@ -338,7 +356,7 @@ void covMat() {
   }
 
   CovMatResults detVarResults = make_cov_mat( "detVar_total", rmm,
-    detvar_cv_spec, detvar_universes, true, false );
+    detvar_cv_spec, detvar_universes, true, false, false );
 
   //TH2D* signal_cm = detVarResults.signal_cov_mat_.release();
   //TH1D* signal_reco = detVarResults.reco_signal_cv_.release();
@@ -363,7 +381,7 @@ void covMat() {
   }
 
   CovMatResults testResults = make_cov_mat( "genie_All", rmm,
-    test_cv_spec, test_univ_spec, true, true );
+    test_cv_spec, test_univ_spec, true, true, false );
 
   //TH2D* signal_cm = testResults.signal_cov_mat_.release();
   //TH1D* signal_reco = testResults.reco_signal_cv_.release();
@@ -382,12 +400,12 @@ void covMat() {
 
   std::vector< FileNamecycle > test_univ_spec2;
   for ( size_t u = 0u; u < 1000u; ++u ) {
-    test_univ_spec.emplace_back( test_file,
+    test_univ_spec2.emplace_back( test_file,
       "weight_flux_all_" + std::to_string(u) );
   }
 
-  CovMatResults testResults2 = make_cov_mat( "reinteractions", rmm,
-    test_cv_spec, test_univ_spec, true, true );
+  CovMatResults testResults2 = make_cov_mat( "flux", rmm,
+    test_cv_spec, test_univ_spec2, true, true, true );
 
   TH2D* signal_cm = testResults2.signal_cov_mat_.release();
   TH1D* signal_reco = testResults2.reco_signal_cv_.release();
