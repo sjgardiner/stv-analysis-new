@@ -29,11 +29,14 @@ const std::string DEFAULT_MC_EVENT_WEIGHT = "spline_weight * (std::isfinite("
 using NFT = NtupleFileType;
 
 void make_plots( const std::string& branchexpr, const std::string& selection,
-  const std::set<int>& runs, double xmin, double xmax, int Nbins,
-  const std::string& x_axis_label = "", const std::string& y_axis_label = "",
-  const std::string& title = "",
+  const std::set<int>& runs, std::vector<double> bin_low_edges,
+  const std::string& x_axis_label = "",
+  const std::string& y_axis_label = "", const std::string& title = "",
   const std::string& mc_event_weight = DEFAULT_MC_EVENT_WEIGHT )
 {
+  // Get the number of bins to use in histograms
+  int Nbins = bin_low_edges.size() - 1;
+
   // Make a counter that iterates each time this function is called. We'll use
   // it to avoid duplicate histogram names (which can confuse ROOT).
   static long plot_counter = -1;
@@ -122,7 +125,7 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
   // Fill the beam-off data histogram using the matching TChain
   std::string off_data_hist_name = hist_name_prefix + "_ext";
   TH1D* off_data_hist = new TH1D( off_data_hist_name.c_str(),
-    plot_title.c_str(), Nbins, xmin, xmax );
+    plot_title.c_str(), Nbins, bin_low_edges.data() );
 
   TChain* off_chain = tchain_map.at( NFT::kExtBNB ).get();
   off_chain->Draw( (branchexpr + " >> " + off_data_hist_name).c_str(),
@@ -147,7 +150,7 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
   // Fill the beam-on data histogram using the matching TChain
   std::string on_data_hist_name = hist_name_prefix + "_on";
   TH1D* on_data_hist = new TH1D( on_data_hist_name.c_str(),
-    plot_title.c_str(), Nbins, xmin, xmax);
+    plot_title.c_str(), Nbins, bin_low_edges.data() );
 
   TChain* on_chain = tchain_map.at( NFT::kOnBNB ).get();
   on_chain->Draw( (branchexpr + " >> " + on_data_hist_name).c_str(),
@@ -169,7 +172,7 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
       + std::to_string( cat );
 
     TH1D* temp_mc_hist = new TH1D( temp_mc_hist_name.c_str(),
-      plot_title.c_str(), Nbins, xmin, xmax );
+      plot_title.c_str(), Nbins, bin_low_edges.data() );
 
     mc_hists[ cat ] = temp_mc_hist;
 
@@ -202,7 +205,7 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
       ++dummy_counter;
 
       TH1D* temp_mc_hist = new TH1D( temp_mc_hist_name.c_str(),
-        plot_title.c_str(), Nbins, xmin, xmax );
+        plot_title.c_str(), Nbins, bin_low_edges.data() );
 
       mc_ch->Draw( (branchexpr + " >> " + temp_mc_hist_name).c_str(),
         (mc_event_weight + "*(" + selection + " && category == "
@@ -242,7 +245,9 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
   // Sum all contributions into this TH1D so that we can get the overall
   // statistical uncertainty easily
   TH1D* stat_err_hist = new TH1D(
-    ("stat_err_hist_" + hist_name_prefix).c_str(), "", Nbins, xmin, xmax );
+    ("stat_err_hist_" + hist_name_prefix).c_str(), "",
+    Nbins, bin_low_edges.data()
+  );
 
   stacked_hist->Add( off_data_hist );
   stat_err_hist->Add( off_data_hist );
@@ -393,19 +398,46 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
   c1->Update();
 }
 
+// Overloaded version with constant-width binning
+void make_plots( const std::string& branchexpr, const std::string& selection,
+  const std::set<int>& runs, double xmin, double xmax, int Nbins,
+  const std::string& x_axis_label = "", const std::string& y_axis_label = "",
+  const std::string& title = "",
+  const std::string& mc_event_weight = DEFAULT_MC_EVENT_WEIGHT )
+{
+  // Generates a vector of bin low edges equivalent to the approach used
+  // by the TH1D constructor that takes xmin and xmax in addition to the
+  // number of bins
+  std::vector<double> bin_low_edges;
+  double bin_step = ( xmax - xmin ) / Nbins;
+  for ( int b = 0; b <= Nbins; ++b ) {
+    double low_edge = xmin + b*bin_step;
+    bin_low_edges.push_back( low_edge );
+  }
+  for ( const auto& b : bin_low_edges ) std::cout << "b = " << b << '\n';
+  make_plots( branchexpr, selection, runs, bin_low_edges, x_axis_label,
+    y_axis_label, title, mc_event_weight );
+}
+
+
+
 void plots() {
 
   const std::string sel_CCNp = "sel_CCNp0pi";
   const std::string sel_CCincl = "sel_nu_mu_cc && sel_has_muon_candidate"
     " && sel_muon_above_threshold";
 
-  // Drafts of selections for sidebands (need further refinement)
-  const std::string sel_NC = "sel_nu_mu_cc && sel_no_reco_showers && !sel_has_muon_candidate && sel_has_p_candidate && sel_passed_proton_pid_cut && sel_protons_contained && sel_lead_p_passed_mom_cuts";
+  //// Drafts of selections for sidebands (need further refinement)
+  //const std::string sel_NC = "sel_nu_mu_cc && sel_no_reco_showers && !sel_has_muon_candidate && sel_has_p_candidate && sel_passed_proton_pid_cut && sel_protons_contained && sel_lead_p_passed_mom_cuts";
 
-  const std::string sel_OOFV = "!sel_nu_mu_cc && sel_no_reco_showers && !sel_has_muon_candidate";
+  //const std::string sel_OOFV = "!sel_nu_mu_cc && sel_no_reco_showers && !sel_has_muon_candidate";
 
-  const std::string sel_CCNpi = "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate && sel_has_p_candidate && !sel_passed_proton_pid_cut && sel_protons_contained"; // && sel_lead_p_passed_mom_cuts";
+  //const std::string sel_CCNpi = "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate && sel_has_p_candidate && !sel_passed_proton_pid_cut && sel_protons_contained"; // && sel_lead_p_passed_mom_cuts";
 
-  make_plots( "reco_nu_vtx_sce_z", sel_CCNpi, std::set<int>{1}, FV_Z_MIN,
-    FV_Z_MAX, 40, "reco vertex z [cm]", "events", "Run 1" );
+  //make_plots( "reco_nu_vtx_sce_z", sel_CCNpi, std::set<int>{1}, FV_Z_MIN,
+  //  FV_Z_MAX, 40, "reco vertex z [cm]", "events", "Run 1" );
+
+  make_plots( "delta_pT", "sel_CCNp0pi", // && sel_topo_cut_passed",
+    std::set<int>{1}, 0., 0.8, 15, "#deltap_{T} [GeV]", "events",
+    "Runs 1-3" );
 }
