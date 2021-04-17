@@ -52,7 +52,7 @@ constexpr int PI_ZERO = 111;
 constexpr int PI_PLUS = 211;
 
 // Values of parameters to use in analysis cuts
-constexpr float PROTON_PID_CUT = 0.2;
+constexpr float DEFAULT_PROTON_PID_CUT = 0.2;
 constexpr float LEAD_P_MIN_MOM_CUT = 0.250; // GeV/c
 constexpr float LEAD_P_MAX_MOM_CUT = 1.200; // GeV/c
 constexpr float MUON_MOM_CUT = 0.100; // GeV/c
@@ -67,6 +67,24 @@ constexpr float MUON_LENGTH_CUT = 10.; // cm
 constexpr float MUON_PID_CUT = 0.2;
 
 constexpr float TRACK_SCORE_CUT = 0.5;
+
+// Function that defines the track-length-dependent proton PID cut
+double proton_pid_cut( double track_length ) {
+
+  double cut = DEFAULT_PROTON_PID_CUT;
+
+  // All track length values are in cm
+  if ( track_length >= 0. && track_length <= 10.5 ) {
+    cut = -0.0034219305*std::pow( track_length, 2 );
+    cut += 0.018436866*track_length + 0.062718401;
+  }
+  else if ( track_length > 10.5 && track_length <= 33.1776508 ) {
+    cut = 0.014153245*( track_length - 10.5 ) - 0.12096235;
+  }
+
+  return cut;
+
+}
 
 // Boundaries of the proton containment volume (used in reco only) in cm
 double PCV_X_MIN =   10.;
@@ -1294,7 +1312,7 @@ void AnalysisEvent::apply_selection() {
       float llr_pid_score = track_llr_pid_score_->at( p );
 
       // Check whether the current proton candidate fails the proton PID cut
-      if ( llr_pid_score > PROTON_PID_CUT ) {
+      if ( llr_pid_score > proton_pid_cut(track_length) ) {
         sel_passed_proton_pid_cut_ = false;
       }
 
