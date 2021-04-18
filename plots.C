@@ -20,10 +20,7 @@
 #include "EventCategory.hh"
 #include "FiducialVolume.hh"
 #include "FilePropertiesManager.hh"
-
-// By default, weight the MC events using the MicroBooNE CV tune
-const std::string DEFAULT_MC_EVENT_WEIGHT = "spline_weight * (std::isfinite("
-  "tuned_cv_weight) && tuned_cv_weight <= 100. ? tuned_cv_weight : 1)";
+#include "HistUtils.hh"
 
 // Abbreviation to make using the enum class easier
 using NFT = NtupleFileType;
@@ -405,16 +402,10 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
   const std::string& title = "",
   const std::string& mc_event_weight = DEFAULT_MC_EVENT_WEIGHT )
 {
-  // Generates a vector of bin low edges equivalent to the approach used
-  // by the TH1D constructor that takes xmin and xmax in addition to the
-  // number of bins
-  std::vector<double> bin_low_edges;
-  double bin_step = ( xmax - xmin ) / Nbins;
-  for ( int b = 0; b <= Nbins; ++b ) {
-    double low_edge = xmin + b*bin_step;
-    bin_low_edges.push_back( low_edge );
-  }
-  for ( const auto& b : bin_low_edges ) std::cout << "b = " << b << '\n';
+  // Generates a vector of bin low edges equivalent to the approach used by the
+  // TH1 constructor that takes xmin and xmax in addition to the number of bins
+  auto bin_low_edges = get_bin_low_edges( xmin, xmax, Nbins );
+
   make_plots( branchexpr, selection, runs, bin_low_edges, x_axis_label,
     y_axis_label, title, mc_event_weight );
 }
