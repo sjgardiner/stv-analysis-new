@@ -1178,7 +1178,7 @@ void AnalysisEvent::apply_numu_CC_selection() {
   this->find_muon_candidate();
 
   sel_nu_mu_cc_ = sel_reco_vertex_in_FV_ && sel_pfp_starts_in_PCV_
-    && sel_has_muon_candidate_;
+    && sel_has_muon_candidate_ && sel_topo_cut_passed_;
 }
 
 // Sets the index of the muon candidate in the track vectors, or BOGUS_INDEX if
