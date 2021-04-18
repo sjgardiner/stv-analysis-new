@@ -1,6 +1,7 @@
 #pragma once
 
 // Standard library includes
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -28,6 +29,21 @@
 // here: https://tinyurl.com/2s4yuzxm
 R__LOAD_LIBRARY(libTreePlayer.so)
 #endif
+
+// Converts the name of an analysis ntuple file (typically with the full path)
+// into a TDirectoryFile name to use as a subfolder of the main output
+// TDirectoryFile used for saving response matrices. Since the forward slash
+// character '/' cannot be used in a TDirectoryFile name, this function
+// replaces all instances of this character by a '+' instead. The technique
+// used here is based on https://stackoverflow.com/a/2896627/4081973
+std::string ntuple_subfolder_from_file_name( const std::string& file_name ) {
+  constexpr char FORWARD_SLASH = '/';
+  constexpr char PLUS = '+';
+
+  std::string result = file_name;
+  std::replace( result.begin(), result.end(), FORWARD_SLASH, PLUS );
+  return result;
+}
 
 // Branch names for special event weights
 const std::string SPLINE_WEIGHT_NAME = "weight_splines_general_Spline";
@@ -226,7 +242,8 @@ class ResponseMatrixMaker {
     void build_response_matrices();
 
     // Writes the response matrix histograms to an output ROOT file
-    void save_histograms( const std::string& output_file_name );
+    void save_histograms( const std::string& output_file_name,
+      const std::string& subdirectory_name, bool update_file = true );
 
   protected:
 
@@ -258,11 +275,19 @@ class ResponseMatrixMaker {
 
     // Stores Universe objects used to accumulate event weights
     std::map< std::string, std::vector<Universe> > universes_;
+
+    // Root TDirectoryFile name to use when writing the response matrices to an
+    // output ROOT file
+    std::string output_directory_name_;
 };
 
 ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
 {
   std::ifstream in_file( config_file_name );
+
+  // Load the root TDirectoryFile name to use when writing the response
+  // matrices to an output ROOT file
+  in_file >> output_directory_name_;
 
   // Load the TTree name to use when processing ntuple input files
   std::string ttree_name;
@@ -510,9 +535,48 @@ void ResponseMatrixMaker::prepare_universes( const WeightHandler& wh ) {
 }
 
 void ResponseMatrixMaker::save_histograms(
-  const std::string& output_file_name )
+  const std::string& output_file_name,
+  const std::string& subdirectory_name,
+  bool update_file )
 {
-  TFile out_file( output_file_name.c_str(), "recreate" );
+  // Decide whether to overwrite the output file or simply update the contents.
+  // This difference is only important if the output file already exists before
+  // this function is called.
+  std::string tfile_option( "recreate" );
+  if ( update_file ) {
+    tfile_option = "update";
+  }
+
+  TFile out_file( output_file_name.c_str(), tfile_option.c_str() );
+
+  // Navigate to the subdirectory within the output ROOT file where the
+  // response matrix histograms will be saved. Create new TDirectoryFile
+  // objects as needed.
+  TDirectoryFile* root_tdir = nullptr;
+  TDirectoryFile* sub_tdir = nullptr;
+
+  out_file.GetObject( output_directory_name_.c_str(), root_tdir );
+  if ( !root_tdir ) {
+    // TODO: add error handling for a forward slash in the root TDirectoryFile
+    // name
+    root_tdir = new TDirectoryFile( output_directory_name_.c_str(),
+      "response matrices", "", &out_file );
+  }
+
+  std::string subdir_name = ntuple_subfolder_from_file_name(
+    subdirectory_name );
+
+  root_tdir->GetObject( subdir_name.c_str(), sub_tdir );
+  if ( !sub_tdir ) {
+    sub_tdir = new TDirectoryFile( subdir_name.c_str(), "response matrices",
+      "", root_tdir );
+  }
+
+  // Now we've found (or created) the TDirectoryFile where the output
+  // will be saved. Ensure that it is the active file here before writing
+  // out the histograms.
+  sub_tdir->cd();
+
   for ( auto& pair : universes_ ) {
     auto& u_vec = pair.second;
     for ( auto& univ : u_vec ) {
