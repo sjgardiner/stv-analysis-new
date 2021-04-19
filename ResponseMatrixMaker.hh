@@ -238,12 +238,26 @@ class ResponseMatrixMaker {
     inline auto& input_chain() { return input_chain_; }
 
     // Does the actual calculation of response matrix elements across the
-    // various systematic universes
-    void build_response_matrices();
+    // various systematic universes. The optional argument points to a vector
+    // of branch names that will be used to retrieve systematic universe
+    // weights. If it is omitted, all available ones will be auto-detected and
+    // used.
+    void build_response_matrices(
+      const std::vector<std::string>* universe_branch_names = nullptr );
+
+    // Overloaded version of the function that takes a reference the
+    // vector of universe branch names (for convenience). The behavior
+    // is the same as the original, but in this case the explicit vector of
+    // branch names definitely exists.
+    void build_response_matrices(
+      const std::vector<std::string>& universe_branch_names );
 
     // Writes the response matrix histograms to an output ROOT file
     void save_histograms( const std::string& output_file_name,
       const std::string& subdirectory_name, bool update_file = true );
+
+    // Provides read-only access to the map of Universe objects
+    const auto& universe_map() const { return universes_; }
 
   protected:
 
@@ -378,8 +392,15 @@ void ResponseMatrixMaker::prepare_formulas() {
 
 }
 
-void ResponseMatrixMaker::build_response_matrices() {
+void ResponseMatrixMaker::build_response_matrices(
+  const std::vector<std::string>& universe_branch_names )
+{
+  return this->build_response_matrices( &universe_branch_names );
+}
 
+void ResponseMatrixMaker::build_response_matrices(
+  const std::vector<std::string>* universe_branch_names )
+{
   int num_input_files = input_chain_.GetListOfFiles()->GetEntries();
   if ( num_input_files < 1 ) {
     std::cout << "ERROR: The ResponseMatrixMaker object has not been"
@@ -388,7 +409,7 @@ void ResponseMatrixMaker::build_response_matrices() {
   }
 
   WeightHandler wh;
-  wh.set_branch_addresses( input_chain_ );
+  wh.set_branch_addresses( input_chain_, universe_branch_names );
 
   // Make sure that we always have branches set up for the CV correction
   // weights, i.e., the spline and tune weights. Don't throw an exception if

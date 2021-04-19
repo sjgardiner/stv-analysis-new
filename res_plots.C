@@ -1,5 +1,6 @@
 #include "FilePropertiesManager.hh"
 #include "HistUtils.hh"
+#include "ResponseMatrixMaker.hh"
 
 
 // Script intended to help with choosing binning for kinematic variables
@@ -278,7 +279,178 @@ void make_res_plots( const std::string& branchexpr,
     mc_branchexpr, signal_cuts, mc_event_weight );
 }
 
+void make_res_plots( const std::string& rmm_config_file_name,
+  const std::set<int>& runs,
+  const std::string& universe_branch_name = "TunedCentralValue_UBGenie",
+  size_t universe_index = 0u,
+  bool show_smear_numbers = false )
+{
+  const std::string variable_title = "bin";
+
+  // Create a ResponseMatrixMaker object that will handle the actual
+  // calculation of the smearing matrix
+  ResponseMatrixMaker rmm( rmm_config_file_name );
+
+  // Get access to the singleton utility class that manages the processed
+  // ntuple files
+  const FilePropertiesManager& fpm = FilePropertiesManager::Instance();
+
+  // TODO: Reduce code duplication for the POT tallying
+
+  // Add the appropriate CV numu ntuples from the requested run(s) to the
+  // TChain owned by the ResponseMatrixMaker object. For the resolution
+  // studies, this is all we really need. Also tally the total simulated POT
+  // for later scaling purposes.
+  double total_simulated_POT = 0.;
+
+  const auto& ntuple_map = fpm.ntuple_file_map();
+  for ( const auto& run : runs ) {
+    const auto& ntuple_files = ntuple_map.at( run )
+      .at( NtupleFileType::kNumuMC );
+    for ( const auto& file_name : ntuple_files ) {
+      rmm.add_input_file( file_name );
+
+      TFile temp_file( file_name.c_str(), "read" );
+      TParameter<float>* temp_pot = nullptr;
+      temp_file.GetObject( "summed_pot", temp_pot );
+      double pot = temp_pot->GetVal();
+      total_simulated_POT += pot;
+    }
+  }
+
+  // Look up the MC event weights from the input files and construct the
+  // response matrices in the usual way. For speed, restrict the calculation to
+  // just the universe branch requested by the user (typically the CV branch).
+  rmm.build_response_matrices( { universe_branch_name } );
+
+  // Get access to the Universe object that stores the histograms of summed MC
+  // event weights that we need
+  const auto& universe = rmm.universe_map().at( universe_branch_name )
+    .at( universe_index );
+
+  TH2D* smear_hist = dynamic_cast< TH2D* >(
+    universe.hist_2d_->Clone("smear_hist") );
+
+  // TODO: also reduce code duplication here
+
+  // Before renormalizing the smearing matrix histogram, take a projection
+  // along the reco (y) axis. This will show the expected number of signal
+  // events in each reco bin according to our central value MC model. Reco bins
+  // should be chosen to have sufficient expected statistics in addition to
+  // small smearing.
+  TH1D* expected_reco_hist = smear_hist->ProjectionY();
+  int num_reco_bins = expected_reco_hist->GetNbinsX();
+
+  // Scale the expected reco bin counts to the POT analyzed for the full
+  // dataset. Also set the bin stat uncertainties to the square root of their
+  // contents. This is not correct for getting the MC statistical uncertainties
+  // (which should use the sum of the squares of the weights to get the
+  // variance), but we're less interested in those. Primarily we'd like to know
+  // what the anticipated statistical uncertainties on the *measurement* will
+  // be. We can estimate that by choosing the bin errors in this way. This will
+  // help in the effort to choose suitable bins for reporting the final result.
+  expected_reco_hist->Scale( EXPECTED_POT / total_simulated_POT );
+  for ( int eb = 0; eb <= num_reco_bins + 1; ++eb ) {
+    double bin_events = expected_reco_hist->GetBinContent( eb );
+    double bin_stat_err = std::sqrt( std::max(0., bin_events) );
+    expected_reco_hist->SetBinError( eb, bin_stat_err );
+  }
+
+  expected_reco_hist->SetStats( false );
+  expected_reco_hist->SetLineColor( kBlack );
+  expected_reco_hist->SetLineWidth( 2 );
+
+  std::stringstream temp_ss;
+  temp_ss << "expected reco bin counts (" << EXPECTED_POT << " POT);"
+    << " reco " << variable_title << "; events";
+
+  expected_reco_hist->SetTitle( temp_ss.str().c_str() );
+
+  TCanvas* c_expected = new TCanvas;
+  expected_reco_hist->Draw( "hist e" );
+
+  // Normalize the smearing matrix elements so that a sum over all reco bins
+  // (including the under/overflow bins) yields a value of one. This means that
+  // every selected signal event must end up somewhere in reco space.
+  int num_bins_x = smear_hist->GetXaxis()->GetNbins();
+  int num_bins_y = smear_hist->GetYaxis()->GetNbins();
+
+  // Loop over the true (x) bins. Include the underflow (index zero) and
+  // overflow (index num_bins_x + 1) bins.
+  for ( int bx = 0; bx <= num_bins_x + 1; ++bx ) {
+
+    // For the current true (x) bin, compute the sum of all reco (y) bins.
+    double y_sum = 0.;
+    for ( int by = 0; by <= num_bins_y + 1; ++by ) {
+      y_sum += smear_hist->GetBinContent( bx, by );
+    }
+
+    // Normalize each of the reco (y) bins so that the sum over y is unity.
+    for ( int by = 0; by <= num_bins_y + 1; ++by ) {
+
+      // To avoid dividing by zero, set the bin content to zero if the sum of
+      // the reco (y) bins is not positive.
+      if ( y_sum <= 0. ) {
+        //smear_hist->SetBinContent( bx, by, REALLY_SMALL );
+        smear_hist->SetBinContent( bx, by, 0. );
+      }
+      else {
+        // Otherwise, normalize in the usual way
+        double bc = smear_hist->GetBinContent( bx, by );
+
+        double content = std::max( bc / y_sum, REALLY_SMALL );
+
+        smear_hist->SetBinContent( bx, by, content );
+      }
+    } // loop over reco (y) bins
+
+  } // loop over true (x) bins
+
+  // Smearing matrix histogram style options
+  smear_hist->GetXaxis()->SetTitleFont( FONT_STYLE);
+  smear_hist->GetYaxis()->SetTitleFont( FONT_STYLE );
+  smear_hist->GetXaxis()->SetTitleSize( 0.05 );
+  smear_hist->GetYaxis()->SetTitleSize( 0.05 );
+  smear_hist->GetXaxis()->SetLabelFont( FONT_STYLE );
+  smear_hist->GetYaxis()->SetLabelFont( FONT_STYLE );
+  smear_hist->GetZaxis()->SetLabelFont( FONT_STYLE );
+  smear_hist->GetZaxis()->SetLabelSize( 0.03 );
+  smear_hist->GetXaxis()->CenterTitle();
+  smear_hist->GetYaxis()->CenterTitle();
+  smear_hist->GetXaxis()->SetTitleOffset( 1.2 );
+  smear_hist->GetYaxis()->SetTitleOffset( 1.1 );
+  smear_hist->SetStats( false );
+  smear_hist->SetMarkerSize( 1.8 ); // text size
+  smear_hist->SetMarkerColor( kWhite ); // text color
+
+  // Draw the smearing matrix plot
+  TCanvas* c_smear = new TCanvas;
+  c_smear->SetBottomMargin( 0.15 );
+  c_smear->SetLeftMargin( 0.13 );
+
+  if ( show_smear_numbers ) {
+    // Round all numbers to this precision when rendering them
+    gStyle->SetPaintTextFormat( "4.2f" );
+
+    smear_hist->Draw("text colz");
+  }
+  else {
+    smear_hist->Draw( "colz" );
+  }
+
+  // For each true bin, print the fraction of events that are reconstructed
+  // in the correct corresponding reco bin.
+  for ( int bb = 1; bb <= num_reco_bins; ++bb ) {
+    std::cout << "bin #" << bb << ": "
+      << expected_reco_hist->GetBinLowEdge( bb ) << ", "
+      << smear_hist->GetBinContent(bb, bb) << '\n';
+  }
+
+}
+
 void res_plots() {
+
+  make_res_plots( "myconfig2.txt", {1}, "unweighted" );
 
   //make_res_plots( "p3_mu.CosTheta()", "cos(#theta_{#mu})",
   // "sel_CCNp0pi", {1},
