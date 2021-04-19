@@ -23,7 +23,7 @@ void make_config() {
 
     { 0.75, { -1, 0.5, 0.8, 0.875, 0.950, 1.00 } },
 
-    { 1.14, { -1, 0.5, 0.8, 0.875, 0.950, 1.00 } },
+    { 1.14, { -1, 0.8, 0.875, 0.950, 1.00 } },
 
     // Upper edge of the last bin. The script will create an overflow bin above
     // this.

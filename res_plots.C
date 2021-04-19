@@ -323,9 +323,16 @@ void make_res_plots( const std::string& rmm_config_file_name,
   // just the universe branch requested by the user (typically the CV branch).
   rmm.build_response_matrices( { universe_branch_name } );
 
+  // For all but the "unweighted" universe, the key used to look up
+  // the map entry is "weight_" prepended to the original ntuple branch name.
+  std::string universe_key = "unweighted";
+  if ( universe_key != universe_branch_name ) {
+    universe_key = "weight_" + universe_branch_name;
+  }
+
   // Get access to the Universe object that stores the histograms of summed MC
   // event weights that we need
-  const auto& universe = rmm.universe_map().at( universe_branch_name )
+  const auto& universe = rmm.universe_map().at( universe_key )
     .at( universe_index );
 
   TH2D* smear_hist = dynamic_cast< TH2D* >(
@@ -438,6 +445,31 @@ void make_res_plots( const std::string& rmm_config_file_name,
     smear_hist->Draw( "colz" );
   }
 
+  // Draw a vertical red line to separate the signal true bins from the
+  // background true bins in the smearing matrix plot. Start by finding
+  // where the first background bin is. Here we assume that the full set
+  // of signal bins comes before any background bins.
+  const auto& true_bins = rmm.true_bins();
+  size_t num_true_bins = true_bins.size();
+  size_t first_bkgd_bin_idx = num_true_bins;
+  for ( size_t t = 0u; t < num_true_bins; ++t ) {
+    const auto& tbin = true_bins.at( t );
+    if ( tbin.type_ == TrueBinType::kBackgroundTrueBin ) {
+      first_bkgd_bin_idx = t;
+      break;
+    }
+  }
+
+  // We've found the bin index. Now draw the line to indicate the
+  // signal/background boundary in true space
+  TLine* bkgd_line = new TLine( first_bkgd_bin_idx, 0.,
+    first_bkgd_bin_idx, num_reco_bins );
+
+  bkgd_line->SetLineColor( kRed );
+  bkgd_line->SetLineWidth( 3 );
+  bkgd_line->SetLineStyle( 2 );
+  bkgd_line->Draw( "same" );
+
   // For each true bin, print the fraction of events that are reconstructed
   // in the correct corresponding reco bin.
   for ( int bb = 1; bb <= num_reco_bins; ++bb ) {
@@ -449,6 +481,8 @@ void make_res_plots( const std::string& rmm_config_file_name,
 }
 
 void res_plots() {
+
+  make_res_plots( "myconfig_muon2D.txt", {1} );
 
   //make_res_plots( "p3_mu.CosTheta()", "cos(#theta_{#mu})",
   // "sel_CCNp0pi", {1},
@@ -524,34 +558,30 @@ void res_plots() {
   //  false );
 
   ///////////////////////////////////////////////////////
-  // 2D binning studies
+  // 2D muon binning study
   ///////////////////////////////////////////////////////
 
-  make_res_plots( "p3_mu.CosTheta()", "cos#theta_{#mu}",
-    "sel_CCNp0pi && p3_mu.Mag() >= 0.1 && p3_mu.Mag() < 0.17", {1},
-    { -1, 0., 1. },
+  //make_res_plots( "p3_mu.CosTheta()", "cos#theta_{#mu}",
+  //  "sel_CCNp0pi && p3_mu.Mag() >= 0.1 && p3_mu.Mag() < 0.17", {1},
+  //  { -1, 0., 1. },
 
-  // "sel_CCNp0pi && p3_mu.Mag() >= 0.1 && p3_mu.Mag() < 0.17"
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.17 && p3_mu.Mag() < 0.24", {1},
   // { -1, 0., 1. },
 
-  // "sel_CCNp0pi && p3_mu.Mag() >= 0.17 && p3_mu.Mag() < 0.24"
-  // { -1, 0., 1. },
-
-  // "sel_CCNp0pi && p3_mu.Mag() >= 0.24 && p3_mu.Mag() < 0.3"
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.24 && p3_mu.Mag() < 0.3", {1},
   // { -1, -0.2, 0.2, 0.5, 1.00 },
 
-  // "sel_CCNp0pi && p3_mu.Mag() >= 0.3 && p3_mu.Mag() < 0.48"
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.3 && p3_mu.Mag() < 0.48", {1},
   // { -1, -0.1, 0.2, 0.5, 0.65, 0.8, 0.9, 1.00 },
 
-  //"sel_CCNp0pi && p3_mu.Mag() >= 0.48 && p3_mu.Mag() < 0.75"
+  //"sel_CCNp0pi && p3_mu.Mag() >= 0.48 && p3_mu.Mag() < 0.75", {1},
   //{ -1, 0.2, 0.5, 0.65, 0.8, 0.875, 0.950, 1.00 },
 
-  //"sel_CCNp0pi && p3_mu.Mag() >= 0.75 && p3_mu.Mag() < 1.14"
+  //"sel_CCNp0pi && p3_mu.Mag() >= 0.75 && p3_mu.Mag() < 1.14", {1},
   //{ -1, 0.5, 0.8, 0.875, 0.950, 1.00 },
 
-  //"sel_CCNp0pi && p3_mu.Mag() >= 1.14 && p3_mu.Mag() < 2.5"
+  //"sel_CCNp0pi && p3_mu.Mag() >= 1.14 && p3_mu.Mag() < 2.5", {1},
   //{ -1, 0.5, 0.8, 0.875, 0.950, 1.00 },
 
-  false );
-
+  //false );
 }
