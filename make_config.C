@@ -2,17 +2,41 @@
 
 void make_config() {
 
-  //std::vector< double > dpT_edges = { 0., 0.1, 0.2, 0.3, 0.4, 0.5,
-  //  0.6, 0.7, 0.8 };
+  // Using floating-point numbers as std::map keys is admittedly evil, but
+  // it's safe in this case: all we'll do with this map is iterate over the
+  // elements. Keys are muon momentum bin edges, values are muon scattering
+  // cosine bin edges.
+  std::map< double, std::vector<double> > muon_2D_bin_edges = {
 
-  std::vector<double> dpT_edges = { 0., 0.0533333, 0.106667, 0.16, 0.213333, 0.266667, 0.32,
-    0.373333, 0.426667, 0.48, 0.533333, 0.586667, 0.64, 0.693333, 0.746667, 0.8 };
+    // No need for an underflow bin: due to the signal definition, all muons
+    // with reco momentum below 0.1 GeV/c will be lost
 
-  std::vector< int > signal_categories = { 1, 2, 3, 4 };
+    { 0.1,  { -1., 0., 1. } },
+
+    { 0.17, { -1., 0., 1. } },
+
+    { 0.24, { -1, -0.2, 0.2, 0.5, 1.00 } },
+
+    { 0.3,  { -1, -0.1, 0.2, 0.5, 0.65, 0.8, 0.9, 1.00 } },
+
+    { 0.48, { -1, 0.2, 0.5, 0.65, 0.8, 0.875, 0.950, 1.00 } },
+
+    { 0.75, { -1, 0.5, 0.8, 0.875, 0.950, 1.00 } },
+
+    { 1.14, { -1, 0.5, 0.8, 0.875, 0.950, 1.00 } },
+
+    // Upper edge of the last bin. The script will create an overflow bin above
+    // this.
+    { 2.5, {} }
+
+  };
 
   std::string selection = "sel_CCNp0pi";
   std::string signal_def = "mc_is_signal";
 
+  // By construction, MC event categories 5-11 contain all beam-correlated
+  // backgrounds. This list is therefore comprehensive apart from cosmic
+  // overlay stuff which is directly measured in a dedicated sample.
   std::vector< std::string > background_defs = {
     "category == 5", "category == 6", "category == 7", "category == 8",
     "category == 9", "category == 10", "category == 11"
@@ -22,26 +46,86 @@ void make_config() {
   std::vector< RecoBin > reco_bins;
 
   // Configure kinematic limits for all of the signal bins
-  for ( size_t pTbin = 0u; pTbin < dpT_edges.size() - 1u; ++pTbin ) {
 
-    std::string pTlow_str = std::to_string( dpT_edges.at(pTbin) );
-    std::string pThigh_str = std::to_string( dpT_edges.at(pTbin + 1u) );
+  // Get an iterator to the last map element. They are sorted numerically,
+  // so this will be the upper edge of the last non-overflow bin.
+  auto last = muon_2D_bin_edges.cend();
+  --last;
 
-    for ( const int& cat : signal_categories ) {
+  auto iter = muon_2D_bin_edges.cbegin();
+  for ( auto iter = muon_2D_bin_edges.cbegin(); iter != last; ++iter ) {
 
-      std::string cat_str = "category == " + std::to_string( cat );
+    // Get an iterator to the map element after the current one. Due to
+    // the automatic sorting, this is guaranteed to contain the upper edge
+    // of the current muon momentum bin.
+    auto next = iter;
+    ++next;
 
-      std::string true_bin_def = signal_def + " && mc_delta_pT >= " + pTlow_str
-        + " && mc_delta_pT < " + pThigh_str + " && " + cat_str;
+    // Get the current muon momentum bin limits
+    double pmu_low = iter->first;
+    double pmu_high = next->first;
+
+    // Now iterate over the scattering cosine bins associated with the
+    // current momentum bin. Note that we will skip any situations in
+    // which the binning is undefined (i.e., because there are less than
+    // two bin edges given)
+    const auto& cosine_bin_edges = iter->second;
+
+    size_t num_cosine_edges = cosine_bin_edges.size();
+    size_t num_cosine_bins = 0u;
+    if ( num_cosine_edges >= 2u ) num_cosine_bins = num_cosine_edges - 1u;
+
+    for ( size_t b = 0u; b < num_cosine_bins; ++b ) {
+
+      double cosmu_low = cosine_bin_edges.at( b );
+      double cosmu_high = cosine_bin_edges.at( b + 1u );
+
+      std::stringstream true_ss;
+      true_ss << signal_def
+        << " && mc_p3_mu.Mag() >= " << pmu_low
+        << " && mc_p3_mu.Mag() < " << pmu_high
+        << " && mc_p3_mu.CosTheta() >= " << cosmu_low
+        << " && mc_p3_mu.CosTheta() < " << cosmu_high;
+
+      std::string true_bin_def = true_ss.str();
 
       true_bins.emplace_back( true_bin_def, kSignalTrueBin );
-    }
 
-    std::string reco_bin_def = selection + " && delta_pT >= " + pTlow_str
-      + " && delta_pT < " + pThigh_str;
+      std::stringstream reco_ss;
+      reco_ss << selection
+        << " && p3_mu.Mag() >= " << pmu_low
+        << " && p3_mu.Mag() < " << pmu_high
+        << " && p3_mu.CosTheta() >= " << cosmu_low
+        << " && p3_mu.CosTheta() < " << cosmu_high;
 
-    reco_bins.emplace_back( reco_bin_def );
-  }
+      std::string reco_bin_def = reco_ss.str();
+
+      reco_bins.emplace_back( reco_bin_def );
+
+      // We don't need an overflow cosine bin because the entire angular
+      // range is covered. We'll use a single bin for the overflow in pmu.
+
+    } // loop over scattering cosine bins
+
+  } // loop over muon momentum bins
+
+
+  // Create the single overflow bin for muon momentum in both true and reco
+  // space
+
+  double pmu_overflow_min = last->first;
+
+  std::stringstream true_ss;
+  true_ss << signal_def << " && mc_p3_mu.Mag() >= " << pmu_overflow_min;
+
+  std::string true_bin_def = true_ss.str();
+  true_bins.emplace_back( true_bin_def, kSignalTrueBin );
+
+  std::stringstream reco_ss;
+  reco_ss << selection << " && mc_p3_mu.Mag() >= " << pmu_overflow_min;
+
+  std::string reco_bin_def = reco_ss.str();
+  reco_bins.emplace_back( reco_bin_def );
 
   // Add true bins for the background categories of interest
   for ( const auto& bdef : background_defs ) {
@@ -49,7 +133,8 @@ void make_config() {
   }
 
   // Dump this information to the output file
-  std::ofstream out_file( "myconfig.txt" );
+  std::ofstream out_file( "myconfig_muon2D.txt" );
+  out_file << "Muon2D\n";
   out_file << "stv_tree\n";
   out_file << true_bins.size() << '\n';
   for ( const auto& tb : true_bins ) out_file << tb << '\n';
