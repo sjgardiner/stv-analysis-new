@@ -452,7 +452,7 @@ void ResponseMatrixMaker::build_response_matrices(
     }
 
     input_chain_.GetEntry( entry );
-    std::cout << "Entry " << entry << '\n';
+    //std::cout << "Entry " << entry << '\n';
 
     std::vector< size_t > matched_true_bins;
     double spline_weight = 0.;
