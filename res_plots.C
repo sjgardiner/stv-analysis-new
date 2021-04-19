@@ -450,8 +450,6 @@ void make_res_plots( const std::string& rmm_config_file_name,
 
 void res_plots() {
 
-  make_res_plots( "myconfig2.txt", {1}, "unweighted" );
-
   //make_res_plots( "p3_mu.CosTheta()", "cos(#theta_{#mu})",
   // "sel_CCNp0pi", {1},
   // { -1, -0.925, -0.85, -0.775, -0.7, -0.625, -0.55, -0.475, -0.4, -0.325,
@@ -495,5 +493,65 @@ void res_plots() {
   //make_res_plots( "delta_pT", "#deltap_{T}", "sel_CCNp0pi", {1},
   //  { 0, 0.1, 0.2, 0.3, 0.4, 0.525, 0.675, 0.9 },
   //  false, true );
+
+  //make_res_plots( "p3_lead_p.CosTheta()", "cos#theta_{p}",
+  // "sel_CCNp0pi", {1},
+  // { -1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8,
+  //    0.85, 0.9, 0.95, 1.0 },
+  // false );
+
+  //make_res_plots( "p3_mu.Mag()", "p_{#mu}", "sel_CCNp0pi", {1},
+  //  { 0.1, 0.17, 0.24, 0.3, 0.48, 0.75, 1.14, 2.5 },
+  //  false );
+
+  /// Muon-proton opening angle
+  //make_res_plots( "TMath::ACos( (p3_mu.X()*p3_lead_p.X() + "
+  //  "p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) / p3_mu.Mag()"
+  //  "/ p3_lead_p.Mag() )", "#theta_{#mu-p}", "sel_CCNp0pi", std::set<int>{1},
+
+  //  { 0, 0.52, 0.78, 1.0, 1.15, 1.35, 1.5, 1.65, 1.8, 1.95, 2.1,
+  //    2.35, 2.62, M_PI },
+
+  //  false, false, DEFAULT_TRUE_BINS,
+
+  //  "TMath::ACos( (mc_p3_mu.X()*mc_p3_lead_p.X() + "
+  //  "mc_p3_mu.Y()*mc_p3_lead_p.Y() + mc_p3_mu.Z()*mc_p3_lead_p.Z())"
+  //  " / mc_p3_mu.Mag() / mc_p3_lead_p.Mag() )"
+  //);
+
+  //make_res_plots( "p3_mu.Mag()", "p_{#mu}", "sel_CCNp0pi", {1},
+  //  { 0.1, 0.17, 0.24, 0.3, 0.48, 0.75, 1.14, 2.5 },
+  //  false );
+
+  ///////////////////////////////////////////////////////
+  // 2D binning studies
+  ///////////////////////////////////////////////////////
+
+  make_res_plots( "p3_mu.CosTheta()", "cos#theta_{#mu}",
+    "sel_CCNp0pi && p3_mu.Mag() >= 0.1 && p3_mu.Mag() < 0.17", {1},
+    { -1, 0., 1. },
+
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.1 && p3_mu.Mag() < 0.17"
+  // { -1, 0., 1. },
+
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.17 && p3_mu.Mag() < 0.24"
+  // { -1, 0., 1. },
+
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.24 && p3_mu.Mag() < 0.3"
+  // { -1, -0.2, 0.2, 0.5, 1.00 },
+
+  // "sel_CCNp0pi && p3_mu.Mag() >= 0.3 && p3_mu.Mag() < 0.48"
+  // { -1, -0.1, 0.2, 0.5, 0.65, 0.8, 0.9, 1.00 },
+
+  //"sel_CCNp0pi && p3_mu.Mag() >= 0.48 && p3_mu.Mag() < 0.75"
+  //{ -1, 0.2, 0.5, 0.65, 0.8, 0.875, 0.950, 1.00 },
+
+  //"sel_CCNp0pi && p3_mu.Mag() >= 0.75 && p3_mu.Mag() < 1.14"
+  //{ -1, 0.5, 0.8, 0.875, 0.950, 1.00 },
+
+  //"sel_CCNp0pi && p3_mu.Mag() >= 1.14 && p3_mu.Mag() < 2.5"
+  //{ -1, 0.5, 0.8, 0.875, 0.950, 1.00 },
+
+  false );
 
 }
