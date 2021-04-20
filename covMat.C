@@ -879,21 +879,23 @@ void covMat( const std::string& input_respmat_file_name,
     auto& results_to_clone = syst_to_total_cov_mat.begin()->second;
 
     TH1D* temp_signal_hist = dynamic_cast< TH1D* >(
-      results_to_clone.reco_signal_cv_->Clone( "total_mc_cv_signal" )
+      results_to_clone.reco_signal_cv_->Clone(
+        (label + "_reco_signal_cv").c_str() )
     );
     temp_signal_hist->SetDirectory( nullptr );
 
     TH1D* temp_bkgd_hist = dynamic_cast< TH1D* >(
-      results_to_clone.reco_bkgd_cv_->Clone( "total_mc_cv_bkgd" )
+      results_to_clone.reco_bkgd_cv_->Clone(
+        (label + "_reco_bkgd_cv").c_str() )
     );
     temp_bkgd_hist->SetDirectory( nullptr );
 
     TH2D* temp_signal_cov = make_covariance_matrix_histogram(
-      (label + "_total_signal").c_str(), "total covariance matrix",
+      (label + "_signal_cov_mat").c_str(), "total covariance matrix",
       num_reco_bins );
 
     TH2D* temp_bkgd_cov = make_covariance_matrix_histogram(
-      (label + "_total_bkgd").c_str(), "total covariance matrix",
+      (label + "_bkgd_cov_mat").c_str(), "total covariance matrix",
       num_reco_bins );
 
     CovMatResults my_temp_results( temp_signal_cov,
@@ -948,6 +950,31 @@ void covMat( const std::string& input_respmat_file_name,
     reco_pred_hist->SetBinError( a + 1, std::sqrt(std::max(0., cov)) );
   }
 
+  TCanvas* c1 = new TCanvas;
+  pred_cov_mat->Draw( "colz" );
+
+  TCanvas* c2 = new TCanvas;
+  reco_bnb_hist->SetLineColor( kBlack );
+  reco_bnb_hist->SetLineWidth( 3 );
+  reco_bnb_hist->SetStats( false );
+  reco_bnb_hist->Draw( "e" );
+  reco_pred_hist->Draw( "same hist e" );
+
+  reco_ext_hist->SetLineColor( kRed );
+  reco_ext_hist->Draw( "same hist e" );
+
+  TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
+
+  //std::string legend_title = get_legend_title( bnb_pot );
+  //lg->SetHeader( legend_title.c_str(), "C" );
+
+  lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
+  lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
+  lg->AddEntry( reco_ext_hist, "EXT BNB (stat)", "l" );
+  lg->Draw( "same" );
+
+  std::cout << "DATA POT = " << bnb_pot << '\n';
+
   // If the user has requested to save the results, do so now
   if ( !root_output_file.empty() ) {
     TFile out_tfile( root_output_file.c_str(), "recreate" );
@@ -964,28 +991,11 @@ void covMat( const std::string& input_respmat_file_name,
     pred_cov_mat->Write();
 
     total_mc_hist_cv_2D->Write();
+
+    TParameter<double> temp_pot_param( "bnb_pot", bnb_pot );
+    temp_pot_param.Write();
   }
 
-  TCanvas* c1 = new TCanvas;
-  pred_cov_mat->Draw( "colz" );
-
-  TCanvas* c2 = new TCanvas;
-  reco_bnb_hist->SetLineColor( kBlack );
-  reco_bnb_hist->SetLineWidth( 3 );
-  reco_bnb_hist->SetStats( false );
-  reco_bnb_hist->Draw( "e" );
-  reco_pred_hist->Draw( "same hist e" );
-
-  reco_ext_hist->SetLineColor( kRed );
-  reco_ext_hist->Draw( "same hist e" );
-
-  TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
-  lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
-  lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
-  lg->AddEntry( reco_ext_hist, "EXT BNB (stat)", "l" );
-  lg->Draw( "same" );
-
-  std::cout << "DATA POT = " << bnb_pot << '\n';
 }
 
   //// Plot some stuff

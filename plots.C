@@ -21,6 +21,7 @@
 #include "FiducialVolume.hh"
 #include "FilePropertiesManager.hh"
 #include "HistUtils.hh"
+#include "PlotUtils.hh"
 
 // Abbreviation to make using the enum class easier
 using NFT = NtupleFileType;
@@ -277,23 +278,7 @@ void make_plots( const std::string& branchexpr, const std::string& selection,
   // Prepare the plot legend
   TLegend* lg = new TLegend( 0.64, 0.32, 0.94, 0.85 );
 
-  // Print the data POT exposure to a precision of 3 decimal digits, then
-  // separate out the base-ten exponent for the legend header
-  std::stringstream temp_ss;
-  temp_ss << std::scientific << std::setprecision(3) << pot_on;
-
-  std::string pot_str = temp_ss.str();
-  size_t e_pos = pot_str.find( 'e' );
-
-  // Digits not including 'e' and the base-ten exponent
-  std::string pot_digits_str = pot_str.substr( 0, e_pos );
-  // pot_str now contains just the base-ten exponent
-  pot_str.erase( 0, e_pos + 1u );
-  // If there's a leading '+' in the exponent, erase that too
-  if ( pot_str.front() == '+' ) pot_str.erase( 0, 1u );
-
-  std::string legend_title = "MicroBooNE " + pot_digits_str + " #times 10^{"
-    + pot_str + "} POT, INTERNAL";
+  std::string legend_title = get_legend_title( pot_on );
   lg->SetHeader( legend_title.c_str(), "C" );
 
   lg->AddEntry( on_data_hist, "Data (beam on)", "lp" );

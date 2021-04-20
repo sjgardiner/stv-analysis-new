@@ -216,6 +216,11 @@ MatrixMap load_matrix_map( TFile& in_tfile ) {
 
     for ( const auto& label : *cov_mat_labels ) {
 
+      // Skip the special summed covariance matrix labels that only
+      // exist for the "total_mc" TDirectoryFile
+      if ( ntuple_file != "total_mc"
+        && (label == "xsec_all" || label == "xsec_unisim") ) continue;
+
       // TODO: add error handling here for missing objects
       TH2D* signal_cov = nullptr;
       TH2D* bkgd_cov = nullptr;
