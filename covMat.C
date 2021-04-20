@@ -4,7 +4,13 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <string>
 #include <vector>
+
+// ROOT includes
+#include "TH1D.h"
+#include "TH2D.h"
+#include "TParameter.h"
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
@@ -84,6 +90,9 @@ struct CovMatResults {
   bool fractional_ = false;
 
 };
+
+using MatrixMap = std::map< std::string,
+  std::map<std::string, CovMatResults> >;
 
 
 // Stores "settings" for calling the make_cov_mat function for a single
@@ -374,14 +383,56 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
     info.is_flux_variation_ );
 }
 
+// Helper function that saves the contents of the map of covariance
+// matrices to an output ROOT file
+void save_matrix_map( const MatrixMap& matrix_map, TFile& out_tfile )
+{
+  TDirectoryFile* root_tdir = new TDirectoryFile( "covMat",
+    "covariance matrices", "", &out_tfile );
+
+  root_tdir->cd();
+
+  for ( const auto& pair : matrix_map ) {
+
+    const std::string ntuple_file = pair.first;
+    const auto& results_map = pair.second;
+
+    std::string subdir = ntuple_subfolder_from_file_name( ntuple_file );
+
+    TDirectoryFile* ntuple_tdir = new TDirectoryFile( subdir.c_str(),
+      "covariance matrices", "", root_tdir );
+
+    ntuple_tdir->cd();
+
+    for ( const auto& results_pair : results_map ) {
+      const std::string& label = results_pair.first;
+      const CovMatResults& results = results_pair.second;
+
+      results.signal_cov_mat_->Write( (label + "-signal_cov_mat").c_str() );
+      results.bkgd_cov_mat_->Write( (label + "-bkgd_cov_mat").c_str() );
+
+      results.reco_signal_cv_->Write( (label + "-reco_signal_cv").c_str() );
+      results.reco_bkgd_cv_->Write( (label + "-reco_bkgd_cv").c_str() );
+
+      TParameter<bool> frac( (label + "-fractional").c_str(),
+        results.fractional_ );
+      frac.Write();
+
+    } // covariance matrix categories
+
+  } // ntuple files
+
+}
+
 void covMat( const std::string& input_respmat_file_name,
-  const std::string& config_file_name )
+  const std::string& config_file_name,
+  const std::string& root_output_file = "" )
 {
   // Map to hold all the covariance matrices that we'll need.
   // Outer keys are stv ntuple file names, inner keys are systematic
   // type labels ("detVar", etc.), and values are CovMatResults objects
   // containing the finished matrices.
-  std::map< std::string, std::map<std::string, CovMatResults> > matrix_map;
+  MatrixMap matrix_map;
 
   // The response matrices in each universe have already been made. However,
   // we'll re-create the object used to make them. It provides an easy
@@ -760,6 +811,20 @@ void covMat( const std::string& input_respmat_file_name,
     reco_pred_hist->SetBinError( a + 1, std::sqrt(std::max(0., cov)) );
   }
 
+  // If the user has requested to save the results, do so now
+  if ( !root_output_file.empty() ) {
+    TFile out_tfile( root_output_file.c_str(), "recreate" );
+
+    save_matrix_map( matrix_map, out_tfile );
+
+    out_tfile.cd();
+    out_tfile.WriteObject( &pot_map, "pot_map" );
+
+    reco_bnb_hist->Write();
+    reco_ext_hist->Write();
+    reco_pred_hist->Write();
+  }
+
   TCanvas* c1 = new TCanvas;
   pred_cov_mat->Draw( "colz" );
 
@@ -802,5 +867,3 @@ void covMat( const std::string& input_respmat_file_name,
   //  TCanvas* c3 = new TCanvas;
   //  bkgd_cm->Draw( "colz" );
   //}
-
-// std::string var_name = detvar_sample_to_label( sample_name );
