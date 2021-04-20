@@ -700,6 +700,16 @@ void covMat( const std::string& input_respmat_file_name,
     );
   }
 
+  // Before entering the loop below, create a 2D histogram to accumulate
+  // the POT-scaled total number of events predicted by the central-value MC
+  // model in each reco/true bin combination.
+  size_t num_true_bins = rmm.true_bins().size();
+
+  TH2D* total_mc_hist_cv_2D = new TH2D( "total_mc_hist_cv_2D",
+    "; true bin number; reco bin number; events", num_true_bins, 0.,
+    num_true_bins, num_reco_bins, 0., num_reco_bins );
+  total_mc_hist_cv_2D->Sumw2();
+
   // All that remains is to sum the MC contributions while scaling to
   // the correct POT
   for ( auto& pair : matrix_map ) {
@@ -739,7 +749,21 @@ void covMat( const std::string& input_respmat_file_name,
       pred_cov_mat->Add( syst_results.signal_cov_mat_.get(), pot_scale2 );
       pred_cov_mat->Add( syst_results.bkgd_cov_mat_.get(), pot_scale2 );
     }
-  }
+
+    // While we're at it, retrieve the 2D central-value MC prediction for the
+    // current ntuple file. Add it to the total 2D CV result with the
+    // appropriate POT scaling.
+
+    std::string subdir_2d = ntuple_subfolder_from_file_name( stv_file_name );
+    std::string cv_2d_name = subdir_2d + '/' + CV_WEIGHT_NAMECYCLE + "_2d";
+
+    TH2D* temp_cv_2d_hist( dynamic_cast<TH2D*>(
+      respmat_dir->Get( cv_2d_name.c_str() ) )
+    );
+
+    total_mc_hist_cv_2D->Add( temp_cv_2d_hist, pot_scale );
+
+  } // loop over the matrix map
 
   // We should be done now. Set the uncertainties on the final MC prediction
   // to be equal to the diagonal elements of the total covariance matrix.
@@ -760,6 +784,8 @@ void covMat( const std::string& input_respmat_file_name,
     reco_bnb_hist->Write();
     reco_ext_hist->Write();
     reco_pred_hist->Write();
+
+    total_mc_hist_cv_2D->Write();
   }
 
   TCanvas* c1 = new TCanvas;
