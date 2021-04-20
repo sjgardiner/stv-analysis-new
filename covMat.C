@@ -13,6 +13,7 @@
 #include "TParameter.h"
 
 // STV analysis includes
+#include "CovMatUtils.hh"
 #include "FilePropertiesManager.hh"
 #include "IntegratedFluxUniverseManager.hh"
 #include "ResponseMatrixMaker.hh"
@@ -71,29 +72,6 @@ TH2D* make_covariance_matrix_histogram( const std::string& hist_name,
   hist->SetStats( false );
   return hist;
 }
-
-struct CovMatResults {
-
-  CovMatResults() {}
-
-  CovMatResults( TH2D* signal_cm, TH2D* bkgd_cm, TH1D* rc_signal_cv,
-    TH1D* rc_bkgd_cv, bool frac ) : signal_cov_mat_( signal_cm ),
-    bkgd_cov_mat_( bkgd_cm ), reco_signal_cv_( rc_signal_cv ),
-    reco_bkgd_cv_( rc_bkgd_cv ), fractional_( frac ) {}
-
-  std::unique_ptr< TH2D > signal_cov_mat_;
-  std::unique_ptr< TH2D > bkgd_cov_mat_;
-
-  std::unique_ptr< TH1D > reco_signal_cv_;
-  std::unique_ptr< TH1D > reco_bkgd_cv_;
-
-  bool fractional_ = false;
-
-};
-
-using MatrixMap = std::map< std::string,
-  std::map<std::string, CovMatResults> >;
-
 
 // Stores "settings" for calling the make_cov_mat function for a single
 // systematic variation of interest
@@ -381,47 +359,6 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
   return make_cov_mat( cov_mat_name, main_dir_file, resp_mat, cv_spec,
     universe_spec, info.needs_fractional_, info.average_over_universes_,
     info.is_flux_variation_ );
-}
-
-// Helper function that saves the contents of the map of covariance
-// matrices to an output ROOT file
-void save_matrix_map( const MatrixMap& matrix_map, TFile& out_tfile )
-{
-  TDirectoryFile* root_tdir = new TDirectoryFile( "covMat",
-    "covariance matrices", "", &out_tfile );
-
-  root_tdir->cd();
-
-  for ( const auto& pair : matrix_map ) {
-
-    const std::string ntuple_file = pair.first;
-    const auto& results_map = pair.second;
-
-    std::string subdir = ntuple_subfolder_from_file_name( ntuple_file );
-
-    TDirectoryFile* ntuple_tdir = new TDirectoryFile( subdir.c_str(),
-      "covariance matrices", "", root_tdir );
-
-    ntuple_tdir->cd();
-
-    for ( const auto& results_pair : results_map ) {
-      const std::string& label = results_pair.first;
-      const CovMatResults& results = results_pair.second;
-
-      results.signal_cov_mat_->Write( (label + "-signal_cov_mat").c_str() );
-      results.bkgd_cov_mat_->Write( (label + "-bkgd_cov_mat").c_str() );
-
-      results.reco_signal_cv_->Write( (label + "-reco_signal_cv").c_str() );
-      results.reco_bkgd_cv_->Write( (label + "-reco_bkgd_cv").c_str() );
-
-      TParameter<bool> frac( (label + "-fractional").c_str(),
-        results.fractional_ );
-      frac.Write();
-
-    } // covariance matrix categories
-
-  } // ntuple files
-
 }
 
 void covMat( const std::string& input_respmat_file_name,
