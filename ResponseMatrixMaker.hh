@@ -259,6 +259,10 @@ class ResponseMatrixMaker {
     // Provides read-only access to the map of Universe objects
     const auto& universe_map() const { return universes_; }
 
+    // Returns the name of the TDirectoryFile that will be used to hold the
+    // response matrix histograms when they are written to the output ROOT file
+    const std::string& dir_name() const { return output_directory_name_; }
+
   protected:
 
     // Prepares the TTreeFormula objects needed to test each entry for

@@ -11,29 +11,32 @@
 #include "IntegratedFluxUniverseManager.hh"
 #include "ResponseMatrixMaker.hh"
 
-struct FileNamecycle {
+using NFT = NtupleFileType;
 
-  FileNamecycle( const std::string& f, const std::string n )
-    : file_( f ), namecycle_( n ) {}
+// Simple container for the name of a subdirectory of the main response matrix
+// TDirectoryFile (dir) paired with the namecycle of a universe histogram
+// (namecycle)
+struct DirNamecycle {
 
-  std::string file_;
+  DirNamecycle( const std::string& d, const std::string n )
+    : dir_( d ), namecycle_( n ) {}
+
+  std::string dir_;
   std::string namecycle_;
 };
 
-const std::string DETVAR_CV_NAME = "prodgenie_bnb_nu_overlay_DetVar_CV_reco2"
-  "_v08_00_00_38_run3b_reco2_reco2";
-const std::vector< std::string > DETVAR_SAMPLE_NAMES = {
-  "prodgenie_bnb_nu_overlay_DetVar_LYAttenuation_v08_00_00_38_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_LYDown_v08_00_00_37_v2_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_LYRayleigh_v08_00_00_37_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_Recomb2_reco2_v08_00_00_39_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_SCE_reco2_v08_00_00_38_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_WireModAngleXZ_v08_00_00_38_exe_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_WireModAngleYZ_v08_00_00_38_exe_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_wiremod_ScaleX_v08_00_00_38_run3b_reco2_reco2",
-  "prodgenie_bnb_nu_overlay_DetVar_wiremod_ScaleYZ_v08_00_00_38_run3b_reco2_reco2"
-};
+// Detector systematic variations are currently only available for Run 3
+constexpr int DETVAR_RUN = 3;
 
+// Namecycle to use when prepraring universe specifiers for the
+// detector variation samples (including the detVar CV)
+const std::string DETVAR_NAMECYCLE = "unweighted_0";
+
+// Central value universe for reweightable systematics
+const std::string CV_WEIGHT_NAMECYCLE = "weight_TunedCentralValue_UBGenie_0";
+
+// Helper function that produces labels to use when naming covariance
+// matrix histograms for detector systematic uncertainties
 std::string detvar_sample_to_label( const std::string& sample_name ) {
   // Extract just the "DetVar" part of the file name to use as a label for
   // the associated covariance matrix
@@ -49,13 +52,6 @@ std::string detvar_sample_to_label( const std::string& sample_name ) {
   return label;
 }
 
-
-std::string sample_to_respmat_file_name( const std::string& sample_name,
-  const std::string& respmat_folder )
-{
-  std::string file_name = respmat_folder + "/respmat-stv-" + sample_name + ".root";
-  return file_name;
-}
 
 // Note: the caller takes ownership. The use of bare pointers is slightly
 // dangerous here.
@@ -111,38 +107,31 @@ const std::map< std::string, SystInfo > SYSTEMATICS_TO_USE {
   { "xsec_multi", {"weight_All_UBGenie_", 500u, false, true, false} },
 };
 
-std::string stv_file_to_respmat_file( const std::string& stv_file_name,
-  const std::string& respmat_folder )
-{
-  // Get the basename of the input file using the trick described here:
-  // https://stackoverflow.com/a/24386991
-  std::string stv_basename = stv_file_name.substr(
-    stv_file_name.find_last_of('/') + 1 );
-
-  std::string resp_mat_file_name = respmat_folder + "/respmat-" + stv_basename;
-  return resp_mat_file_name;
-}
-
 CovMatResults make_cov_mat( const std::string& cov_mat_name,
-  const ResponseMatrixMaker& resp_mat, const FileNamecycle& cv_spec,
-  const std::vector< FileNamecycle >& universe_spec,
-  bool fractional, bool average_over_universes, bool is_flux_variation )
+  TDirectoryFile& main_dir_file, const ResponseMatrixMaker& resp_mat,
+  const DirNamecycle& cv_spec,
+  const std::vector< DirNamecycle >& universe_spec, bool fractional,
+  bool average_over_universes, bool is_flux_variation )
 {
   // Get the total number of true and reco bins for later reference
   size_t num_true_bins = resp_mat.true_bins().size();
   size_t num_reco_bins = resp_mat.reco_bins().size();
 
-  std::cout << "PROCESSING file " << cv_spec.file_ << " for "
+  std::cout << "PROCESSING subdirectory " << cv_spec.dir_ << " for CV "
     << cv_spec.namecycle_ << '\n';
 
-  std::unique_ptr< TFile > cv_file( new TFile(cv_spec.file_.c_str(), "read") );
+  std::string cv_true_hist_name = cv_spec.dir_
+    + '/' + cv_spec.namecycle_ + "_true";
 
-  std::unique_ptr< TH1D > cv_true_hist( dynamic_cast<TH1D*>(
-    cv_file->Get((cv_spec.namecycle_ + "_true").c_str()) )
+  std::unique_ptr< TH1D > cv_true_hist( dynamic_cast< TH1D* >(
+    main_dir_file.Get( cv_true_hist_name.c_str() ) )
   );
 
+  std::string cv_2d_hist_name = cv_spec.dir_ + '/' + cv_spec.namecycle_
+    + "_2d";
+
   std::unique_ptr< TH2D > cv_2d_hist( dynamic_cast<TH2D*>(
-    cv_file->Get((cv_spec.namecycle_ + "_2d").c_str()) )
+    main_dir_file.Get( cv_2d_hist_name.c_str() ) )
   );
 
   // Get the expected signal and background event counts in each
@@ -185,28 +174,24 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
   TH2D* covMat_bkgd = make_covariance_matrix_histogram(
     (cov_mat_name + "_bkgd").c_str(), "background covariance", num_reco_bins );
 
-  // Prepare a TFile smart pointer to use to access the histograms in each
-  // universe
-  std::unique_ptr< TFile > univ_file;
-
   // Loop over universes
   size_t num_universes = universe_spec.size();
   for ( size_t univ_idx = 0u; univ_idx < num_universes; ++univ_idx ) {
+
     const auto& univ_info = universe_spec.at( univ_idx );
 
-    // Check whether we need to open a new file for this universe. This
-    // can happen either if we haven't opened one previously or if the
-    // current universe's file name differs from the previous one.
-    if ( !univ_file || univ_file->GetName() != univ_info.file_ ) {
-      univ_file.reset( new TFile(univ_info.file_.c_str(), "read") );
-    }
+    std::string univ_true_hist_name = univ_info.dir_
+      + '/' + univ_info.namecycle_ + "_true";
 
     std::unique_ptr< TH1D > univ_true_hist( dynamic_cast<TH1D*>(
-      univ_file->Get((univ_info.namecycle_ + "_true").c_str()) )
+      main_dir_file.Get( univ_true_hist_name.c_str() ) )
     );
 
+    std::string univ_2d_hist_name = univ_info.dir_
+      + '/' + univ_info.namecycle_ + "_2d";
+
     std::unique_ptr< TH2D > univ_2d_hist( dynamic_cast<TH2D*>(
-      univ_file->Get((univ_info.namecycle_ + "_2d").c_str()) )
+      main_dir_file.Get( univ_2d_hist_name.c_str() ) )
     );
 
     // Get the expected signal and background event counts in
@@ -375,22 +360,23 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
 
 // Overloaded version that takes settings from a SystInfo object
 CovMatResults make_cov_mat( const std::string& cov_mat_name,
-  const ResponseMatrixMaker& resp_mat, const FileNamecycle& cv_spec,
-  const SystInfo& info )
+  TDirectoryFile& main_dir_file, const ResponseMatrixMaker& resp_mat,
+  const DirNamecycle& cv_spec, const SystInfo& info )
 {
-  std::vector< FileNamecycle > universe_spec;
+  std::vector< DirNamecycle > universe_spec;
   for ( size_t u = 0u; u < info.univ_count_; ++u ) {
-    universe_spec.emplace_back( cv_spec.file_,
+    universe_spec.emplace_back( cv_spec.dir_,
       info.wgt_prefix_ + std::to_string(u) );
   }
 
-  return make_cov_mat( cov_mat_name, resp_mat, cv_spec, universe_spec,
-    info.needs_fractional_, info.average_over_universes_,
+  return make_cov_mat( cov_mat_name, main_dir_file, resp_mat, cv_spec,
+    universe_spec, info.needs_fractional_, info.average_over_universes_,
     info.is_flux_variation_ );
 }
 
-void covMat() {
-
+void covMat( const std::string& input_respmat_file_name,
+  const std::string& config_file_name )
+{
   // Map to hold all the covariance matrices that we'll need.
   // Outer keys are stv ntuple file names, inner keys are systematic
   // type labels ("detVar", etc.), and values are CovMatResults objects
@@ -403,55 +389,138 @@ void covMat() {
   // TODO: consider refactoring this to have a "read-only" version. Also, be
   // careful. With the current approach, if you use the wrong configuration
   // file here, all of your covariance matrices could be invalid.
-  ResponseMatrixMaker rmm( "myconfig.txt" );
+  ResponseMatrixMaker rmm( config_file_name );
 
-  const std::string respmat_folder = "/uboone/data/users/gardiner/"
-    "old-ntuples-stv/resp-all-backup";
+  // Get access to the TDirectoryFile within the input ROOT file that holds the
+  // response matrix histograms for the various analysis ntuples
+  TFile in_tfile( input_respmat_file_name.c_str(), "read" );
 
-  std::string detvar_cv_file_name = sample_to_respmat_file_name(
-    DETVAR_CV_NAME, respmat_folder );
+  TDirectoryFile* respmat_dir = nullptr;
+  in_tfile.GetObject( rmm.dir_name().c_str(), respmat_dir );
 
-  FileNamecycle detvar_cv_spec( detvar_cv_file_name, "unweighted_0" );
-
-  std::vector< FileNamecycle > detvar_universes;
-  for ( const auto& sample : DETVAR_SAMPLE_NAMES ) {
-    std::string sample_file_name = sample_to_respmat_file_name( sample,
-      respmat_folder );
-    detvar_universes.emplace_back( sample_file_name, "unweighted_0" );
+  if ( !respmat_dir ) {
+    std::cout << "ERROR: Could not open the TDirectoryFile \""
+      << rmm.dir_name() << "\" within the ROOT file "
+      << input_respmat_file_name << '\n';
+    return;
   }
 
-  CovMatResults detVarResults = make_cov_mat( "detVar_total", rmm,
-    detvar_cv_spec, detvar_universes, true, false, false );
+  // If we've got to this point, then the TDirectoryFile containing the response
+  // matrix histograms is available. Set it to be the active directory for ROOT.
+  respmat_dir->cd();
 
-  // CV for reweightable systematics
-  const std::string cv_weight_name = "weight_TunedCentralValue_UBGenie_0";
+  // Use the FilePropertiesManager to look up all of the detVar systematics
+  // samples. At the moment, these are only available for Run 3. The fractional
+  // uncertainty calculated for Run 3 is then applied to the other runs.
+  // TODO: update this part when/if new detVar samples become available.
+  const auto& fpm = FilePropertiesManager::Instance();
 
-  // The detector variation uncertainties will be applied globally using
-  // the fractional covariance matrices calculated above. For all other
-  // systematics, we go file-by-file across all MC samples with weights.
-  std::ifstream list_file( "foo3" );
-  std::string file_name;
-  while ( std::getline(list_file, file_name, '\n') ) {
+  // Get access to the files for Run 3
+  const auto& detvar_run_file_map = fpm.ntuple_file_map().at( DETVAR_RUN );
 
-    std::string respmat_file = stv_file_to_respmat_file(
-      file_name, respmat_folder );
+  // Get the central-value detVar sample. I assume here (somewhat dangerously)
+  // that there is only one nutple file in each Run 3 detector systematics
+  // sample. This is currently true, but it could cause problems later.
+  // TODO: revisit how you handle looking up the files to address this potential
+  // problem.
+  auto detvar_cv_iter = detvar_run_file_map.at( NFT::kDetVarMCCV ).cbegin();
 
-    FileNamecycle cv_spec( respmat_file, cv_weight_name );
+  // Get the name of the detVarCV subdirectory of the main response matrix
+  // TDirectoryFile
+  std::string detvar_cv_subdirectory = ntuple_subfolder_from_file_name(
+    *detvar_cv_iter );
+
+  DirNamecycle detvar_cv_spec( detvar_cv_subdirectory, DETVAR_NAMECYCLE );
+
+  // Specify the detVar samples (other than the CV) that we want to consider.
+  // Note that a wireMod dE/dx sample is available, but we exclude it because it
+  // is deprecated in favor of Recomb2. Using both together would be
+  // double-counting.
+  constexpr std::array< NtupleFileType, 9 > detVar_labels = {
+    NFT::kDetVarMCLYatten, NFT::kDetVarMCLYdown, NFT::kDetVarMCLYrayl,
+    NFT::kDetVarMCRecomb2, NFT::kDetVarMCSCE, NFT::kDetVarMCWMAngleXZ,
+    NFT::kDetVarMCWMAngleYZ, NFT::kDetVarMCWMX, NFT::kDetVarMCWMYZ
+  };
+
+  std::vector< DirNamecycle > detvar_universes;
+
+  for ( const auto& label : detVar_labels ) {
+
+    // As I did for the CV above, I assume here that there is only one ntuple in
+    // each of the Run 3 detector variation samples.
+    // TODO: revisit this
+    auto temp_iter = detvar_run_file_map.at( label ).cbegin();
+
+    // Get the name of the subdirectory of the main response matrix
+    // TDirectoryFile for the current detector variation sample
+    std::string subdir = ntuple_subfolder_from_file_name(
+      *temp_iter );
+
+    detvar_universes.emplace_back( subdir, DETVAR_NAMECYCLE );
+  }
+
+  CovMatResults detVarResults = make_cov_mat( "detVar_total", *respmat_dir,
+    rmm, detvar_cv_spec, detvar_universes, true, false, false );
+
+  // The detector variation uncertainties will be applied globally using the
+  // fractional covariance matrices for Run 3 calculated above. For all other
+  // systematics, we go file-by-file across all MC samples with weights. The
+  // ntuple file type labels we need to find these using the
+  // FilePropertiesManager are listed here.
+  constexpr std::array< NtupleFileType, 3 > rw_sample_labels = { NFT::kNumuMC,
+    NFT::kIntrinsicNueMC, NFT::kDirtMC };
+
+  // Here we loop over all central-value (i.e., non-detVar) MC samples in *all*
+  // runs, not just Run 3 (like we did for the detVar samples above). For code
+  // readability below, we'll precompute a vector of all of the ntuple file
+  // names before the main loop for reweightable systematics.
+
+  std::vector< std::string > cv_mc_file_names;
+
+  for ( const auto& run_and_type_pair : fpm.ntuple_file_map() ) {
+
+    const auto& type_map = run_and_type_pair.second;
+
+    for ( const auto& type : rw_sample_labels ) {
+
+      const auto& file_set = type_map.at( type );
+
+      // Note that, since we iterate over the whole set of ntuple files here for
+      // every run/type combination, the reweightable systematics automatically
+      // accomodate an arbitrary number of input ntuple files.
+      for ( const std::string& file_name : file_set ) {
+        cv_mc_file_names.push_back( file_name );
+      }
+
+    } // ntuple file type loop
+
+  } // run loop
+
+  // Main loop over the central-value MC samples for calculating reweightable
+  // systematic uncertainties
+  for ( const auto& file_name : cv_mc_file_names ) {
+
+    // Create the universe specification for the CV prediction first
+    std::string file_subdir = ntuple_subfolder_from_file_name( file_name );
+
+    DirNamecycle cv_spec( file_subdir, CV_WEIGHT_NAMECYCLE );
 
     for ( const auto& pair : SYSTEMATICS_TO_USE ) {
       std::string syst_name = pair.first;
       const auto& info = pair.second;
 
-      CovMatResults temp_results = make_cov_mat( syst_name, rmm,
-        cv_spec, info );
+      CovMatResults temp_results = make_cov_mat( syst_name, *respmat_dir,
+        rmm, cv_spec, info );
 
       if ( matrix_map.find(file_name) == matrix_map.end() ) {
         matrix_map[ file_name ] = std::map< std::string, CovMatResults >();
       }
-      matrix_map[ file_name ][ syst_name ] = std::move( temp_results );
-    }
 
-  } // input files for reweightable systematics
+      matrix_map[ file_name ][ syst_name ] = std::move( temp_results );
+
+    } // loop over reweightable systematics
+
+  } // loop over central-value MC input files
 
   // The map holding the covariance matrices is now complete for the high-stats
   // CV MC samples with one exception: we need to add in properly normalized
@@ -459,7 +528,8 @@ void covMat() {
   // calculated above using the Run 3 detector variations.
   size_t num_reco_bins = 0u;
   for ( auto& pair : matrix_map ) {
-    std::string stv_file_name = pair.first;
+
+    //std::string stv_file_name = pair.first;
     auto& syst_map = pair.second;
 
     // Retrieve the covariance matrix results for the cross-section multisim
@@ -530,9 +600,11 @@ void covMat() {
   // However, separating this task probably makes the code more readable.
 
   // Keys are STV ntuple file names, values are beam exposures (POT)
+  // TODO: consider changing the ResponseMatrixMaker class so that the
+  // POT information is saved together with the response matrices themselves.
   std::map< std::string, float > pot_map;
   for ( const auto& pair : matrix_map ) {
-    std::string stv_file_name = pair.first;
+    const std::string& stv_file_name = pair.first;
     TFile stv_file( stv_file_name.c_str(), "read" );
 
     TParameter<float>* summed_pot = nullptr;
@@ -556,7 +628,6 @@ void covMat() {
   double bnb_trigs = 0.;
   double ext_trigs = 0.;
 
-  const auto& fpm = FilePropertiesManager::Instance();
   const auto& norm_map = fpm.data_norm_map();
   const auto& file_map = fpm.ntuple_file_map();
 
@@ -573,13 +644,18 @@ void covMat() {
     const auto& ext_set = type_to_file_set.at( NtupleFileType::kExtBNB );
 
     for ( const std::string& bnb_file : bnb_set ) {
-      std::string rf = stv_file_to_respmat_file( bnb_file, respmat_folder );
-      TFile temp_file( rf.c_str(), "read" );
 
-      TH1D* reco_evts = dynamic_cast< TH1D* >(
-        temp_file.Get( "unweighted_0_reco" )
-      );
+      // Look up the correct TDirectoryFile subdirectory name to use for the
+      // current beam-on data ntuple
+      std::string bnb_subdir = ntuple_subfolder_from_file_name( bnb_file );
 
+      // Retrieve the histogram containing the reco event counts
+      std::string bnb_hist_name = bnb_subdir + "/unweighted_0_reco";
+
+      TH1D* reco_evts = nullptr;
+      respmat_dir->GetObject( bnb_hist_name.c_str(), reco_evts );
+
+      // Add the current event counts to the total across all beam-on samples
       reco_bnb_hist->Add( reco_evts );
 
       const auto& trigs_and_pot = norm_map.at( bnb_file );
@@ -587,23 +663,30 @@ void covMat() {
       bnb_trigs += trigs_and_pot.trigger_count_;
 
       bnb_pot_per_run.at( run ) += trigs_and_pot.pot_;
-    }
+
+    } // loop over beam-on data files
 
     for ( const std::string& ext_file : ext_set ) {
-      std::string rf = stv_file_to_respmat_file( ext_file, respmat_folder );
-      TFile temp_file( rf.c_str(), "read" );
 
-      TH1D* reco_evts = dynamic_cast< TH1D* >(
-        temp_file.Get( "unweighted_0_reco" )
-      );
+      // Look up the correct TDirectoryFile subdirectory name to use for the
+      // current extBNB (i.e., beam-off) data ntuple
+      std::string ext_subdir = ntuple_subfolder_from_file_name( ext_file );
 
+      // Retrieve the histogram containing the reco event counts
+      std::string ext_hist_name = ext_subdir + "/unweighted_0_reco";
+
+      TH1D* reco_evts = nullptr;
+      respmat_dir->GetObject( ext_hist_name.c_str(), reco_evts );
+
+      // Add the current event counts to the total across all extBNB samples
       reco_ext_hist->Add( reco_evts );
 
       const auto& trigs_and_pot = norm_map.at( ext_file );
       ext_trigs += trigs_and_pot.trigger_count_;
-    }
 
-  }
+    } // loop over extBNB (i.e., beam-off) data files
+
+  } // loop over runs
 
   // We've accumulated all of the measurements. Now scale the EXT events to
   // BNB based on the ratio of the recorded triggers.
@@ -638,7 +721,7 @@ void covMat() {
 
     double file_pot = pot_map.at( stv_file_name );
 
-    // TODO: super hacky. Please change this.
+    // TODO: super hacky. Please change this. It can easily break.
     int current_run = 0;
     if ( stv_file_name.find("run1") != std::string::npos ) {
       current_run = 1;
