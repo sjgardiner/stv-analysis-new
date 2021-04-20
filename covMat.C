@@ -852,6 +852,8 @@ void covMat( const std::string& input_respmat_file_name,
     reco_ext_hist->Write();
     reco_pred_hist->Write();
 
+    pred_cov_mat->Write();
+
     total_mc_hist_cv_2D->Write();
   }
 

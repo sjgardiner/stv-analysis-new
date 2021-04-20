@@ -12,6 +12,76 @@ struct CovMatResults {
     bkgd_cov_mat_( bkgd_cm ), reco_signal_cv_( rc_signal_cv ),
     reco_bkgd_cv_( rc_bkgd_cv ), fractional_( frac ) {}
 
+  // Returns the number of reco bins (i.e., the number of matrix elements along
+  // either axis)
+  int num_reco_bins() const { return signal_cov_mat_->GetNbinsX(); }
+
+  // Returns the fractional covariance matrix element for the signal only.
+  // NOTE: bin numbering in this interface is one-based (not zero-based)
+  // to match the conventions of ROOT histograms.
+  double frac_covariance_signal( int bin_a, int bin_b ) {
+    double covar = signal_cov_mat_->GetBinContent( bin_a, bin_b );
+    if ( fractional_ ) return covar;
+    else {
+      double cv_a = reco_signal_cv_->GetBinContent( bin_a );
+      double cv_b = reco_signal_cv_->GetBinContent( bin_b );
+      double cv_prod = cv_a * cv_b;
+      if ( cv_prod == 0. ) return 0.;
+      covar /= cv_prod;
+    }
+    return covar;
+  }
+
+  // TODO: reduce code duplication here
+  // Returns the fractional covariance matrix element for the background only.
+  double frac_covariance_bkgd( int bin_a, int bin_b ) {
+    double covar = bkgd_cov_mat_->GetBinContent( bin_a, bin_b );
+    if ( fractional_ ) return covar;
+    else {
+      double cv_a = reco_bkgd_cv_->GetBinContent( bin_a );
+      double cv_b = reco_bkgd_cv_->GetBinContent( bin_b );
+      double cv_prod = cv_a * cv_b;
+      if ( cv_prod == 0. ) return 0.;
+      covar /= cv_prod;
+    }
+    return covar;
+  }
+
+  // TODO: reduce code duplication here
+  // Returns the fractional covariance matrix element the full MC prediction
+  // (signal plus background)
+  double frac_covariance_total( int bin_a, int bin_b ) {
+    double covar_bkgd = bkgd_cov_mat_->GetBinContent( bin_a, bin_b );
+    double covar_signal = signal_cov_mat_->GetBinContent( bin_a, bin_b );
+
+    double cv_a_bkgd = reco_bkgd_cv_->GetBinContent( bin_a );
+    double cv_b_bkgd = reco_bkgd_cv_->GetBinContent( bin_b );
+
+    double cv_a_signal = reco_signal_cv_->GetBinContent( bin_a );
+    double cv_b_signal = reco_signal_cv_->GetBinContent( bin_b );
+
+    // If these are fractional covariances already, we need to scale them
+    // back into regular covariances before summing signal and background.
+    if ( fractional_ ) {
+      covar_bkgd *= cv_a_bkgd * cv_b_bkgd;
+      covar_signal *= cv_a_signal * cv_b_signal;
+    }
+
+    // OK, now add them and divide by the total CV prediction to get a total
+    // fractional covariance
+    double covar = covar_bkgd + covar_signal;
+
+    double cv_a = cv_a_bkgd + cv_a_signal;
+    double cv_b = cv_b_bkgd + cv_b_signal;
+
+    double cv_prod = cv_a * cv_b;
+
+    if ( cv_prod == 0. ) return 0.;
+    covar /= cv_prod;
+
+    return covar;
+  }
+
   std::unique_ptr< TH2D > signal_cov_mat_;
   std::unique_ptr< TH2D > bkgd_cov_mat_;
 
