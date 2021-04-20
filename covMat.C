@@ -89,9 +89,47 @@ struct SystInfo {
 };
 
 const std::map< std::string, SystInfo > SYSTEMATICS_TO_USE {
+
   { "flux", {"weight_flux_all_", 1000u, false, true, true} },
+
   { "reint", {"weight_reint_all_", 1000u, false, true, false} },
+
   { "xsec_multi", {"weight_All_UBGenie_", 500u, false, true, false} },
+
+  // TODO: Double-check the unisims (I wrote this in a hurry)
+  { "xsec_AxFFCCQEshape", {"weight_AxFFCCQEshape_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_DecayAngMEC", {"weight_DecayAngMEC_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_NormCCCOH", {"weight_NormCCCOH_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_NormNCCOH", {"weight_NormNCCOH_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_RPA_CCQE", {"weight_RPA_CCQE_UBGenie_", 2u,
+    false, true, false} },
+
+  { "xsec_ThetaDelta2NRad", {"weight_ThetaDelta2NRad_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_Theta_Delta2Npi", {"weight_Theta_Delta2Npi_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_VecFFCCQEshape", {"weight_VecFFCCQEshape_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_XSecShape_CCMEC", {"weight_XSecShape_CCMEC_UBGenie_", 2u,
+    false, false, false} },
+
+  { "xsec_xsr_scc_Fa3_SCC", {"weight_xsr_scc_Fa3_SCC_", 10u,
+    false, true, false} },
+
+  { "xsec_xsr_scc_Fv3_SCC", {"weight_xsr_scc_Fv3_SCC_", 10u,
+    false, true, false} },
+
 };
 
 CovMatResults make_cov_mat( const std::string& cov_mat_name,
@@ -824,6 +862,77 @@ void covMat( const std::string& input_respmat_file_name,
 
   } // loop over the matrix map
 
+
+  // For the "total_mc" results, we can sum subcategories of the systematics
+  // here as we like. Currently, this is done only to (1) combine the various
+  // xsec unisims into a summary, and (2) add that summary to the multisims
+  // in order to get a combined xsec covariance matrix.
+
+  const std::vector< std::string > extra_syst_labels = {
+    "xsec_unisim", "xsec_all"
+  };
+
+  for ( const auto& label : extra_syst_labels ) {
+
+    // For the CV predictions, just clone the histograms from
+    // one of the pre-existing sets of results
+    auto& results_to_clone = syst_to_total_cov_mat.begin()->second;
+
+    TH1D* temp_signal_hist = dynamic_cast< TH1D* >(
+      results_to_clone.reco_signal_cv_->Clone( "total_mc_cv_signal" )
+    );
+    temp_signal_hist->SetDirectory( nullptr );
+
+    TH1D* temp_bkgd_hist = dynamic_cast< TH1D* >(
+      results_to_clone.reco_bkgd_cv_->Clone( "total_mc_cv_bkgd" )
+    );
+    temp_bkgd_hist->SetDirectory( nullptr );
+
+    TH2D* temp_signal_cov = make_covariance_matrix_histogram(
+      (label + "_total_signal").c_str(), "total covariance matrix",
+      num_reco_bins );
+
+    TH2D* temp_bkgd_cov = make_covariance_matrix_histogram(
+      (label + "_total_bkgd").c_str(), "total covariance matrix",
+      num_reco_bins );
+
+    CovMatResults my_temp_results( temp_signal_cov,
+      temp_bkgd_cov, temp_signal_hist, temp_bkgd_hist, false );
+
+    syst_to_total_cov_mat[ label ] = std::move( my_temp_results );
+
+  }
+
+  // All right, add up the xsec unisim covariance matrices in this loop.
+  const std::array< std::string, 11 > xsec_unisim_labels = {
+    "xsec_AxFFCCQEshape", "xsec_DecayAngMEC", "xsec_NormCCCOH",
+    "xsec_NormNCCOH", "xsec_RPA_CCQE", "xsec_ThetaDelta2NRad",
+    "xsec_Theta_Delta2Npi", "xsec_VecFFCCQEshape", "xsec_XSecShape_CCMEC",
+    "xsec_xsr_scc_Fa3_SCC", "xsec_xsr_scc_Fv3_SCC"
+  };
+
+  auto& unisim_results = syst_to_total_cov_mat.at( "xsec_unisim" );
+
+  for ( const auto& label : xsec_unisim_labels ) {
+
+    auto& temp_results = syst_to_total_cov_mat.at( label );
+    unisim_results.signal_cov_mat_->Add( temp_results.signal_cov_mat_.get() );
+    unisim_results.bkgd_cov_mat_->Add( temp_results.bkgd_cov_mat_.get() );
+
+  }
+
+  auto& xsec_all_results = syst_to_total_cov_mat.at( "xsec_all" );
+
+  const std::array< std::string, 2 > temp_labels = { "xsec_unisim",
+    "xsec_multi" };
+
+  for ( const auto& label : temp_labels ) {
+
+    auto& temp_results = syst_to_total_cov_mat.at( label );
+    xsec_all_results.signal_cov_mat_->Add( temp_results.signal_cov_mat_.get() );
+    xsec_all_results.bkgd_cov_mat_->Add( temp_results.bkgd_cov_mat_.get() );
+
+  }
 
   // Now that we don't need to do any more iterations over analysis ntuple
   // files, go ahead and add the map of total covariances (summed over the POT
