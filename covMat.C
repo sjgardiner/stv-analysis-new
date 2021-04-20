@@ -709,6 +709,42 @@ void covMat( const std::string& input_respmat_file_name,
     "; true bin number; reco bin number; events", num_true_bins, 0.,
     num_true_bins, num_reco_bins, 0., num_reco_bins );
   total_mc_hist_cv_2D->Sumw2();
+  total_mc_hist_cv_2D->SetStats( false );
+
+  // Also create a new map of CovMatResults indexed by systematic label.
+  // We will fill these with the POT-scaled total covariance matrices
+  // for each individual source of uncertainty. Iterate over the systematic
+  // labels used for the first ntuple file in the matrix_map to ensure that
+  // you don't miss any
+  std::map< std::string, CovMatResults > syst_to_total_cov_mat;
+  for ( const auto& label_pair : matrix_map.cbegin()->second ) {
+
+    const std::string& label = label_pair.first;
+
+    TH1D* temp_signal_hist = new TH1D( "total_mc_cv_signal",
+      "; reco bin; events", num_reco_bins, 0., num_reco_bins );
+    temp_signal_hist->SetStats( false );
+    temp_signal_hist->SetDirectory( nullptr );
+
+    TH1D* temp_bkgd_hist = new TH1D( "total_mc_cv_bkgd",
+      "; reco bin; events", num_reco_bins, 0., num_reco_bins );
+    temp_bkgd_hist->SetStats( false );
+    temp_bkgd_hist->SetDirectory( nullptr );
+
+    TH2D* temp_signal_cov = make_covariance_matrix_histogram(
+      (label + "_total_signal").c_str(), "total covariance matrix",
+      num_reco_bins );
+
+    TH2D* temp_bkgd_cov = make_covariance_matrix_histogram(
+      (label + "_total_bkgd").c_str(), "total covariance matrix",
+      num_reco_bins );
+
+    CovMatResults my_temp_results( temp_signal_cov,
+      temp_bkgd_cov, temp_signal_hist, temp_bkgd_hist, false );
+
+    syst_to_total_cov_mat[ label ] = std::move( my_temp_results );
+
+  } // loop over systematic labels
 
   // All that remains is to sum the MC contributions while scaling to
   // the correct POT
@@ -743,12 +779,35 @@ void covMat( const std::string& input_respmat_file_name,
     // Add each of the relevant covariance matrices to the total. Note that
     // the POT scaling factor needs to be squared in this case.
     for ( const auto& syst : syst_map ) {
+
+      const std::string& syst_label = syst.first;
       const auto& syst_results = syst.second;
 
       double pot_scale2 = std::pow( pot_scale, 2 );
       pred_cov_mat->Add( syst_results.signal_cov_mat_.get(), pot_scale2 );
       pred_cov_mat->Add( syst_results.bkgd_cov_mat_.get(), pot_scale2 );
-    }
+
+      // Also add the current covariance matrices to the running totals
+      // for the appropriate individual systematic category
+      auto& category_results = syst_to_total_cov_mat.at( syst_label );
+
+      category_results.signal_cov_mat_->Add(
+        syst_results.signal_cov_mat_.get(), pot_scale2 );
+
+      category_results.bkgd_cov_mat_->Add(
+        syst_results.bkgd_cov_mat_.get(), pot_scale2 );
+
+      // We increment the category-specific central-value predictions here
+      // because we only see each systematic category once in the loop. We thus
+      // avoid double-counting and can conveniently do everything in the same
+      // loop.
+      category_results.reco_signal_cv_->Add(
+        temp_results.reco_signal_cv_.get(), pot_scale );
+
+      category_results.reco_bkgd_cv_->Add(
+        temp_results.reco_bkgd_cv_.get(), pot_scale );
+
+    } // systematic categories
 
     // While we're at it, retrieve the 2D central-value MC prediction for the
     // current ntuple file. Add it to the total 2D CV result with the
@@ -764,6 +823,14 @@ void covMat( const std::string& input_respmat_file_name,
     total_mc_hist_cv_2D->Add( temp_cv_2d_hist, pot_scale );
 
   } // loop over the matrix map
+
+
+  // Now that we don't need to do any more iterations over analysis ntuple
+  // files, go ahead and add the map of total covariances (summed over the POT
+  // for all non-detVar MC samples) to the main matrix_map. We can get it
+  // into the map efficiently via move semantics, but note that the
+  // syst_to_total_cov_mat map should not be used afterwards.
+  matrix_map[ "total_mc" ] = std::move( syst_to_total_cov_mat );
 
   // We should be done now. Set the uncertainties on the final MC prediction
   // to be equal to the diagonal elements of the total covariance matrix.

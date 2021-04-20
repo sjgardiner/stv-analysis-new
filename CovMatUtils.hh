@@ -57,13 +57,13 @@ void save_matrix_map( const MatrixMap& matrix_map, TFile& out_tfile )
 
       cov_mat_labels.insert( label );
 
-      results.signal_cov_mat_->Write( (label + "-signal_cov_mat").c_str() );
-      results.bkgd_cov_mat_->Write( (label + "-bkgd_cov_mat").c_str() );
+      results.signal_cov_mat_->Write( (label + "_signal_cov_mat").c_str() );
+      results.bkgd_cov_mat_->Write( (label + "_bkgd_cov_mat").c_str() );
 
-      results.reco_signal_cv_->Write( (label + "-reco_signal_cv").c_str() );
-      results.reco_bkgd_cv_->Write( (label + "-reco_bkgd_cv").c_str() );
+      results.reco_signal_cv_->Write( (label + "_reco_signal_cv").c_str() );
+      results.reco_bkgd_cv_->Write( (label + "_reco_bkgd_cv").c_str() );
 
-      TParameter<bool> frac( (label + "-fractional").c_str(),
+      TParameter<bool> frac( (label + "_fractional").c_str(),
         results.fractional_ );
       frac.Write();
 
@@ -111,10 +111,20 @@ MatrixMap load_matrix_map( TFile& in_tfile ) {
 
   root_tdir->cd();
 
+  // Build a vector of file names from the POT map. Then add "total_mc"
+  // which is also included for the POT-summed total central-value MC
+  // results.
+  std::vector< std::string > ntuple_files;
   for ( const auto& pair : *pot_map ) {
-
     const std::string& ntuple_file = pair.first;
     //float pot = pair.second;
+    ntuple_files.push_back( ntuple_file );
+  }
+
+  ntuple_files.push_back( "total_mc" );
+
+  // Now loop over the file names and reconstruct the full matrix_map
+  for ( const auto& ntuple_file : ntuple_files ) {
 
     if ( !retrieved_map.count(ntuple_file) ) {
       retrieved_map[ ntuple_file ] = std::map< std::string, CovMatResults >();
@@ -143,20 +153,20 @@ MatrixMap load_matrix_map( TFile& in_tfile ) {
       TH1D* signal_cv = nullptr;
       TH1D* bkgd_cv = nullptr;
 
-      ntuple_tdir->GetObject( (label + "-signal_cov_mat").c_str(), signal_cov );
+      ntuple_tdir->GetObject( (label + "_signal_cov_mat").c_str(), signal_cov );
       signal_cov->SetDirectory( nullptr );
 
-      ntuple_tdir->GetObject( (label + "-bkgd_cov_mat").c_str(), bkgd_cov );
+      ntuple_tdir->GetObject( (label + "_bkgd_cov_mat").c_str(), bkgd_cov );
       bkgd_cov->SetDirectory( nullptr );
 
-      ntuple_tdir->GetObject( (label + "-reco_signal_cv").c_str(), signal_cv );
+      ntuple_tdir->GetObject( (label + "_reco_signal_cv").c_str(), signal_cv );
       signal_cv->SetDirectory( nullptr );
 
-      ntuple_tdir->GetObject( (label + "-reco_bkgd_cv").c_str(), bkgd_cv );
+      ntuple_tdir->GetObject( (label + "_reco_bkgd_cv").c_str(), bkgd_cv );
       bkgd_cv->SetDirectory( nullptr );
 
       TParameter<bool>* frac = nullptr;
-      ntuple_tdir->GetObject( (label + "-fractional").c_str(), frac );
+      ntuple_tdir->GetObject( (label + "_fractional").c_str(), frac );
 
       CovMatResults temp_results( signal_cov, bkgd_cov, signal_cv, bkgd_cv,
         frac->GetVal() );
