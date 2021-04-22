@@ -19,7 +19,7 @@ struct CovMatResults {
   // Returns the fractional covariance matrix element for the signal only.
   // NOTE: bin numbering in this interface is one-based (not zero-based)
   // to match the conventions of ROOT histograms.
-  double frac_covariance_signal( int bin_a, int bin_b ) {
+  double frac_covariance_signal( int bin_a, int bin_b ) const {
     double covar = signal_cov_mat_->GetBinContent( bin_a, bin_b );
     if ( fractional_ ) return covar;
     else {
@@ -34,7 +34,7 @@ struct CovMatResults {
 
   // TODO: reduce code duplication here
   // Returns the fractional covariance matrix element for the background only.
-  double frac_covariance_bkgd( int bin_a, int bin_b ) {
+  double frac_covariance_bkgd( int bin_a, int bin_b ) const {
     double covar = bkgd_cov_mat_->GetBinContent( bin_a, bin_b );
     if ( fractional_ ) return covar;
     else {
@@ -50,7 +50,7 @@ struct CovMatResults {
   // TODO: reduce code duplication here
   // Returns the fractional covariance matrix element the full MC prediction
   // (signal plus background)
-  double frac_covariance_total( int bin_a, int bin_b ) {
+  double frac_covariance_total( int bin_a, int bin_b ) const {
     double covar_bkgd = bkgd_cov_mat_->GetBinContent( bin_a, bin_b );
     double covar_signal = signal_cov_mat_->GetBinContent( bin_a, bin_b );
 

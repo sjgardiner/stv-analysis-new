@@ -419,11 +419,10 @@ void plots() {
 
   // NEW COMPARISONS with MCC8 CCNp
 
-  //make_plots( "p3_mu.CosTheta()", "sel_CCNp0pi", std::set<int>{1},
-  //  { -1.0, -0.82, -0.66, -0.39, -0.16, 0.05, 0.25, 0.43, 0.59, 0.73,
-  //  0.83, 0.91, 1.0 }, "cos#theta_{#mu}", "events",
-  //  "MCC9 CCNp (Run 1, spline weights only)",
-  //  "spline_weight" );
+  make_plots( "p3_mu.CosTheta()", "sel_CCNp0pi", std::set<int>{1,2,3},
+    { -1.0, -0.82, -0.66, -0.39, -0.16, 0.05, 0.25, 0.43, 0.59, 0.73,
+    0.83, 0.91, 1.0 }, "cos#theta_{#mu}", "events",
+    "MCC9 CCNp (Run 1)" );
 
   //make_plots( "TMath::ACos( (p3_mu.X()*p3_lead_p.X() + "
   //"p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) / p3_mu.Mag()"

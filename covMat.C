@@ -16,6 +16,7 @@
 #include "CovMatUtils.hh"
 #include "FilePropertiesManager.hh"
 #include "IntegratedFluxUniverseManager.hh"
+#include "PlotUtils.hh"
 #include "ResponseMatrixMaker.hh"
 
 using NFT = NtupleFileType;

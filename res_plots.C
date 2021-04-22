@@ -482,7 +482,7 @@ void make_res_plots( const std::string& rmm_config_file_name,
 
 void res_plots() {
 
-  make_res_plots( "myconfig_muon2D.txt", {1} );
+  //make_res_plots( "myconfig_muon2D.txt", {1} );
 
   //make_res_plots( "p3_mu.CosTheta()", "cos(#theta_{#mu})",
   // "sel_CCNp0pi", {1},
@@ -497,13 +497,13 @@ void res_plots() {
   //  0.975, 1.20 },
   //false );
 
-  //make_res_plots( "pn", "p_{n}", "sel_CCNp0pi", {1},
+  //make_res_plots( "pn", "p_{n}", "sel_CCNp0pi", {2},
   //  { 0., 0.125, 0.225, 0.325, 0.425, 0.525, 0.65, 0.85 },
-  //  false );
-
-  //make_res_plots( "delta_alphaT", "#delta#alpha_{T}", "sel_CCNp0pi", {1},
-  //  { 0, 0.35, 0.85, 1.35, 1.85, 2.3, 2.7, 2.95, M_PI },
   //  true, true );
+
+  make_res_plots( "delta_alphaT", "#delta#alpha_{T}", "sel_CCNp0pi", {1},
+    { 0, 0.35, 0.85, 1.35, 1.85, 2.3, 2.7, 2.95, M_PI },
+    true, false );
 
   //make_res_plots( "delta_pTx", "#deltap_{Tx}", "sel_CCNp0pi", {1},
   // { -0.6, -0.45, -0.35, -0.25, -0.15, -0.075, 0, 0.075, 0.15, 0.25,
