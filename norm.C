@@ -7,6 +7,14 @@
 
 using NFT = NtupleFileType;
 
+// Helper function for testing the start of a std::string. Taken from
+// https://stackoverflow.com/a/40441240/4081973.
+bool beginsWith( const std::string& str, const std::string& prefix ) {
+  int result = str.rfind( prefix, 0 );
+  if ( result == 0 ) return true;
+  return false;
+}
+
 struct CovMatResults {
 
   CovMatResults() {}
@@ -20,7 +28,32 @@ struct CovMatResults {
   std::unique_ptr< TH2D > bkgd_cov_mat_;
   std::unique_ptr< TH2D > total_cov_mat_;
 
-  bool fractional_;
+  bool fractional_ = false;
+
+  // Helper function for operator+=
+  void add_or_clone( std::unique_ptr<TH2D>& mine, TH2D* other ) {
+    if ( !other ) return;
+    if ( mine ) mine->Add( other );
+    else {
+      TH2D* temp_clone = dynamic_cast< TH2D* >(
+        other->Clone( "temp_clone" )
+      );
+      temp_clone->SetDirectory( nullptr );
+      temp_clone->SetStats( false );
+      mine.reset( temp_clone );
+    }
+  }
+
+  CovMatResults& operator+=( const CovMatResults& other ) {
+    if ( this->fractional_ || other.fractional_ ) throw std::runtime_error(
+      "UNIMPLEMENTED!" );
+
+    add_or_clone( signal_cov_mat_, other.signal_cov_mat_.get() );
+    add_or_clone( bkgd_cov_mat_, other.bkgd_cov_mat_.get() );
+    add_or_clone( total_cov_mat_, other.total_cov_mat_.get() );
+
+    return *this;
+  }
 
 };
 
@@ -330,6 +363,153 @@ CovMatResults make_cov_mat( const ResponseMatrixMaker& resp_mat,
     detVar_alt_u, false, false );
 }
 
+// Overloaded version that uses a single alternate universe scaled by a
+// fully-correlated fractional uncertainty from the CV universe. This version
+// is used to easily assess POT and "number of targets" normalization
+// uncertainties.
+CovMatResults make_cov_mat( const std::string& cov_mat_name,
+  const ResponseMatrixMaker& resp_mat, const Universe& cv_univ,
+  double fully_correlated_fractional_uncertainty )
+{
+  // TODO: implement signal and background contributions here!
+  const double frac2 = std::pow( fully_correlated_fractional_uncertainty, 2 );
+
+  size_t num_reco_bins = resp_mat.reco_bins().size();
+
+  CovMatResults results;
+
+  TH2D* signal_cm = make_covariance_matrix_histogram( "scaled_signal",
+    "signal covariance", num_reco_bins );
+
+  TH2D* bkgd_cm = make_covariance_matrix_histogram( "scaled_bkgd",
+    "background covariance", num_reco_bins );
+
+  TH2D* total_cm = make_covariance_matrix_histogram( "scaled_total",
+    "total covariance", num_reco_bins );
+
+  results.signal_cov_mat_.reset( signal_cm );
+  results.bkgd_cov_mat_.reset( bkgd_cm );
+  results.total_cov_mat_.reset( total_cm );
+
+  for ( int a = 1; a <= num_reco_bins; ++a ) {
+
+    double Ta_CV = cv_univ.hist_reco_->GetBinContent( a );
+
+    for ( int b = 1; b <= num_reco_bins; ++b ) {
+
+      double Tb_CV = cv_univ.hist_reco_->GetBinContent( b );
+
+      double total_cov = Ta_CV * Tb_CV * frac2;
+
+      //results.signal_cov_mat_->SetBinContent( a, b, signal_cov );
+      //results.bkgd_cov_mat_->SetBinContent( a, b, bkgd_cov );
+      results.total_cov_mat_->SetBinContent( a, b, total_cov );
+
+    } // reco bin b
+
+  } // reco bin a
+
+  return results;
+}
+
+// Use the MC statistical uncertainties from the CV universe to make a diagonal
+// covariance matrix.
+CovMatResults make_MC_stats_cov_mat( const ResponseMatrixMaker& resp_mat,
+  const Universe& cv_univ )
+{
+  // Get the bin structure so that we can distinguish between signal and
+  // background when making the covariance matrices
+  const auto& true_bins = resp_mat.true_bins();
+  const auto& reco_bins = resp_mat.reco_bins();
+
+  size_t num_true_bins = true_bins.size();
+  size_t num_reco_bins = reco_bins.size();
+
+  CovMatResults results;
+
+  TH2D* signal_cm = make_covariance_matrix_histogram( "MCstats_signal",
+    "signal covariance", num_reco_bins );
+
+  TH2D* bkgd_cm = make_covariance_matrix_histogram( "MCstats_bkgd",
+    "background covariance", num_reco_bins );
+
+  TH2D* total_cm = make_covariance_matrix_histogram( "MCstats_total",
+    "total covariance", num_reco_bins );
+
+  results.signal_cov_mat_.reset( signal_cm );
+  results.bkgd_cov_mat_.reset( bkgd_cm );
+  results.total_cov_mat_.reset( total_cm );
+
+  // TODO: optimize so that you can use the Sumw2 array entries instead.
+  // This avoids needing to take many square roots only to square them again.
+  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+
+    double signal_err2 = 0.;
+    double bkgd_err2 = 0.;
+
+    for ( size_t tb = 0u; tb < num_true_bins; ++tb ) {
+      // To account for the underflow bin, we need to increment our
+      // zero-based indices here by one
+      double err2 = cv_univ.hist_2d_->GetBinError( tb + 1, rb + 1 );
+      err2 *= err2;
+
+      const auto& tbin = true_bins.at( tb );
+      if ( tbin.type_ == kSignalTrueBin ) {
+        signal_err2 += err2;
+      }
+      else {
+        bkgd_err2 += err2;
+      }
+
+    } // true bins
+
+    double total_err2 = signal_err2 + bkgd_err2;
+
+    results.signal_cov_mat_->SetBinContent( rb + 1, rb + 1, signal_err2 );
+    results.bkgd_cov_mat_->SetBinContent( rb + 1, rb + 1, bkgd_err2 );
+    results.total_cov_mat_->SetBinContent( rb + 1, rb + 1, total_err2 );
+
+  } // reco bins
+
+  return results;
+}
+
+// Use the EXT data statistical uncertainties a diagonal covariance matrix.
+CovMatResults make_ext_stats_cov_mat( const SystematicsCalculator& syst )
+{
+  const TH1D* ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
+  size_t num_reco_bins = ext_hist->GetNbinsX();
+
+  CovMatResults results;
+
+  TH2D* signal_cm = make_covariance_matrix_histogram( "EXTstats_signal",
+    "signal covariance", num_reco_bins );
+
+  TH2D* bkgd_cm = make_covariance_matrix_histogram( "EXTstats_bkgd",
+    "background covariance", num_reco_bins );
+
+  TH2D* total_cm = make_covariance_matrix_histogram( "EXTstats_total",
+    "total covariance", num_reco_bins );
+
+  results.signal_cov_mat_.reset( signal_cm );
+  results.bkgd_cov_mat_.reset( bkgd_cm );
+  results.total_cov_mat_.reset( total_cm );
+
+  // By definition, EXT events are background. So we'll have zero signal
+  // covariance everywhere. The total is just a copy of the background one.
+  // Note the one-based bin numbering convention for TH1D.
+  for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+    double err2 = ext_hist->GetBinError( rb );
+    err2 *= err2;
+
+    results.bkgd_cov_mat_->SetBinContent( rb, rb, err2 );
+    results.total_cov_mat_->SetBinContent( rb, rb, err2 );
+  }
+
+  return results;
+}
+
+
 void covMat( const std::string& input_respmat_file_name,
   const std::string& config_file_name,
   const std::string& root_output_file = "" )
@@ -346,7 +526,9 @@ void covMat( const std::string& input_respmat_file_name,
   // configuration file here, all of your covariance matrices could be invalid.
   ResponseMatrixMaker rmm( config_file_name );
 
-  SystematicsCalculator syst( input_respmat_file_name, rmm.dir_name() );
+  auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name,
+    rmm.dir_name() );
+  auto& syst = *syst_ptr;
 
   const auto& fpm = FilePropertiesManager::Instance();
 
@@ -371,289 +553,176 @@ void covMat( const std::string& input_respmat_file_name,
     matrix_map[ cov_mat_name ] = std::move( temp_results );
   }
 
+  // Compute a few "subtotal" covariance matrices. Store them in the map.
+  CovMatResults detVar_total;
+  CovMatResults xsec_unisim;
   for ( const auto& pair : matrix_map ) {
-    TCanvas* c1 = new TCanvas;
-    pair.second.total_cov_mat_->Draw( "colz" );
-    break;
+    const std::string& name = pair.first;
+    const CovMatResults& cmr = pair.second;
+
+    // Add the covariance matrices together for detVar and xsec universes
+    if ( beginsWith(name, "xsec") && name != "xsec_multi" ) {
+      xsec_unisim += cmr;
+    }
+    else if ( beginsWith(name, "detVar") ) {
+      detVar_total += cmr;
+    }
+
   }
 
-  //// Build the final event counts and covariance matrix for the MC + EXT
-  //// prediction ("pred"). Start by adding in the ready-to-go EXT events.
-  //TH1D* reco_pred_hist = new TH1D( "reco_pred_hist", "; reco bin; events",
-  //  num_reco_bins, 0., num_reco_bins );
-  //reco_pred_hist->Sumw2();
-
-  //TH2D* pred_cov_mat = make_covariance_matrix_histogram( "pred_cov",
-  //  "; reco bin; reco bin; covariance", num_reco_bins );
-
-  //// Add in the EXT event counts
-  //reco_pred_hist->Add( reco_ext_hist );
-
-  //// For EXT events, the covariance matrix is just the statistical variances
-  //// along the diagonal.
-  //for ( size_t a = 0u; a < num_reco_bins; ++a ) {
-  //  pred_cov_mat->SetBinContent( a + 1, a + 1,
-  //    std::pow( reco_ext_hist->GetBinError(a + 1), 2 )
-  //  );
-  //}
-
-  //// Before entering the loop below, create a 2D histogram to accumulate
-  //// the POT-scaled total number of events predicted by the central-value MC
-  //// model in each reco/true bin combination.
-  //size_t num_true_bins = rmm.true_bins().size();
-
-  //TH2D* total_mc_hist_cv_2D = new TH2D( "total_mc_hist_cv_2D",
-  //  "; true bin number; reco bin number; events", num_true_bins, 0.,
-  //  num_true_bins, num_reco_bins, 0., num_reco_bins );
-  //total_mc_hist_cv_2D->Sumw2();
-  //total_mc_hist_cv_2D->SetStats( false );
-
-  //// Also create a new map of CovMatResults indexed by systematic label.
-  //// We will fill these with the POT-scaled total covariance matrices
-  //// for each individual source of uncertainty. Iterate over the systematic
-  //// labels used for the first ntuple file in the matrix_map to ensure that
-  //// you don't miss any
-  //std::map< std::string, CovMatResults > syst_to_total_cov_mat;
-  //for ( const auto& label_pair : matrix_map.cbegin()->second ) {
-
-  //  const std::string& label = label_pair.first;
-
-  //  TH1D* temp_signal_hist = new TH1D( "total_mc_cv_signal",
-  //    "; reco bin; events", num_reco_bins, 0., num_reco_bins );
-  //  temp_signal_hist->SetStats( false );
-  //  temp_signal_hist->SetDirectory( nullptr );
+  matrix_map[ "xsec_unisim" ] = std::move( xsec_unisim );
+  matrix_map[ "detVar_total" ] = std::move( detVar_total );
 
-  //  TH1D* temp_bkgd_hist = new TH1D( "total_mc_cv_bkgd",
-  //    "; reco bin; events", num_reco_bins, 0., num_reco_bins );
-  //  temp_bkgd_hist->SetStats( false );
-  //  temp_bkgd_hist->SetDirectory( nullptr );
+  CovMatResults xsec_total;
+  xsec_total += matrix_map.at( "xsec_multi" );
+  xsec_total += matrix_map.at( "xsec_unisim" );
 
-  //  TH2D* temp_signal_cov = make_covariance_matrix_histogram(
-  //    (label + "_total_signal").c_str(), "total covariance matrix",
-  //    num_reco_bins );
+  matrix_map[ "xsec_total" ] = std::move( xsec_total );
 
-  //  TH2D* temp_bkgd_cov = make_covariance_matrix_histogram(
-  //    (label + "_total_bkgd").c_str(), "total covariance matrix",
-  //    num_reco_bins );
+  // POT fractional uncertainty is 2% (fully correlated)
+  CovMatResults pot_covMat = make_cov_mat( "POT", rmm,
+    syst.cv_universe(), 0.02 );
 
-  //  CovMatResults my_temp_results( temp_signal_cov,
-  //    temp_bkgd_cov, temp_signal_hist, temp_bkgd_hist, false );
+  matrix_map[ "POT" ] = std::move( pot_covMat );
 
-  //  syst_to_total_cov_mat[ label ] = std::move( my_temp_results );
+  // Number-of-targets uncertainty is 1% (fully correlated)
+  CovMatResults numTargets_covMat = make_cov_mat( "numTargets", rmm,
+    syst.cv_universe(), 0.01 );
 
-  //} // loop over systematic labels
-
-  //// All that remains is to sum the MC contributions while scaling to
-  //// the correct POT
-  //for ( auto& pair : matrix_map ) {
-
-  //  std::string stv_file_name = pair.first;
-  //  auto& syst_map = pair.second;
+  matrix_map[ "numTargets" ] = std::move( numTargets_covMat );
 
-  //  double file_pot = pot_map.at( stv_file_name );
-
-  //  // TODO: super hacky. Please change this. It can easily break.
-  //  int current_run = 0;
-  //  if ( stv_file_name.find("run1") != std::string::npos ) {
-  //    current_run = 1;
-  //  }
-  //  else if ( stv_file_name.find("run2") != std::string::npos ) {
-  //    current_run = 2;
-  //  }
-  //  else if ( stv_file_name.find("run3") != std::string::npos ) {
-  //    current_run = 3;
-  //  }
+  // MC stats uncertainty is based on CV universe histograms
+  CovMatResults mc_stats_covMat = make_MC_stats_cov_mat(
+    rmm, syst.cv_universe() );
 
-  //  double run_bnb_pot = bnb_pot_per_run.at( current_run );
+  matrix_map[ "MCstats" ] = std::move( mc_stats_covMat );
 
-  //  double pot_scale = run_bnb_pot / file_pot;
+  CovMatResults ext_stats_covMat = make_ext_stats_cov_mat( syst );
 
-  //  // Avoid double-counting by only adding the CV reco space predictions once
-  //  const auto& temp_results = syst_map.at( "xsec_multi" );
-  //  reco_pred_hist->Add( temp_results.reco_signal_cv_.get(), pot_scale );
-  //  reco_pred_hist->Add( temp_results.reco_bkgd_cv_.get(), pot_scale );
+  matrix_map[ "EXTstats" ] = std::move( ext_stats_covMat );
 
-  //  // Add each of the relevant covariance matrices to the total. Note that
-  //  // the POT scaling factor needs to be squared in this case.
-  //  for ( const auto& syst : syst_map ) {
+////////////////////////////////////////////////
 
-  //    const std::string& syst_label = syst.first;
-  //    const auto& syst_results = syst.second;
+  // Build the final event counts and total covariance matrix for the MC + EXT
+  // prediction ("pred").
+  int num_reco_bins = rmm.reco_bins().size();
+  TH1D* reco_pred_hist = new TH1D( "reco_pred_hist", "; reco bin; events",
+    num_reco_bins, 0., num_reco_bins );
+  reco_pred_hist->Sumw2();
 
-  //    double pot_scale2 = std::pow( pot_scale, 2 );
-  //    pred_cov_mat->Add( syst_results.signal_cov_mat_.get(), pot_scale2 );
-  //    pred_cov_mat->Add( syst_results.bkgd_cov_mat_.get(), pot_scale2 );
+  TH1D* reco_bnb_hist = syst.data_hists_.at( NFT::kOnBNB ).get();
+  TH1D* reco_ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
 
-  //    // Also add the current covariance matrices to the running totals
-  //    // for the appropriate individual systematic category
-  //    auto& category_results = syst_to_total_cov_mat.at( syst_label );
+  // Add in the EXT event counts
+  reco_pred_hist->Add( reco_ext_hist );
 
-  //    category_results.signal_cov_mat_->Add(
-  //      syst_results.signal_cov_mat_.get(), pot_scale2 );
+  // Add in the CV MC prediction
+  reco_pred_hist->Add( syst.cv_universe().hist_reco_.get() );
 
-  //    category_results.bkgd_cov_mat_->Add(
-  //      syst_results.bkgd_cov_mat_.get(), pot_scale2 );
+  // Terms needed for the total covariance matrix
+  const std::vector< std::string > total_cov_mat_keys = { "detVar_total",
+    "flux", "reint", "xsec_total", "POT", "numTargets", "MCstats", "EXTstats"
+  };
 
-  //    // We increment the category-specific central-value predictions here
-  //    // because we only see each systematic category once in the loop. We thus
-  //    // avoid double-counting and can conveniently do everything in the same
-  //    // loop.
-  //    category_results.reco_signal_cv_->Add(
-  //      temp_results.reco_signal_cv_.get(), pot_scale );
+  // Keys are labels, values are fractional uncertainty histograms
+  auto* fr_unc_hists = new std::map< std::string, TH1D* >();
+  auto& frac_uncertainty_hists = *fr_unc_hists;
 
-  //    category_results.reco_bkgd_cv_->Add(
-  //      temp_results.reco_bkgd_cv_.get(), pot_scale );
+  CovMatResults total_covMat;
+  int color = 1;
+  for ( const auto& key : total_cov_mat_keys ) {
 
-  //  } // systematic categories
+    const auto& temp_results = matrix_map.at( key );
+    total_covMat += temp_results;
 
-  //  // While we're at it, retrieve the 2D central-value MC prediction for the
-  //  // current ntuple file. Add it to the total 2D CV result with the
-  //  // appropriate POT scaling.
+    TH1D* temp_hist = new TH1D( ("myfrac_temp_hist_" + key).c_str(),
+      "; reco bin; fractional uncertainty", num_reco_bins, 0., num_reco_bins );
 
-  //  std::string subdir_2d = ntuple_subfolder_from_file_name( stv_file_name );
-  //  std::string cv_2d_name = subdir_2d + '/' + CV_WEIGHT_NAMECYCLE + "_2d";
+    temp_hist->SetStats( false );
+    //temp_hist->SetDirectory( nullptr );
 
-  //  TH2D* temp_cv_2d_hist( dynamic_cast<TH2D*>(
-  //    respmat_dir->Get( cv_2d_name.c_str() ) )
-  //  );
+    for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+      double err2 = temp_results.total_cov_mat_->GetBinContent( rb, rb );
+      double err = std::sqrt( std::max(0., err2) );
+      double cv = reco_pred_hist->GetBinContent( rb );
+      if ( cv > 0. ) err /= cv;
+      else err = 0.;
 
-  //  total_mc_hist_cv_2D->Add( temp_cv_2d_hist, pot_scale );
+      temp_hist->SetBinContent( rb, err );
 
-  //} // loop over the matrix map
+      frac_uncertainty_hists[ key ] = temp_hist;
+    }
 
+    if ( color <= 9 ) ++color;
+    if ( color == 5 ) ++color;
+    if ( color >= 10 ) color += 10;
 
-  //// For the "total_mc" results, we can sum subcategories of the systematics
-  //// here as we like. Currently, this is done only to (1) combine the various
-  //// xsec unisims into a summary, and (2) add that summary to the multisims
-  //// in order to get a combined xsec covariance matrix.
+    temp_hist->SetLineColor( color );
+    temp_hist->SetLineWidth( 3 );
+    temp_hist->GetYaxis()->SetRangeUser( 0., 1. );
+  }
 
-  //const std::vector< std::string > extra_syst_labels = {
-  //  "xsec_unisim", "xsec_all"
-  //};
+  matrix_map[ "total" ] = std::move( total_covMat );
 
-  //for ( const auto& label : extra_syst_labels ) {
-
-  //  // For the CV predictions, just clone the histograms from
-  //  // one of the pre-existing sets of results
-  //  auto& results_to_clone = syst_to_total_cov_mat.begin()->second;
-
-  //  TH1D* temp_signal_hist = dynamic_cast< TH1D* >(
-  //    results_to_clone.reco_signal_cv_->Clone(
-  //      (label + "_reco_signal_cv").c_str() )
-  //  );
-  //  temp_signal_hist->SetDirectory( nullptr );
-
-  //  TH1D* temp_bkgd_hist = dynamic_cast< TH1D* >(
-  //    results_to_clone.reco_bkgd_cv_->Clone(
-  //      (label + "_reco_bkgd_cv").c_str() )
-  //  );
-  //  temp_bkgd_hist->SetDirectory( nullptr );
-
-  //  TH2D* temp_signal_cov = make_covariance_matrix_histogram(
-  //    (label + "_signal_cov_mat").c_str(), "total covariance matrix",
-  //    num_reco_bins );
-
-  //  TH2D* temp_bkgd_cov = make_covariance_matrix_histogram(
-  //    (label + "_bkgd_cov_mat").c_str(), "total covariance matrix",
-  //    num_reco_bins );
-
-  //  CovMatResults my_temp_results( temp_signal_cov,
-  //    temp_bkgd_cov, temp_signal_hist, temp_bkgd_hist, false );
-
-  //  syst_to_total_cov_mat[ label ] = std::move( my_temp_results );
-
-  //}
-
-  //// All right, add up the xsec unisim covariance matrices in this loop.
-  //const std::array< std::string, 11 > xsec_unisim_labels = {
-  //  "xsec_AxFFCCQEshape", "xsec_DecayAngMEC", "xsec_NormCCCOH",
-  //  "xsec_NormNCCOH", "xsec_RPA_CCQE", "xsec_ThetaDelta2NRad",
-  //  "xsec_Theta_Delta2Npi", "xsec_VecFFCCQEshape", "xsec_XSecShape_CCMEC",
-  //  "xsec_xsr_scc_Fa3_SCC", "xsec_xsr_scc_Fv3_SCC"
-  //};
-
-  //auto& unisim_results = syst_to_total_cov_mat.at( "xsec_unisim" );
-
-  //for ( const auto& label : xsec_unisim_labels ) {
-
-  //  auto& temp_results = syst_to_total_cov_mat.at( label );
-  //  unisim_results.signal_cov_mat_->Add( temp_results.signal_cov_mat_.get() );
-  //  unisim_results.bkgd_cov_mat_->Add( temp_results.bkgd_cov_mat_.get() );
-
-  //}
-
-  //auto& xsec_all_results = syst_to_total_cov_mat.at( "xsec_all" );
-
-  //const std::array< std::string, 2 > temp_labels = { "xsec_unisim",
-  //  "xsec_multi" };
-
-  //for ( const auto& label : temp_labels ) {
-
-  //  auto& temp_results = syst_to_total_cov_mat.at( label );
-  //  xsec_all_results.signal_cov_mat_->Add( temp_results.signal_cov_mat_.get() );
-  //  xsec_all_results.bkgd_cov_mat_->Add( temp_results.bkgd_cov_mat_.get() );
-
-  //}
-
-  //// Now that we don't need to do any more iterations over analysis ntuple
-  //// files, go ahead and add the map of total covariances (summed over the POT
-  //// for all non-detVar MC samples) to the main matrix_map. We can get it
-  //// into the map efficiently via move semantics, but note that the
-  //// syst_to_total_cov_mat map should not be used afterwards.
-  //matrix_map[ "total_mc" ] = std::move( syst_to_total_cov_mat );
-
-  //// We should be done now. Set the uncertainties on the final MC prediction
-  //// to be equal to the diagonal elements of the total covariance matrix.
-  //for ( size_t a = 0u; a < num_reco_bins; ++a ) {
-  //  double cov = pred_cov_mat->GetBinContent( a + 1, a + 1 );
-  //  reco_pred_hist->SetBinError( a + 1, std::sqrt(std::max(0., cov)) );
-  //}
-
-  //TCanvas* c1 = new TCanvas;
-  //pred_cov_mat->Draw( "colz" );
-
-  //TCanvas* c2 = new TCanvas;
-  //reco_bnb_hist->SetLineColor( kBlack );
-  //reco_bnb_hist->SetLineWidth( 3 );
-  //reco_bnb_hist->SetStats( false );
-  //reco_bnb_hist->Draw( "e" );
-  //reco_pred_hist->Draw( "same hist e" );
-
-  //reco_ext_hist->SetLineColor( kRed );
-  //reco_ext_hist->Draw( "same hist e" );
-
-  //TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
-
-  ////std::string legend_title = get_legend_title( bnb_pot );
-  ////lg->SetHeader( legend_title.c_str(), "C" );
-
-  //lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
-  //lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
-  //lg->AddEntry( reco_ext_hist, "EXT BNB (stat)", "l" );
-  //lg->Draw( "same" );
-
-  //std::cout << "DATA POT = " << bnb_pot << '\n';
-
-  //// If the user has requested to save the results, do so now
-  //if ( !root_output_file.empty() ) {
-  //  TFile out_tfile( root_output_file.c_str(), "recreate" );
-
-  //  save_matrix_map( matrix_map, out_tfile );
-
-  //  out_tfile.cd();
-  //  out_tfile.WriteObject( &pot_map, "pot_map" );
-
-  //  reco_bnb_hist->Write();
-  //  reco_ext_hist->Write();
-  //  reco_pred_hist->Write();
-
-  //  pred_cov_mat->Write();
-
-  //  total_mc_hist_cv_2D->Write();
-
-  //  TParameter<double> temp_pot_param( "bnb_pot", bnb_pot );
-  //  temp_pot_param.Write();
-  //}
+  // We should be done now. Set the uncertainties on the final MC prediction
+  // to be equal to the diagonal elements of the total covariance matrix.
+  const auto& total_cov_matrix = matrix_map.at( "total" ).total_cov_mat_;
+  for ( size_t a = 1u; a <= num_reco_bins; ++a ) {
+    double cov = total_cov_matrix->GetBinContent( a, a );
+    reco_pred_hist->SetBinError( a, std::sqrt(std::max(0., cov)) );
+  }
+
+  TH1D* total_frac_err_hist = new TH1D( "total_frac_err_hist",
+    "; reco bin; events", num_reco_bins, 0., num_reco_bins );
+  for ( size_t a = 1u; a <= num_reco_bins; ++a ) {
+    double cv = reco_pred_hist->GetBinContent( a );
+    double err = reco_pred_hist->GetBinError( a );
+    if ( cv > 0. ) err /= cv;
+    else err = 0.;
+    total_frac_err_hist->SetBinContent( a, err );
+  }
+
+  TCanvas* c1 = new TCanvas;
+  reco_bnb_hist->SetLineColor( kBlack );
+  reco_bnb_hist->SetLineWidth( 3 );
+  reco_bnb_hist->SetStats( false );
+  reco_bnb_hist->Draw( "e" );
+  reco_pred_hist->Draw( "same hist e" );
+
+  reco_ext_hist->SetLineColor( kRed );
+  reco_ext_hist->Draw( "same hist e" );
+
+  TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
+
+  //std::string legend_title = get_legend_title( bnb_pot );
+  //lg->SetHeader( legend_title.c_str(), "C" );
+
+  lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
+  lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
+  lg->AddEntry( reco_ext_hist, "EXT BNB (stat)", "l" );
+  lg->Draw( "same" );
+
+  TCanvas* c2 = new TCanvas;
+  TLegend* lg2 = new TLegend( 0.7, 0.7, 0.9, 0.9 );
+
+  total_frac_err_hist->SetStats( false );
+  total_frac_err_hist->GetYaxis()->SetRangeUser( 0.,
+    total_frac_err_hist->GetMaximum() * 1.05 );
+  total_frac_err_hist->SetLineColor( kBlack );
+  total_frac_err_hist->SetLineWidth( 3 );
+  total_frac_err_hist->Draw( "hist" );
+
+  lg2->AddEntry( total_frac_err_hist, "total", "l" );
+
+  for ( auto& pair : frac_uncertainty_hists ) {
+    const auto& name = pair.first;
+    TH1D* hist = pair.second;
+
+    lg2->AddEntry( hist, name.c_str(), "l" );
+    hist->Draw( "same hist" );
+  }
+
+  lg2->Draw( "same" );
 
 }
 

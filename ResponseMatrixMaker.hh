@@ -191,7 +191,7 @@ class Universe {
 
     Universe( const std::string& universe_name,
       size_t universe_index, int num_true_bins, int num_reco_bins )
-      : index_( universe_index )
+      : universe_name_( universe_name ), index_( universe_index )
     {
       std::string hist_name_prefix = universe_name + '_'
         + std::to_string( universe_index );
@@ -215,6 +215,20 @@ class Universe {
       hist_2d_->Sumw2();
     }
 
+    std::unique_ptr< Universe > clone() const {
+      int num_true_bins = hist_2d_->GetXaxis()->GetNbins();
+      int num_reco_bins = hist_2d_->GetYaxis()->GetNbins();
+      auto result = std::make_unique< Universe >( universe_name_,
+        index_, num_true_bins, num_reco_bins );
+
+      result->hist_true_->Add( this->hist_true_.get() );
+      result->hist_reco_->Add( this->hist_reco_.get() );
+      result->hist_2d_->Add( this->hist_2d_.get() );
+
+      return result;
+    }
+
+    std::string universe_name_;
     size_t index_;
     std::unique_ptr< TH1D > hist_true_;
     std::unique_ptr< TH1D > hist_reco_;
