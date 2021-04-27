@@ -298,15 +298,16 @@ class SystematicsCalculator {
 
                   // We have what we need to create the new Universe object. Do
                   // it! Note that its owned histograms are currently empty.
-                  Universe temp_univ( univ_name, univ_index,
-                    num_true_bins, num_reco_bins );
+                  auto temp_univ = std::make_unique<Universe>( univ_name,
+                    univ_index, num_true_bins, num_reco_bins );
 
-                  set_stats_and_dir( temp_univ );
+                  set_stats_and_dir( *temp_univ );
 
                   // If we do not already have a map entry for this kind of
                   // universe, then create one
                   if ( !rw_universes_.count(univ_name) ) {
-                    rw_universes_[ univ_name ] = std::vector< Universe >();
+                    rw_universes_[ univ_name ]
+                      = std::vector< std::unique_ptr<Universe> >();
                   }
 
                   // Move this universe into the map. Note that the automatic
@@ -334,7 +335,7 @@ class SystematicsCalculator {
 
                 for ( size_t u_idx = 0u; u_idx < univ_vec.size(); ++u_idx ) {
                   // Get a reference to the current universe object
-                  auto& universe = univ_vec.at( u_idx );
+                  auto& universe = *univ_vec.at( u_idx );
 
                   // Double-check that the universe ordering is right. The
                   // index in the map of universes should match the index
@@ -420,22 +421,30 @@ class SystematicsCalculator {
 
         const auto& univ_vec = pair.second;
         for ( const auto& universe : univ_vec ) {
-          universe.hist_reco_->Write();
-          universe.hist_true_->Write();
-          universe.hist_2d_->Write();
+          universe->hist_reco_->Write();
+          universe->hist_true_->Write();
+          universe->hist_2d_->Write();
         }
 
       }
 
     }
 
-  protected:
+    const Universe& cv_universe() const {
+      return *rw_universes_.at( CV_UNIV_NAME ).front();
+    }
+
+  //protected:
+
+    // Central value universe name
+    const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
 
     // Holds reco-space histograms for data (BNB and EXT) bin counts
     std::map< NFT, std::unique_ptr<TH1D> > data_hists_;
 
     // Holds universe objects for reweightable systematics
-    std::map< std::string, std::vector<Universe> > rw_universes_;
+    std::map< std::string, std::vector< std::unique_ptr<Universe> > >
+      rw_universes_;
 
     // Detector systematic universes (and the detVar CV) will be indexed using
     // ntuple file type values. We're currently scaling one set of ntuples
