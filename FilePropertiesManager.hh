@@ -40,6 +40,42 @@ enum class NtupleFileType {
   kDetVarMCWMYZ, // wireMod YZ
 };
 
+// Utility functions for manipulating NtupleFileType values
+bool ntuple_type_is_detVar( const NtupleFileType& type ) {
+  constexpr std::array< NtupleFileType, 11 > detVar_types = {
+    NtupleFileType::kDetVarMCCV, NtupleFileType::kDetVarMCLYatten,
+    NtupleFileType::kDetVarMCLYdown, NtupleFileType::kDetVarMCLYrayl,
+    NtupleFileType::kDetVarMCRecomb2, NtupleFileType::kDetVarMCSCE,
+    NtupleFileType::kDetVarMCWMAngleXZ, NtupleFileType::kDetVarMCWMAngleYZ,
+    NtupleFileType::kDetVarMCWMdEdx, NtupleFileType::kDetVarMCWMX,
+    NtupleFileType::kDetVarMCWMYZ
+  };
+
+  auto end = detVar_types.cend();
+  auto iter = std::find( detVar_types.cbegin(), end, type );
+  if ( iter != end ) return true;
+  return false;
+}
+
+bool ntuple_type_is_mc( const NtupleFileType& type ) {
+  if ( type != NtupleFileType::kOnBNB && type != NtupleFileType::kExtBNB ) {
+    return true;
+  }
+  return false;
+}
+
+bool ntuple_type_is_reweightable_mc( const NtupleFileType& type ) {
+
+  if ( type == NtupleFileType::kNumuMC
+    || type == NtupleFileType::kIntrinsicNueMC
+    || type == NtupleFileType::kDirtMC )
+  {
+    return true;
+  }
+
+  return false;
+}
+
 // Singleton class that keeps track of the various ntuple files to be analyzed
 class FilePropertiesManager {
 
@@ -106,6 +142,19 @@ class FilePropertiesManager {
       throw std::runtime_error( "ntuple file not found" );
       // Bogus value to satisfy the function signature requirements
       return NtupleFileType::kOnBNB;
+    }
+
+    // Returns a string representation of an NtupleFileType value, or
+    // an empty string if one could not be found.
+    std::string ntuple_type_to_string( const NtupleFileType& type ) const {
+      std::string result;
+      for ( const auto& pair : string_to_file_type_map_ ) {
+        if ( pair.second == type ) {
+          result = pair.first;
+          break;
+        }
+      }
+      return result;
     }
 
   private:

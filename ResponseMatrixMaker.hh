@@ -191,6 +191,7 @@ class Universe {
 
     Universe( const std::string& universe_name,
       size_t universe_index, int num_true_bins, int num_reco_bins )
+      : index_( universe_index )
     {
       std::string hist_name_prefix = universe_name + '_'
         + std::to_string( universe_index );
@@ -214,6 +215,7 @@ class Universe {
       hist_2d_->Sumw2();
     }
 
+    size_t index_;
     std::unique_ptr< TH1D > hist_true_;
     std::unique_ptr< TH1D > hist_reco_;
     std::unique_ptr< TH2D > hist_2d_;
