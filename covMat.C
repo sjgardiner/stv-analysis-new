@@ -15,7 +15,6 @@
 // STV analysis includes
 #include "CovMatUtils.hh"
 #include "FilePropertiesManager.hh"
-#include "IntegratedFluxUniverseManager.hh"
 #include "PlotUtils.hh"
 #include "ResponseMatrixMaker.hh"
 
@@ -233,6 +232,10 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
         const auto& tbin = resp_mat.true_bins().at( tb );
 
         if ( tbin.type_ == kSignalTrueBin ) {
+
+          // Get the CV event count for the current true bin
+          double denom_CV = cv_true_hist->GetBinContent( tb + 1 );
+
           // For the systematic variation universes, we want to assess
           // uncertainties on the signal only through the smearceptance
           // matrix. We therefore compute the smearceptance matrix element
@@ -243,6 +246,17 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
           // +1 in all cases here.
           double numer = univ_2d_hist->GetBinContent( tb + 1, rb + 1 );
           double denom = univ_true_hist->GetBinContent( tb + 1 );
+
+          // I plan to extract the flux-averaged cross sections in terms of the
+          // *nominal* flux model (as opposed to the real flux). I therefore
+          // vary the numerator of the smearceptance matrix for these while
+          // keeping the denominator equal to the CV expectation under the
+          // nominal flux model. This is the same strategy as is used in the
+          // Wire-Cell CC inclusive analysis.
+          if ( is_flux_variation ) {
+            denom = denom_CV;
+          }
+
           // If the denominator is nonzero actually calculate the fraction.
           // Otherwise, just leave it zeroed out.
           // TODO: revisit this, think about MC statistical uncertainties
@@ -250,24 +264,10 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
           double smearcept = 0.;
           if ( denom > 0. ) smearcept = numer / denom;
 
-          // Get the CV event count for the current true bin
-          double denom_CV = cv_true_hist->GetBinContent( tb + 1 );
-
           // Compute the expected signal events in this universe
           // by multiplying the varied smearceptance matrix element
           // by the unaltered CV prediction in the current true bin.
           double expected_CV = smearcept * denom_CV;
-
-          // If we're working with flux variations, then we also need
-          // to account for the (correlated) changes to the integrated
-          // flux. We can do this by multiplying by the scaling factor
-          // given here, which is the ratio of the integrated numu flux
-          // in the current universe to the CV numu flux.
-          if ( is_flux_variation ) {
-            const auto& ifum = IntegratedFluxUniverseManager::Instance();
-            double scale_factor = ifum.flux_factor( univ_idx );
-            expected_CV *= scale_factor;
-          }
 
           // Compute the expected signal events in the current reco bin
           // with the varied smearceptance matrix (and, for flux universes,
