@@ -62,9 +62,7 @@ void effpur() {
   "sel_nu_mu_cc && sel_no_reco_showers"
     " && sel_muon_above_threshold && sel_has_p_candidate"
     " && sel_protons_contained && sel_passed_proton_pid_cut",
-  "sel_CCNp0pi",
-  "sel_CCNp0pi && sel_cosmic_ip_cut_passed",
-  "sel_CCNp0pi && sel_cosmic_ip_cut_passed && sel_topo_cut_passed" };
+  "sel_CCNp0pi" };
 
   TChain stv_ch( "stv_tree" );
   stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root" );
@@ -89,14 +87,28 @@ void effpur() {
     std::cout << "\n\n";
   }
 
+
+  const std::vector< std::string > bin_labels = { "no cuts",
+  "in FV", "starts contained", "CCincl",
+  "#mu threshold", "no showers", "has p candidate",
+  "p contained", "proton PID", "p momentum limits" };
+
   TCanvas* c1 = new TCanvas;
-  eff_graph->SetTitle( "CC0#piNp selection; cut number; efficiency or purity" );
+  c1->SetBottomMargin(0.21);
+  eff_graph->SetTitle( ";; efficiency or purity" );
   eff_graph->SetLineColor(kBlue);
   eff_graph->SetMarkerColor(kBlue);
   eff_graph->SetLineWidth(3);
   eff_graph->SetMarkerStyle(20);
   eff_graph->GetYaxis()->SetRangeUser( 0., 1. );
   eff_graph->Draw( "alp" );
+
+  for ( int b = 1; b <= bin_labels.size(); ++b ) {
+    eff_graph->GetHistogram()->GetXaxis()
+      ->SetBinLabel( eff_graph->GetHistogram()->FindBin(b),
+      bin_labels.at(b - 1).c_str() );
+  }
+  eff_graph->Draw( "same" );
 
   pur_graph->SetLineColor(kRed);
   pur_graph->SetMarkerColor(kRed);

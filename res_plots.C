@@ -491,19 +491,19 @@ void res_plots() {
   //    0.575, 0.65, 0.725, 0.8, 0.85, 0.875, 0.9, 0.925, 0.950, 0.975, 1.00 },
   // false );
 
-  //make_res_plots( "p3_lead_p.Mag()", "p_{lead p}",
-  // "sel_CCNp0pi", {1},
-  //{ 0.250, 0.325, 0.4, 0.45, 0.5, 0.550, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
-  //  0.975, 1.20 },
-  //false );
+  make_res_plots( "p3_lead_p.Mag()", "p_{lead p}",
+   "sel_CCNp0pi", {1},
+  { 0.250, 0.325, 0.4, 0.45, 0.5, 0.550, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+    0.975, 1.20 },
+  true );
 
   //make_res_plots( "pn", "p_{n}", "sel_CCNp0pi", {2},
   //  { 0., 0.125, 0.225, 0.325, 0.425, 0.525, 0.65, 0.85 },
   //  true, true );
 
-  make_res_plots( "delta_alphaT", "#delta#alpha_{T}", "sel_CCNp0pi", {1},
-    { 0, 0.35, 0.85, 1.35, 1.85, 2.3, 2.7, 2.95, M_PI },
-    true, false );
+  //make_res_plots( "delta_alphaT", "#delta#alpha_{T}", "sel_CCNp0pi", {1},
+  //  { 0, 0.35, 0.85, 1.35, 1.85, 2.3, 2.7, 2.95, M_PI },
+  //  true, false );
 
   //make_res_plots( "delta_pTx", "#deltap_{Tx}", "sel_CCNp0pi", {1},
   // { -0.6, -0.45, -0.35, -0.25, -0.15, -0.075, 0, 0.075, 0.15, 0.25,

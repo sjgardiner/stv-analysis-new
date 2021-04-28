@@ -410,6 +410,14 @@ void plots() {
 
   //const std::string sel_CCNpi = "sel_nu_mu_cc && sel_no_reco_showers && sel_has_muon_candidate && sel_has_p_candidate && !sel_passed_proton_pid_cut && sel_protons_contained"; // && sel_lead_p_passed_mom_cuts";
 
+
+  make_plots( "topological_score",
+    "sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV && sel_has_muon_candidate"
+    " && sel_no_reco_showers && sel_muon_above_threshold"
+    "  && sel_has_p_candidate && sel_passed_proton_pid_cut"
+    "  && sel_protons_contained && sel_lead_p_passed_mom_cuts",
+    std::set<int>{1}, 0., 1., 40, "topological score", "events", "Run 1" );
+
   //make_plots( "reco_nu_vtx_sce_z", sel_CCNpi, std::set<int>{1}, FV_Z_MIN,
   //  FV_Z_MAX, 40, "reco vertex z [cm]", "events", "Run 1" );
 
@@ -419,10 +427,10 @@ void plots() {
 
   // NEW COMPARISONS with MCC8 CCNp
 
-  make_plots( "p3_mu.CosTheta()", "sel_CCNp0pi", std::set<int>{1,2,3},
-    { -1.0, -0.82, -0.66, -0.39, -0.16, 0.05, 0.25, 0.43, 0.59, 0.73,
-    0.83, 0.91, 1.0 }, "cos#theta_{#mu}", "events",
-    "MCC9 CCNp (Run 1)" );
+  //make_plots( "p3_mu.CosTheta()", "sel_CCNp0pi", std::set<int>{1,2,3},
+  //  { -1.0, -0.82, -0.66, -0.39, -0.16, 0.05, 0.25, 0.43, 0.59, 0.73,
+  //  0.83, 0.91, 1.0 }, "cos#theta_{#mu}", "events",
+  //  "MCC9 CCNp (Run 1)" );
 
   //make_plots( "TMath::ACos( (p3_mu.X()*p3_lead_p.X() + "
   //"p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) / p3_mu.Mag()"
