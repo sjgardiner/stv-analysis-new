@@ -619,6 +619,16 @@ void covMat( const std::string& input_respmat_file_name,
   // Add in the CV MC prediction
   reco_pred_hist->Add( syst.cv_universe().hist_reco_.get() );
 
+  // Also make an EXT + CV bkgd plot
+  TH1D* reco_ext_plus_bkgd_hist
+    = (TH1D*)reco_ext_hist->Clone( "ext_plus_bkgd" );
+
+  int num_true_bins = rmm.true_bins().size();
+  TH1D* reco_bkgd_hist = syst.cv_universe().hist_2d_->ProjectionY(
+    "reco_bkgd", num_reco_bins + 1, num_true_bins );
+
+  reco_ext_plus_bkgd_hist->Add( reco_bkgd_hist );
+
   // Terms needed for the total covariance matrix
   const std::vector< std::string > total_cov_mat_keys = { "detVar_total",
     "flux", "reint", "xsec_total", "POT", "numTargets", "MCstats", "EXTstats"
@@ -687,10 +697,20 @@ void covMat( const std::string& input_respmat_file_name,
   reco_bnb_hist->SetLineWidth( 3 );
   reco_bnb_hist->SetStats( false );
   reco_bnb_hist->Draw( "e" );
+
+  //reco_pred_hist->SetLineWidth( 3 );
   reco_pred_hist->Draw( "same hist e" );
 
+  reco_bnb_hist->GetYaxis()->SetRangeUser( 0., 40e3 );
+  reco_bnb_hist->Draw( "same e" );
+
   reco_ext_hist->SetLineColor( kRed );
+  reco_ext_hist->SetLineWidth( 2 );
   reco_ext_hist->Draw( "same hist e" );
+
+  reco_ext_plus_bkgd_hist->SetLineColor( 28 );
+  reco_ext_plus_bkgd_hist->SetLineWidth( 2 );
+  reco_ext_plus_bkgd_hist->Draw( "same hist e" );
 
   TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
 
@@ -700,6 +720,7 @@ void covMat( const std::string& input_respmat_file_name,
   lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
   lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
   lg->AddEntry( reco_ext_hist, "EXT BNB (stat)", "l" );
+  lg->AddEntry( reco_ext_plus_bkgd_hist, "Background (stat)", "l" );
   lg->Draw( "same" );
 
   TCanvas* c2 = new TCanvas;
@@ -720,16 +741,34 @@ void covMat( const std::string& input_respmat_file_name,
 
     lg2->AddEntry( hist, name.c_str(), "l" );
     hist->Draw( "same hist" );
+
+    std::cout << name << " frac err in bin #1 = "
+      << hist->GetBinContent( 1 )*100. << "%\n";
   }
 
   lg2->Draw( "same" );
+
+  std::cout << "Total frac error in bin #1 = "
+    << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";
 
 }
 
 void norm() {
 
-  covMat( "/uboone/data/users/gardiner/respmat-myconfig_delta_pTx.root",
-    "myconfig_mcc9_delta_pTx.txt" );
+  covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root",
+    "myconfig_mcc9_one_bin.txt" );
+
+  //covMat( "/uboone/data/users/gardiner/respmat-test-muon2D.root",
+  //  "myconfig_muon2D.txt" );
+
+  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_delta_phiT.root",
+  //  "myconfig_mcc9_delta_phiT.txt" );
+
+  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_pn.root",
+  //  "myconfig_mcc9_pn.txt" );
+
+  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_cth_p.root",
+  //  "myconfig_mcc9_cth_p.txt" );
 
   //// Write the final histograms to the output TFile
   //TFile out_tfile( "myout.root", "recreate" );
