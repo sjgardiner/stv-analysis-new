@@ -117,10 +117,10 @@ TH2D* make_covariance_matrix_histogram( const std::string& hist_name,
   return hist;
 }
 
-template < class UniverseContainer >
+template < class UniversePointerContainer >
   CovMatResults make_cov_mat( const std::string& cov_mat_name,
   const ResponseMatrixMaker& resp_mat, const Universe& cv_univ,
-  const UniverseContainer& universes,
+  const UniversePointerContainer& universes,
   bool average_over_universes, bool is_flux_variation,
   bool fractional = false )
 {
@@ -318,18 +318,12 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
   const std::unique_ptr<Universe>& alt_univ,
   bool average_over_universes = false, bool is_flux_variation = false )
 {
-  // Evil, but we're going to temporarily move this around, so it's needed
-  // TODO: do something far better than this crap!
-  auto& my_univ = const_cast< std::unique_ptr<Universe>& >( alt_univ );
-  std::vector< std::unique_ptr<Universe> > temp_univ_vec;
+  std::vector< const Universe* > temp_univ_vec;
 
-  temp_univ_vec.emplace_back( std::unique_ptr<Universe>(my_univ.release()) );
+  temp_univ_vec.emplace_back( alt_univ.get() );
 
   auto result = make_cov_mat( cov_mat_name, resp_mat, cv_univ, temp_univ_vec,
     average_over_universes, is_flux_variation );
-
-  // Put back the pointer
-  my_univ.reset( temp_univ_vec.back().release() );
 
   return result;
 }
