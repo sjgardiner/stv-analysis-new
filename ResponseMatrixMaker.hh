@@ -30,6 +30,11 @@
 R__LOAD_LIBRARY(libTreePlayer.so)
 #endif
 
+// Keys used to identify true and reco bin configurations in a response
+// matrix file
+const std::string TRUE_BIN_SPEC_NAME = "true_bin_spec";
+const std::string RECO_BIN_SPEC_NAME = "reco_bin_spec";
+
 // Converts the name of an analysis ntuple file (typically with the full path)
 // into a TDirectoryFile name to use as a subfolder of the main output
 // TDirectoryFile used for saving response matrices. Since the forward slash
@@ -614,6 +619,62 @@ void ResponseMatrixMaker::save_histograms(
     // name
     root_tdir = new TDirectoryFile( output_directory_name_.c_str(),
       "response matrices", "", &out_file );
+  }
+
+  // Save the configuration settings for this class to the main
+  // TDirectoryFile before moving on to the appropriate subdirectory. If
+  // these settings have already been saved, then double-check that they
+  // match the current configuration. In the event of a mismatch, throw an
+  // exception to avoid data corruption.
+  std::string tree_name, true_bin_spec, reco_bin_spec;
+  tree_name = this->input_chain().GetName();
+
+  std::ostringstream oss_true, oss_reco;
+
+  for ( const auto& tbin : true_bins_ ) {
+    oss_true << tbin << '\n';
+  }
+
+  for ( const auto& rbin : reco_bins_ ) {
+    oss_reco << rbin << '\n';
+  }
+
+  true_bin_spec = oss_true.str();
+  reco_bin_spec = oss_reco.str();
+
+  std::string* saved_tree_name = nullptr;
+  std::string* saved_tb_spec = nullptr;
+  std::string* saved_rb_spec = nullptr;
+  root_tdir->GetObject( "ntuple_name", saved_tree_name );
+  root_tdir->GetObject( TRUE_BIN_SPEC_NAME.c_str(), saved_tb_spec );
+  root_tdir->GetObject( RECO_BIN_SPEC_NAME.c_str(), saved_rb_spec );
+
+  if ( saved_tree_name ) {
+    if ( tree_name != *saved_tree_name ) {
+      throw std::runtime_error( "Tree name mismatch: " + tree_name
+        + " vs. " + *saved_tree_name );
+    }
+  }
+  else {
+    root_tdir->WriteObject( &tree_name, "ntuple_name" );
+  }
+
+  if ( saved_tb_spec ) {
+    if ( true_bin_spec != *saved_tb_spec ) {
+      throw std::runtime_error( "Inconsistent true bin specification!" );
+    }
+  }
+  else {
+    root_tdir->WriteObject( &true_bin_spec, TRUE_BIN_SPEC_NAME.c_str() );
+  }
+
+  if ( saved_rb_spec ) {
+    if ( reco_bin_spec != *saved_rb_spec ) {
+      throw std::runtime_error( "Inconsistent reco bin specification!" );
+    }
+  }
+  else {
+    root_tdir->WriteObject( &reco_bin_spec, RECO_BIN_SPEC_NAME.c_str() );
   }
 
   std::string subdir_name = ntuple_subfolder_from_file_name(

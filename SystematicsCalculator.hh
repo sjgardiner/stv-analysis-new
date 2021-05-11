@@ -97,6 +97,30 @@ class SystematicsCalculator {
         this->load_universes( *total_subdir );
       }
 
+      // Also load the configuration of true and reco bins used to create the
+      // response matrices
+      std::string* true_bin_spec = nullptr;
+      std::string* reco_bin_spec = nullptr;
+
+      root_tdir->GetObject( TRUE_BIN_SPEC_NAME.c_str(), true_bin_spec );
+      root_tdir->GetObject( RECO_BIN_SPEC_NAME.c_str(), reco_bin_spec );
+
+      if ( !true_bin_spec || !reco_bin_spec ) {
+        throw std::runtime_error( "Failed to load bin specifications" );
+      }
+
+      std::istringstream iss_true( *true_bin_spec );
+      TrueBin temp_true_bin;
+      while ( iss_true >> temp_true_bin ) {
+        true_bins_.push_back( temp_true_bin );
+      }
+
+      std::istringstream iss_reco( *reco_bin_spec );
+      RecoBin temp_reco_bin;
+      while ( iss_reco >> temp_reco_bin ) {
+        reco_bins_.push_back( temp_reco_bin );
+      }
+
     }
 
     void load_universes( TDirectoryFile& total_subdir ) {
@@ -614,4 +638,9 @@ class SystematicsCalculator {
     // TODO: revisit this procedure if new detVar samples become available
     std::map< NFT, std::unique_ptr<Universe> > detvar_universes_;
 
+    // True bin configuration that was used to compute the reponse matrices
+    std::vector< TrueBin > true_bins_;
+
+    // Reco bin configuration that was used to compute the reponse matrices
+    std::vector< RecoBin > reco_bins_;
 };
