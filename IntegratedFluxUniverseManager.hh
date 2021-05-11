@@ -46,12 +46,19 @@ class IntegratedFluxUniverseManager {
       return integrated_flux_factors_.at( universe );
     }
 
+    // Return the CV integrated numu flux (numu / POT / cm^2)
+    inline double cv_numu_integrated_flux() const { return numu_CV_flux_; }
+
   protected:
 
     // Scaling factors used to vary the integrated flux across flux universes.
     // Upon construction of the singleton object, this vector is filled with
     // the scaling factors. They are indexed by universe number (zero-based).
     std::vector< double > integrated_flux_factors_;
+
+    // Integrated central-value BNB numu flux for the MicroBooNE active volume
+    // (numu / POT / cm^2)
+    double numu_CV_flux_;
 
     IntegratedFluxUniverseManager() {
       // Get the latest MCC9 flux histograms from the standard location
@@ -67,6 +74,11 @@ class IntegratedFluxUniverseManager {
       // between the CV and each of the systematic variation universes.
       TH1D* cv_hist = dynamic_cast< TH1D* >( in_file.Get("hEnumu_cv") );
       double cv_integral = cv_hist->Integral();
+
+      // See /pnfs/uboone/persistent/uboonebeam/bnb_gsimple/
+      // bnb_gsimple_fluxes_01.09.2019_463_hist/readme.txt for an explanation
+      // of this calculation.
+      numu_CV_flux_ = cv_integral / ( 4997.*5e8 ) / ( 256.35*233. );
 
       for ( size_t u = 0u; u < NUM_FLUX_UNIVERSES; ++u ) {
         std::string hist_name = "numu_ms_total/hEnumu_ms_"
