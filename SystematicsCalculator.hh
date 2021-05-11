@@ -38,6 +38,39 @@ bool has_ending( const std::string& fullString, const std::string& ending ) {
   return false;
 }
 
+// Simple container for a TH2D that represents a covariance matrix
+struct CovMatrix {
+
+  CovMatrix() {}
+
+  CovMatrix( TH2D* cov_mat ) : cov_matrix_( cov_mat ) {}
+
+  std::unique_ptr< TH2D > cov_matrix_;
+
+  // Helper function for operator+=
+  void add_or_clone( std::unique_ptr<TH2D>& mine, TH2D* other ) {
+    if ( !other ) return;
+    if ( mine ) mine->Add( other );
+    else {
+      TH2D* temp_clone = dynamic_cast< TH2D* >(
+        other->Clone( "temp_clone" )
+      );
+      temp_clone->SetDirectory( nullptr );
+      temp_clone->SetStats( false );
+      mine.reset( temp_clone );
+    }
+  }
+
+  CovMatrix& operator+=( const CovMatrix& other ) {
+
+    add_or_clone( cov_matrix_, other.cov_matrix_.get() );
+
+    return *this;
+  }
+
+};
+
+using CovMatrixMap = std::map< std::string, CovMatrix >;
 
 class SystematicsCalculator {
 
@@ -616,7 +649,11 @@ class SystematicsCalculator {
       return *rw_universes_.at( CV_UNIV_NAME ).front();
     }
 
+    std::unique_ptr< CovMatrixMap > get_covariances() const;
+
   //protected:
+
+    CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
 
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
@@ -644,3 +681,311 @@ class SystematicsCalculator {
     // Reco bin configuration that was used to compute the reponse matrices
     std::vector< RecoBin > reco_bins_;
 };
+
+CovMatrix SystematicsCalculator::make_covariance_matrix(
+  const std::string& hist_name ) const
+{
+  int num_reco_bins = reco_bins_.size();
+  TH2D* hist = new TH2D( hist_name.c_str(),
+    "covariance; reco bin; reco bin; covariance", num_reco_bins, 0.,
+    num_reco_bins, num_reco_bins, 0., num_reco_bins );
+  hist->SetDirectory( nullptr );
+  hist->SetStats( false );
+
+  CovMatrix result( hist );
+  return result;
+}
+
+template < class UniversePointerContainer >
+  void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
+  const Universe& cv_univ, const UniversePointerContainer& universes,
+  bool average_over_universes, bool is_flux_variation )
+{
+  // Get the total number of true and reco bins for later reference
+  size_t num_true_bins = sc.true_bins_.size();
+  size_t num_reco_bins = sc.reco_bins_.size();
+
+  // Get the expected event counts in each reco bin in the CV universe
+  std::vector< double > cv_reco_events( num_reco_bins, 0. );
+
+  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+    cv_reco_events.at( rb ) = cv_univ.hist_reco_->GetBinContent( rb + 1 );
+  }
+
+  // Loop over universes
+  size_t num_universes = universes.size();
+  for ( const auto& univ : universes ) {
+
+    // Get the expected event counts in each reco bin in the current universe.
+    std::vector< double > univ_reco_events( num_reco_bins, 0. );
+
+    for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+      // We need to sum the contributions of the various true bins,
+      // so loop over them while checking whether each one is associated
+      // with either signal or background
+      for ( size_t tb = 0u; tb < num_true_bins; ++tb ) {
+        const auto& tbin = sc.true_bins_.at( tb );
+
+        if ( tbin.type_ == kSignalTrueBin ) {
+
+          // Get the CV event count for the current true bin
+          double denom_CV = cv_univ.hist_true_->GetBinContent( tb + 1 );
+
+          // For the systematic variation universes, we want to assess
+          // uncertainties on the signal only through the smearceptance
+          // matrix. We therefore compute the smearceptance matrix element
+          // here and then apply it to the CV expected event count in
+          // each true bin.
+          // NOTE: ROOT histogram bin numbers are one-based (bin zero is always
+          // the underflow bin). Our bin indices therefore need to be offset by
+          // +1 in all cases here.
+          double numer = univ->hist_2d_->GetBinContent( tb + 1, rb + 1 );
+          double denom = univ->hist_true_->GetBinContent( tb + 1 );
+
+          // I plan to extract the flux-averaged cross sections in terms of the
+          // *nominal* flux model (as opposed to the real flux). I therefore
+          // vary the numerator of the smearceptance matrix for these while
+          // keeping the denominator equal to the CV expectation under the
+          // nominal flux model. This is the same strategy as is used in the
+          // Wire-Cell CC inclusive analysis.
+          if ( is_flux_variation ) {
+            denom = denom_CV;
+          }
+
+          // If the denominator is nonzero actually calculate the fraction.
+          // Otherwise, just leave it zeroed out.
+          // TODO: revisit this, think about MC statistical uncertainties
+          // on the empty bins
+          double smearcept = 0.;
+          if ( denom > 0. ) smearcept = numer / denom;
+
+          // Compute the expected signal events in this universe
+          // by multiplying the varied smearceptance matrix element
+          // by the unaltered CV prediction in the current true bin.
+          double expected_CV = smearcept * denom_CV;
+
+          // Compute the expected signal events in the current reco bin
+          // with the varied smearceptance matrix (and, for flux universes,
+          // the varied integrated flux)
+          univ_reco_events.at( rb ) += expected_CV;
+        }
+        else if ( tbin.type_ == kBackgroundTrueBin ) {
+          // For background events, we can use the same procedure as
+          // in the CV universe
+          double background = univ->hist_2d_->GetBinContent( tb + 1, rb + 1 );
+          univ_reco_events.at( rb ) += background;
+        }
+      } // true bins
+    } // reco bins
+
+    // We have all the needed ingredients to get the contribution of this
+    // universe to the covariance matrix. Loop over each pair of reco bins and
+    // fill the corresponding covariance matrix elements.
+    // TODO: the covariance matrix are symmetric by definition. You can
+    // therefore make this more efficient by calculating only the subset of
+    // elements that you need.
+    for ( size_t a = 0u; a < num_reco_bins; ++a ) {
+
+      double cv_a = cv_reco_events.at( a );
+      double univ_a = univ_reco_events.at( a );
+
+      for ( size_t b = 0u; b < num_reco_bins; ++b ) {
+
+        double cv_b = cv_reco_events.at( b );
+        double univ_b = univ_reco_events.at( b );
+
+        double covariance  = ( cv_a - univ_a ) * ( cv_b - univ_b );
+
+        // We cheat here by noting that the lower bound of each covariance
+        // matrix TH2D bin is the bin index. Filling using the zero-based bin
+        // indices and the covariance as the weight yields the desired behavior
+        // (increment the existing element by the current covariance value) in
+        // an easy-to-read (if slightly evil) way.
+        cov_mat.cov_matrix_->Fill( a, b, covariance );
+      } // reco bin index b
+    } // reco bin index a
+
+  } // universe
+
+  // If requested, average the final covariance matrix elements over all
+  // universes
+  if ( average_over_universes ) {
+    cov_mat.cov_matrix_->Scale( 1. / num_universes );
+  }
+
+}
+
+// Overloaded version that takes a single alternate universe wrapped in a
+// std::unique_ptr
+void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
+  const Universe& cv_univ,
+  const Universe& alt_univ, bool average_over_universes = false,
+  bool is_flux_variation = false )
+{
+  std::vector< const Universe* > temp_univ_vec;
+
+  temp_univ_vec.emplace_back( &alt_univ );
+
+  make_cov_mat( sc, cov_mat, cv_univ, temp_univ_vec, average_over_universes,
+    is_flux_variation );
+}
+
+std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
+{
+  // Make an empty map to store the covariance matrices
+  auto matrix_map_ptr = std::make_unique< CovMatrixMap >();
+  auto& matrix_map = *matrix_map_ptr;
+
+  // Look up the location of the configuration file that defines the various
+  // covariance matrices that should be calculated
+  const auto& fpm = FilePropertiesManager::Instance();
+  std::string config_file_name = fpm.analysis_path() + "/systcalc.conf";
+
+  // Read in the definition of each covariance matrix and calculate it. Each
+  // definition contains at least a name and a type specifier
+  std::ifstream config_file( config_file_name );
+  std::string name, type;
+  while ( config_file >> name >> type ) {
+
+    CovMatrix temp_cov_mat = this->make_covariance_matrix( name );
+
+    if ( type == "sum" ) {
+      int count = 0;
+      config_file >> count;
+      std::string cm_name;
+      for ( int cm = 0; cm < count; ++cm ) {
+        config_file >> cm_name;
+        if ( !matrix_map.count(cm_name) ) {
+          throw std::runtime_error( "Undefined covariance matrix " + cm_name );
+        }
+        temp_cov_mat += matrix_map.at( cm_name );
+      } // terms in the sum
+
+    } // sum type
+
+    else if ( type == "MCstat" ) {
+
+      int num_reco_bins = reco_bins_.size();
+      const auto& cv_univ = this->cv_universe();
+
+      // TODO: optimize so that you can use the Sumw2 array entries instead.
+      // This avoids needing to take many square roots only to square them
+      // again.
+      // NOTE: The reco bin index used here is one-based since ROOT histograms
+      // always include an underflow bin
+      for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+
+        // To account for the underflow bin, we need to increment the
+        // zero-based index here by one
+        double err2 = cv_univ.hist_reco_->GetBinError( rb );
+        err2 *= err2;
+
+        temp_cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
+
+      } // reco bins
+
+    } // MCstat type
+
+    else if ( type == "EXTstat" ) {
+
+      const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get();
+      int num_reco_bins = ext_hist->GetNbinsX();
+
+      // Note the one-based bin numbering convention for TH1D
+      for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+        double err2 = ext_hist->GetBinError( rb );
+        err2 *= err2;
+
+        temp_cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
+      } // reco bins
+
+    } // EXTstat type
+
+    else if ( type == "MCFullCorr" ) {
+      // Read in the fractional uncertainty from the configuration file
+      double frac_unc = 0.;
+      config_file >> frac_unc;
+
+      const double frac2 = std::pow( frac_unc, 2 );
+      int num_reco_bins = reco_bins_.size();
+
+      const auto& cv_univ = this->cv_universe();
+      for ( int a = 1; a <= num_reco_bins; ++a ) {
+
+        double cv_a = cv_univ.hist_reco_->GetBinContent( a );
+
+        for ( int b = 1; b <= num_reco_bins; ++b ) {
+
+          double cv_b = cv_univ.hist_reco_->GetBinContent( b );
+
+          double covariance = cv_a * cv_b * frac2;
+
+          temp_cov_mat.cov_matrix_->SetBinContent( a, b, covariance );
+
+        } // reco bin b
+
+      } // reco bin a
+
+    } // MCFullCorr type
+
+    else if ( type == "DV" ) {
+      // Get the detector variation type represented by the current universe
+      std::string ntuple_type_str;
+      config_file >> ntuple_type_str;
+      auto ntuple_type = fpm.string_to_ntuple_type( ntuple_type_str );
+
+      // Check that it's valid. If not, then complain.
+      bool is_not_detVar = !ntuple_type_is_detVar( ntuple_type );
+      if ( is_not_detVar ) {
+        throw std::runtime_error( "Invalid NtupleFileType!" );
+      }
+
+      const auto& detVar_cv_u = detvar_universes_.at( NFT::kDetVarMCCV );
+      const auto& detVar_alt_u = detvar_universes_.at( ntuple_type );
+
+      make_cov_mat( *this, temp_cov_mat, *detVar_cv_u,
+        *detVar_alt_u, false, false );
+    } // DV type
+
+    else if ( type == "RW" || type == "FluxRW" ) {
+
+      // Treat flux variations in a special way by setting a flag
+      bool is_flux_variation = false;
+      if ( type == "FluxRW" ) is_flux_variation = true;
+
+      // Get the key to use when looking up weights in the map of reweightable
+      // systematic variation universes
+      std::string weight_key;
+      config_file >> weight_key;
+
+      // Retrieve the vector of universes
+      auto end = rw_universes_.cend();
+      auto iter = rw_universes_.find( weight_key );
+      if ( iter == end ) {
+        throw std::runtime_error( "Missing weight key " + weight_key );
+      }
+      const auto& alt_univ_vec = iter->second;
+
+      // Also read in the flag for whether we should average over universes
+      // or not for the current covariance matrix
+      bool avg_over_universes = false;
+      config_file >> avg_over_universes;
+
+      const auto& cv_univ = this->cv_universe();
+      make_cov_mat( *this, temp_cov_mat, cv_univ, alt_univ_vec,
+        avg_over_universes, is_flux_variation );
+
+    } // RW and FluxRW types
+
+    // Add the finished covariance matrix to the map. If an entry already
+    // exists with the same name, throw an exception.
+    if ( matrix_map.count(name) ) {
+      throw std::runtime_error( "Duplicate covariance matrix definition for "
+        + name );
+    }
+    matrix_map[ name ] = std::move( temp_cov_mat );
+
+  } // Covariance matrix definitions
+
+  return matrix_map_ptr;
+}

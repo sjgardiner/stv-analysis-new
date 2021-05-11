@@ -169,6 +169,8 @@ class FilePropertiesManager {
       return NtupleFileType::kUnknown;
     }
 
+    inline const std::string& analysis_path() const { return analysis_path_; }
+
   private:
 
     inline FilePropertiesManager() {
@@ -180,6 +182,8 @@ class FilePropertiesManager {
       const char* path = std::getenv( "STV_ANALYSIS_DIR" );
       if ( path == nullptr ) throw std::runtime_error( "The environment"
         " variable STV_ANALYSIS_DIR is not set. Please set it and try again." );
+
+      analysis_path_ = path;
 
       std::string in_file_name( path );
       in_file_name += "/file_properties.txt";
@@ -279,4 +283,9 @@ class FilePropertiesManager {
       { "detVarWMX", NtupleFileType::kDetVarMCWMX },
       { "detVarWMYZ", NtupleFileType::kDetVarMCWMYZ },
     };
+
+    // Folder that stores the STV analysis configuration files. This is set
+    // automatically on construction using the STV_ANALYSIS_DIR environment
+    // variable.
+    std::string analysis_path_;
 };
