@@ -749,8 +749,10 @@ void covMat( const std::string& input_respmat_file_name,
 
 void norm() {
 
-  covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root",
-    "myconfig_mcc9_one_bin.txt" );
+  covMat( "respmat-myconfig_one_bin.root", "myconfig_mcc9_one_bin.txt" );
+
+  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root",
+  //  "myconfig_mcc9_one_bin.txt" );
 
   //covMat( "/uboone/data/users/gardiner/respmat-test-muon2D.root",
   //  "myconfig_muon2D.txt" );

@@ -215,6 +215,18 @@ class Universe {
       hist_2d_->Sumw2();
     }
 
+    // Note: the new Universe object takes ownership of the histogram
+    // pointers passed to this constructor
+    Universe( const std::string& universe_name,
+      size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d )
+      : universe_name_( universe_name ), index_( universe_index ),
+      hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d )
+    {
+      hist_true_->SetDirectory( nullptr );
+      hist_reco_->SetDirectory( nullptr );
+      hist_2d_->SetDirectory( nullptr );
+    }
+
     std::unique_ptr< Universe > clone() const {
       int num_true_bins = hist_2d_->GetXaxis()->GetNbins();
       int num_reco_bins = hist_2d_->GetYaxis()->GetNbins();

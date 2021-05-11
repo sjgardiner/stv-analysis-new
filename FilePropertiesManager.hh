@@ -38,6 +38,9 @@ enum class NtupleFileType {
   kDetVarMCWMdEdx, // wireMod dE/dx
   kDetVarMCWMX, // wireMod X
   kDetVarMCWMYZ, // wireMod YZ
+
+  // Placeholder for invalid values
+  kUnknown,
 };
 
 // Utility functions for manipulating NtupleFileType values
@@ -155,6 +158,15 @@ class FilePropertiesManager {
         }
       }
       return result;
+    }
+
+    // Converts a string into an NtupleFileType value. Invalid strings will
+    // yield the value NtupleFileType::kUnknown.
+    NtupleFileType string_to_ntuple_type( const std::string& str ) const {
+      auto end = string_to_file_type_map_.cend();
+      auto iter = string_to_file_type_map_.find( str );
+      if ( iter != end ) return iter->second;
+      return NtupleFileType::kUnknown;
     }
 
   private:

@@ -48,7 +48,11 @@ class SystematicsCalculator {
     SystematicsCalculator( const std::string& input_respmat_file_name,
       const std::string& respmat_tdirectoryfile_name = "" )
     {
-      TFile in_tfile( input_respmat_file_name.c_str(), "read" );
+      // Open in "update" mode so that we can save POT-summed histograms
+      // for the combination of all analysis ntuples. Otherwise, we won't
+      // write to the file.
+      // TODO: consider adjusting this to be less dangerous
+      TFile in_tfile( input_respmat_file_name.c_str(), "update" );
 
       TDirectoryFile* root_tdir = nullptr;
 
@@ -65,6 +69,160 @@ class SystematicsCalculator {
         throw std::runtime_error( "Invalid root TDirectoryFile!" );
       }
 
+      // Check whether a set of POT-summed histograms for each universe
+      // is already present in the input response matrix file. This is
+      // signalled by a TDirectoryFile with a name matching the string
+      // TOTAL_SUBFOLDER_NAME.
+      TDirectoryFile* total_subdir = nullptr;
+      root_tdir->GetObject( TOTAL_SUBFOLDER_NAME.c_str(), total_subdir );
+
+      if ( !total_subdir ) {
+
+        // We couldn't find the pre-computed POT-summed universe histograms,
+        // so make them "on the fly" and store them in this object
+        this->build_universes( *root_tdir );
+
+        // Create a new TDirectoryFile as a subfolder to hold the POT-summed
+        // universe histograms
+        total_subdir = new TDirectoryFile( TOTAL_SUBFOLDER_NAME.c_str(),
+          "response matrices", "", root_tdir );
+
+        // Write the universes to the new subfolder for faster loading
+        // later
+        this->save_universes( *total_subdir );
+      }
+      else {
+        // Retrieve the POT-summed universe histograms that were built
+        // previously
+        this->load_universes( *total_subdir );
+      }
+
+    }
+
+    void load_universes( TDirectoryFile& total_subdir ) {
+
+      const auto& fpm = FilePropertiesManager::Instance();
+
+      // TODO: reduce code duplication between this function
+      // and SystematicsCalculator::build_universes()
+      TList* universe_key_list = total_subdir.GetListOfKeys();
+      int num_keys = universe_key_list->GetEntries();
+
+      // Loop over the keys in the TDirectoryFile. Build a universe object
+      // for each key ending in "_2d" and store it in either the rw_universes_
+      // map (for reweightable systematic universes) or the detvar_universes_
+      // map (for detector systematic universes)
+      for ( int k = 0; k < num_keys; ++k ) {
+        // To avoid double-counting universes, search only for the 2D event
+        // count histograms
+        std::string key = universe_key_list->At( k )->GetName();
+        bool is_not_2d_hist = !has_ending( key, "_2d" );
+        if ( is_not_2d_hist ) continue;
+
+        // Get rid of the trailing "_2d" by deleting the last three
+        // characters from the current key
+        key.erase( key.length() - 3u );
+
+        // The last underscore separates the universe name from its
+        // index. Split the key into these two parts.
+        size_t temp_idx = key.find_last_of( '_' );
+
+        std::string univ_name = key.substr( 0, temp_idx );
+        std::string univ_index_str = key.substr( temp_idx + 1u );
+
+        int univ_index = std::stoi( univ_index_str );
+
+        TH1D* hist_true = nullptr;
+        TH1D* hist_reco = nullptr;
+        TH2D* hist_2d = nullptr;
+
+        total_subdir.GetObject( (key + "_true").c_str(), hist_true );
+        total_subdir.GetObject( (key + "_reco").c_str(), hist_reco );
+        total_subdir.GetObject( (key + "_2d").c_str(), hist_2d );
+
+        if ( !hist_true || !hist_reco || !hist_2d ) {
+          throw std::runtime_error( "Failed to retrieve histograms for the "
+            + key + " universe" );
+        }
+
+        // Reconstruct the Universe object from the retrieved histograms
+        auto temp_univ = std::make_unique< Universe >( univ_name, univ_index,
+          hist_true, hist_reco, hist_2d );
+
+        // Determine whether the current universe represents a detector
+        // variation or a reweightable variation. We'll use this information to
+        // decide where it should be stored.
+        NFT temp_type = fpm.string_to_ntuple_type( univ_name );
+        if ( temp_type != NFT::kUnknown ) {
+
+          bool is_detvar = ntuple_type_is_detVar( temp_type );
+          if ( !is_detvar ) throw std::runtime_error( "Universe name "
+            + univ_name + " matches a non-detVar file type. Handling of"
+            + " this situation is currently unimplemented." );
+
+          if ( detvar_universes_.count(temp_type) ) {
+            throw std::runtime_error( "detVar multisims are not currently"
+              " supported" );
+          }
+
+          // Move the detector variation Universe object into the map
+          detvar_universes_[ temp_type ].reset( temp_univ.release() );
+        }
+        else {
+          // If we've made it here, then we're working with a universe
+          // for a reweightable systematic variation
+
+          // If we do not already have a map entry for this kind of universe,
+          // then create one
+          if ( !rw_universes_.count(univ_name) ) {
+            rw_universes_[ univ_name ]
+              = std::vector< std::unique_ptr<Universe> >();
+          }
+
+          // Move this universe into the map. Note that the automatic
+          // sorting of keys in a ROOT TDirectoryFile ensures that the
+          // universe ordering remains correct. We'll double-check that
+          // below, though, just in case.
+          auto& univ_vec = rw_universes_.at( univ_name );
+          univ_vec.emplace_back( std::move(temp_univ) );
+
+          // Verify that the new universe is placed in the expected
+          // position in the vector. If there's a mismatch, something has
+          // gone wrong and the universe ordering will not be preserved.
+          int vec_index = univ_vec.size() - 1;
+          if ( vec_index != univ_index ) {
+            throw std::runtime_error( "Universe index mismatch encountered!" );
+          }
+        }
+
+      } // TDirectoryFile keys (and 2D universe histograms)
+
+      constexpr std::array< NFT, 2 > data_file_types = { NFT::kOnBNB,
+        NFT::kExtBNB };
+
+      for ( const auto& file_type : data_file_types ) {
+        std::string data_name = fpm.ntuple_type_to_string( file_type );
+        std::string hist_name = data_name + "_reco";
+
+        TH1D* hist = nullptr;
+        total_subdir.GetObject( hist_name.c_str(), hist );
+        hist->SetDirectory( nullptr );
+
+        if ( !hist ) {
+          throw std::runtime_error( "Missing data histogram for " + data_name );
+        }
+
+        if ( data_hists_.count(file_type) ) {
+          throw std::runtime_error( "Duplicate data histogram for "
+            + data_name );
+        }
+
+        data_hists_[ file_type ].reset( hist );
+      }
+
+    }
+
+    void build_universes( TDirectoryFile& root_tdir ) {
       // Get some normalization factors here for easy use later.
       std::map< int, double > run_to_bnb_pot_map;
       std::map< int, double > run_to_bnb_trigs_map;
@@ -156,7 +314,7 @@ class SystematicsCalculator {
               file_name );
 
             TDirectoryFile* subdir = nullptr;
-            root_tdir->GetObject( subdir_name.c_str(), subdir );
+            root_tdir.GetObject( subdir_name.c_str(), subdir );
             if ( !subdir ) throw std::runtime_error(
               "Missing TDirectoryFile " + subdir_name );
 
@@ -438,6 +596,10 @@ class SystematicsCalculator {
 
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
+
+    // Subdirectory name for the TDirectoryFile containing the POT-summed
+    // histograms for the various universes across all analysis ntuples
+    const std::string TOTAL_SUBFOLDER_NAME = "total";
 
     // Holds reco-space histograms for data (BNB and EXT) bin counts
     std::map< NFT, std::unique_ptr<TH1D> > data_hists_;
