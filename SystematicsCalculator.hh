@@ -277,6 +277,14 @@ class SystematicsCalculator {
         data_hists_[ file_type ].reset( hist );
       }
 
+      TParameter< double >* temp_pot = nullptr;
+      total_subdir.GetObject( "total_bnb_data_pot", temp_pot );
+      if ( !temp_pot ) {
+        throw std::runtime_error( "Missing BNB data POT value" );
+      }
+
+      total_bnb_data_pot_ = temp_pot->GetVal();
+
     }
 
     void build_universes( TDirectoryFile& root_tdir ) {
@@ -322,9 +330,9 @@ class SystematicsCalculator {
       // Now that we have the accumulated POT over all BNB data runs, sum it
       // into a single number. This will be used to normalize the detVar MC
       // samples.
-      double total_bnb_data_pot = 0.;
+      total_bnb_data_pot_ = 0.;
       for ( const auto& pair : run_to_bnb_pot_map ) {
-        total_bnb_data_pot += pair.second;
+        total_bnb_data_pot_ += pair.second;
       }
 
       // Loop through the ntuple files for the various run / ntuple file type
@@ -460,9 +468,9 @@ class SystematicsCalculator {
               // have detVar samples for Run 3b, we assume that they can be
               // applied globally in this step.
               // TODO: revisit this as appropriate
-              hist_reco->Scale( total_bnb_data_pot / file_pot );
-              hist_true->Scale( total_bnb_data_pot / file_pot );
-              hist_2d->Scale( total_bnb_data_pot / file_pot );
+              hist_reco->Scale( total_bnb_data_pot_ / file_pot );
+              hist_true->Scale( total_bnb_data_pot_ / file_pot );
+              hist_2d->Scale( total_bnb_data_pot_ / file_pot );
 
               // Add the scaled contents of these histograms to the
               // corresponding histograms in the new Universe object
@@ -601,7 +609,7 @@ class SystematicsCalculator {
 
       } // run
 
-      std::cout << "TOTAL BNB DATA POT = " << total_bnb_data_pot << '\n';
+      std::cout << "TOTAL BNB DATA POT = " << total_bnb_data_pot_ << '\n';
     }
 
     void save_universes( TDirectoryFile& out_tdf ) {
@@ -643,6 +651,12 @@ class SystematicsCalculator {
 
       }
 
+      // Save the total BNB data POT for easy retrieval later
+      TParameter< double > temp_pot( "total_bnb_data_pot",
+        total_bnb_data_pot_ );
+
+      temp_pot.Write();
+
     }
 
     const Universe& cv_universe() const {
@@ -680,6 +694,9 @@ class SystematicsCalculator {
 
     // Reco bin configuration that was used to compute the reponse matrices
     std::vector< RecoBin > reco_bins_;
+
+    // Total POT exposure for the analyzed BNB data
+    double total_bnb_data_pot_ = 0.;
 };
 
 CovMatrix SystematicsCalculator::make_covariance_matrix(
