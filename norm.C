@@ -165,6 +165,7 @@ void covMat( const std::string& input_respmat_file_name ) {
 
 void norm() {
 
-  covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
+  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
+  covMat( "respmat-myconfig_one_bin.root" );
 
 }

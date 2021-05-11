@@ -8,6 +8,7 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
+#include "IntegratedFluxUniverseManager.hh"
 #include "ResponseMatrixMaker.hh"
 
 // Helper function to use on a new Universe object's histograms. Prevents
@@ -665,6 +666,13 @@ class SystematicsCalculator {
 
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
+    // Helper functions for comparison to CCNp result
+    double effective_efficiency( const Universe& univ, int reco_bin ) const;
+    double scaling_factor( int reco_bin, int flux_universe_index = -1 ) const;
+    double expected_mc_background( const Universe& univ, int reco_bin ) const;
+    double forward_folded_xsec( const Universe& univ, int reco_bin,
+      int flux_universe_index = -1 ) const;
+
   //protected:
 
     CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
@@ -1005,4 +1013,112 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
   } // Covariance matrix definitions
 
   return matrix_map_ptr;
+}
+
+
+// NOTE: this uses a one-based reco bin index
+double SystematicsCalculator::effective_efficiency(
+  const Universe& univ, int reco_bin ) const
+{
+  int num_true_bins = true_bins_.size();
+  int num_reco_bins = reco_bins_.size();
+
+  if ( reco_bin > num_reco_bins ) {
+    throw std::runtime_error( "Invalid reco bin" );
+  }
+
+  double numerator = 0.;
+  double denominator = 0.;
+  for ( int tb = 1; tb <= num_true_bins; ++tb ) {
+    // Note that the true bin definitions have a zero-based index
+    auto& tbin = true_bins_.at( tb - 1 );
+    // If this isn't a signal true bin, just skip it
+    if ( tbin.type_ != kSignalTrueBin ) continue;
+
+    double num_j_gen = univ.hist_true_->GetBinContent( tb );
+    double num_ij = univ.hist_2d_->GetBinContent( tb, reco_bin );
+
+    double num_j_sel = 0.;
+    for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+      num_j_sel += univ.hist_2d_->GetBinContent( tb, rb );
+    }
+
+    double denom_term = num_ij * num_j_gen;
+    if ( num_j_sel > 0. ) denom_term /= num_j_sel;
+    else denom_term = 0.;
+
+    numerator += num_ij;
+    denominator += denom_term;
+  }
+
+  double eff = 0.;
+  if ( denominator > 0. ) eff = numerator / denominator;
+
+  return eff;
+}
+
+// NOTE: this uses a one-based reco bin index
+double SystematicsCalculator::expected_mc_background(
+  const Universe& univ, int reco_bin ) const
+{
+  int num_true_bins = true_bins_.size();
+  int num_reco_bins = reco_bins_.size();
+
+  if ( reco_bin > num_reco_bins ) {
+    throw std::runtime_error( "Invalid reco bin" );
+  }
+
+  double Bi = 0.;
+  for ( int tb = 1; tb <= num_true_bins; ++tb ) {
+    // Note that the true bin definitions have a zero-based index
+    auto& tbin = true_bins_.at( tb - 1 );
+    // If this isn't a background true bin, just skip it
+    if ( tbin.type_ != kBackgroundTrueBin ) continue;
+
+    Bi += univ.hist_2d_->GetBinContent( tb, reco_bin );
+  }
+
+  return Bi;
+}
+
+// NOTE: this uses a one-based reco bin index
+double SystematicsCalculator::scaling_factor( int reco_bin,
+  int flux_universe_index ) const
+{
+  const auto& ifum = IntegratedFluxUniverseManager::Instance();
+  double numu_flux = ifum.cv_numu_integrated_flux(); // numu / POT / cm^2
+
+  if ( flux_universe_index >= 0 ) {
+    numu_flux *= ifum.flux_factor( flux_universe_index );
+  }
+
+  // Convert to numu / cm^2 by multiplying by the total analyzed beam data POT
+  numu_flux *= total_bnb_data_pot_;
+
+  const auto& cv_univ = this->cv_universe();
+  double reco_bin_width = cv_univ.hist_reco_->GetBinWidth( reco_bin );
+
+  constexpr double NUM_TARGETS_ACTIVE_VOL = 1.0068e30;
+
+  double factor = 1. / ( numu_flux * NUM_TARGETS_ACTIVE_VOL * reco_bin_width );
+  return factor;
+}
+
+// NOTE: this uses a one-based reco bin index
+double SystematicsCalculator::forward_folded_xsec( const Universe& univ,
+  int reco_bin, int flux_universe_index ) const
+{
+  const TH1D* bnb_hist = data_hists_.at( NFT::kOnBNB ).get();
+  double data_counts = bnb_hist->GetBinContent( reco_bin );
+
+  const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get();
+  double ext_counts = ext_hist->GetBinContent( reco_bin );
+
+  double mc_bkgd_counts = this->expected_mc_background( univ, reco_bin );
+
+  double eff = this->effective_efficiency( univ, reco_bin );
+  double scaling = this->scaling_factor( reco_bin, flux_universe_index );
+
+  double xsec = ( data_counts - ext_counts - mc_bkgd_counts ) * scaling / eff;
+  return xsec;
 }
