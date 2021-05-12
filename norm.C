@@ -3,6 +3,7 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
+#include "PlotUtils.hh"
 #include "SystematicsCalculator.hh"
 
 using NFT = NtupleFileType;
@@ -163,9 +164,57 @@ void covMat( const std::string& input_respmat_file_name ) {
 
 }
 
+// The covariance matrix passed to this function should represent the total
+// uncertainty on the difference between the data and prediction
+double get_chi2( const TH1D& data_hist, const TH1D& pred_hist,
+  const CovMatrix& cov_mat )
+{
+  int num_reco_bins = data_hist.GetNbinsX();
+  if ( pred_hist.GetNbinsX() != num_reco_bins ) {
+    throw std::runtime_error( "Incompatible vector sizes in chi^2"
+      " calculation" );
+  }
+
+  // Evaluate the inverse of the covariance matrix
+  auto inverse_cov_mat = cov_mat.get_matrix();
+
+  // Pre-scale before inversion to avoid numerical problems
+  constexpr double BIG_SCALING_FACTOR = 1e76;
+  inverse_cov_mat->operator*=( BIG_SCALING_FACTOR );
+
+  // Do the inversion
+  inverse_cov_mat->Invert();
+
+  // Undo the scaling by re-applying it to the inverse matrix
+  inverse_cov_mat->operator*=( BIG_SCALING_FACTOR );
+
+  // Double-check that we get a unit matrix by multiplying the
+  // original by its inverse
+  //TMatrixD unit_mat( *sym_mat, TMatrixD::kMult, *inverse_cov_mat );
+  //unit_mat.Print();
+
+  // Create a 1D vector containing the difference between the data
+  // and the prediction in each reco bin
+  TMatrixD diff_vec( 1, num_reco_bins );
+  for ( int a = 0; a < num_reco_bins; ++a ) {
+    double data_counts = data_hist.GetBinContent( a + 1 );
+    double pred_counts = pred_hist.GetBinContent( a + 1 );
+    diff_vec( 0, a ) = data_counts - pred_counts;
+  }
+
+  // Multiply diff * covMat^{-1} * diff^{T} to get chi-squared
+  TMatrixD temp1( diff_vec, TMatrixD::kMult, *inverse_cov_mat );
+  TMatrixD temp2( temp1, TMatrixD::kMult, diff_vec.T() );
+
+  // We'll now have a 1x1 matrix containing the chi-squared value
+  double chi2 = temp2( 0, 0 );
+  return chi2;
+}
+
 void norm() {
 
-  std::string input_respmat_file_name( "respmat-myconfig_one_bin.root" );
+  TFile* mcc8_file = new TFile( "CCNp_data_MC_cov_dataRelease.root", "read" );
+  std::string input_respmat_file_name( "respmat_mcc8-cth_mu.root" );
 
   auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name );
   auto& syst = *syst_ptr;
@@ -179,15 +228,16 @@ void norm() {
   // differential cross sections in each reco bin
   int num_reco_bins = syst.reco_bins_.size();
   TH1D* result_hist = new TH1D( "result_hist", "; reco bin; differential xsec"
-    " (cm^2 / Ar / x-axis unit)", num_reco_bins, 0., num_reco_bins );
+    " (cm^{2} / Ar / x-axis unit)", num_reco_bins, 0., num_reco_bins );
   result_hist->Sumw2();
 
-  TH2D* total_cov_matrix = matrix_map.at( "total" ).cov_matrix_.get();
+  const auto& total_cov_matrix = matrix_map.at( "total" );
+  TH2D* total_cov_matrix_hist = total_cov_matrix.cov_matrix_.get();
 
   const auto& cv_univ = syst.cv_universe();
   for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
     double xsec = syst.forward_folded_xsec( cv_univ, rb );
-    double err2 = total_cov_matrix->GetBinContent( rb, rb );
+    double err2 = total_cov_matrix_hist->GetBinContent( rb, rb );
 
     double err = std::sqrt( std::max(0., err2) );
 
@@ -195,13 +245,104 @@ void norm() {
     result_hist->SetBinError( rb, err );
   }
 
+  // Get the MCC8 data and covariance matrix
+  TH1D* mcc8_data = nullptr;
+  mcc8_file->GetObject( "DataXsec_muangle", mcc8_data );
+
+  std::string mcc8_hist_title( "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu}"
+    " (cm^{2} / Ar)" );
+
+  mcc8_data->SetTitle( mcc8_hist_title.c_str()  );
+
+  TH2D* mcc8_cov_hist = nullptr;
+  mcc8_file->GetObject( "CovarianceMatrix_muangle", mcc8_cov_hist );
+
+  // Convert the MCC8 units from 10^{-38} cm^2 / nucleon to cm^2 / Ar
+  constexpr double mcc8_scale_factor = 1e-38 * 40;
+  mcc8_data->Scale( mcc8_scale_factor );
+  mcc8_cov_hist->Scale( std::pow(mcc8_scale_factor, 2) );
+
+  // Correct the MCC9 results for the missing bin width factors in the
+  // denominator. Since we used the MCC8 binning, we can get this information
+  // from the published results.
+  for ( int a = 1; a <= num_reco_bins; ++a ) {
+
+    double width_a = mcc8_data->GetBinWidth( a );
+    double old_counts = result_hist->GetBinContent( a );
+    double old_err = result_hist->GetBinError( a );
+
+    result_hist->SetBinContent( a, old_counts / width_a );
+    result_hist->SetBinError( a, old_err / width_a );
+
+    for ( int b = 1; b <= num_reco_bins; ++b ) {
+      double width_b = mcc8_data->GetBinWidth( b );
+
+      double old_cov = total_cov_matrix_hist->GetBinContent( a, b );
+      double new_cov = old_cov / ( width_a * width_b );
+      total_cov_matrix_hist->SetBinContent( a, b, new_cov );
+    }
+  }
+
+  // Create an MCC9 histogram with "physics binning" to match the MCC8 data
+  TH1D* mcc9_data = dynamic_cast< TH1D* >( mcc8_data->Clone("mcc9_data") );
+  for ( int a = 1; a <= num_reco_bins; ++a ) {
+    double xsec = result_hist->GetBinContent( a );
+    double err = result_hist->GetBinError( a );
+    mcc9_data->SetBinContent( a, xsec );
+    mcc9_data->SetBinError( a, err );
+  }
+
+  // Create a CovMatrix object from the MCC8 covariance matrix histogram.
+  // Add it to ours to obtain the total covariance on the difference between
+  // the two measurements
+  mcc8_cov_hist->SetDirectory( nullptr );
+  CovMatrix mcc8_cov_mat( mcc8_cov_hist );
+
+  CovMatrix comp_cov_mat;
+  comp_cov_mat += total_cov_matrix;
+  comp_cov_mat += mcc8_cov_mat;
+
+  // Compute a chi-squared value for the comparison of the measurements
+  double chi2 = get_chi2( *mcc9_data, *mcc8_data, comp_cov_mat );
+  std::cout << "chi2 = " << chi2 << '\n';
+
+  // Draw the comparison plot
   TCanvas* c1 = new TCanvas;
-  result_hist->SetLineColor( kBlack );
-  result_hist->SetLineWidth( 3 );
-  result_hist->SetStats( false );
-  result_hist->Draw( "e" );
+  c1->SetLeftMargin( 0.12 );
+  c1->SetRightMargin( 0.05 );
 
-  TCanvas* c2 = new TCanvas;
-  total_cov_matrix->Draw( "colz" );
+  mcc8_data->GetXaxis()->SetLabelSize( 0.045 );
+  mcc8_data->GetYaxis()->SetLabelSize( 0.045 );
 
+  mcc8_data->SetLineColor( kAzure - 1 );
+  mcc8_data->SetMarkerColor( kAzure - 1 );
+  mcc8_data->SetLineWidth( 3 );
+  mcc8_data->SetStats( false );
+  mcc8_data->Draw( "e" );
+
+  mcc9_data->SetLineColor( kBlack );
+  mcc9_data->SetLineWidth( 3 );
+  mcc9_data->SetStats( false );
+  mcc9_data->Draw( "e same" );
+
+  TLegend* lg = new TLegend( 0.15, 0.65, 0.45, 0.88 );
+
+  lg->AddEntry( mcc9_data, "MCC9", "le" );
+  lg->AddEntry( mcc8_data, "PRD 102, 112013", "le" );
+
+  std::ostringstream lg_oss;
+  lg_oss << std::setprecision(3) << "#chi^{2} = " << chi2
+    << " / " << num_reco_bins << " bins";
+  TObject* dummy_ptr = nullptr;
+  lg->AddEntry( dummy_ptr, lg_oss.str().c_str(), "" );
+  lg->Draw( "same" );
+
+  std::string uboone_label = get_legend_title( syst.total_bnb_data_pot_ );
+  TLatex* ltx = new TLatex( 0.38, 0.92, uboone_label.c_str() );
+  ltx->SetTextSize( 0.045 );
+  ltx->SetNDC( true ); // Use the pad coordinate system, not the axes
+  ltx->Draw( "same" );
+
+  //TCanvas* c2 = new TCanvas;
+  //total_cov_matrix_hist->Draw( "colz" );
 }
