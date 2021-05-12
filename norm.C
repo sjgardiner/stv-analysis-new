@@ -165,7 +165,43 @@ void covMat( const std::string& input_respmat_file_name ) {
 
 void norm() {
 
-  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
-  covMat( "respmat-myconfig_one_bin.root" );
+  std::string input_respmat_file_name( "respmat-myconfig_one_bin.root" );
+
+  auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name );
+  auto& syst = *syst_ptr;
+
+  // Keys are covariance matrix types, values are CovMatrix objects that
+  // represent the corresponding matrices
+  auto* matrix_map_ptr = syst.get_covariances().release();
+  auto& matrix_map = *matrix_map_ptr;
+
+  // Build the final measurement histogram from the CV forward-folded
+  // differential cross sections in each reco bin
+  int num_reco_bins = syst.reco_bins_.size();
+  TH1D* result_hist = new TH1D( "result_hist", "; reco bin; differential xsec"
+    " (cm^2 / Ar / x-axis unit)", num_reco_bins, 0., num_reco_bins );
+  result_hist->Sumw2();
+
+  TH2D* total_cov_matrix = matrix_map.at( "total" ).cov_matrix_.get();
+
+  const auto& cv_univ = syst.cv_universe();
+  for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+    double xsec = syst.forward_folded_xsec( cv_univ, rb );
+    double err2 = total_cov_matrix->GetBinContent( rb, rb );
+
+    double err = std::sqrt( std::max(0., err2) );
+
+    result_hist->SetBinContent( rb, xsec );
+    result_hist->SetBinError( rb, err );
+  }
+
+  TCanvas* c1 = new TCanvas;
+  result_hist->SetLineColor( kBlack );
+  result_hist->SetLineWidth( 3 );
+  result_hist->SetStats( false );
+  result_hist->Draw( "e" );
+
+  TCanvas* c2 = new TCanvas;
+  total_cov_matrix->Draw( "colz" );
 
 }

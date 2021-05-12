@@ -669,7 +669,8 @@ class SystematicsCalculator {
     // Helper functions for comparison to CCNp result
     double effective_efficiency( const Universe& univ, int reco_bin ) const;
     double scaling_factor( int reco_bin, int flux_universe_index = -1 ) const;
-    double expected_mc_background( const Universe& univ, int reco_bin ) const;
+    double expected_mc_background( const Universe& univ, int reco_bin,
+      bool stat_var = false ) const;
     double forward_folded_xsec( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const;
 
@@ -730,78 +731,35 @@ template < class UniversePointerContainer >
   size_t num_true_bins = sc.true_bins_.size();
   size_t num_reco_bins = sc.reco_bins_.size();
 
-  // Get the expected event counts in each reco bin in the CV universe
-  std::vector< double > cv_reco_events( num_reco_bins, 0. );
+  // Get the expected differential cross-section in each reco bin in the CV
+  // universe
+  std::vector< double > cv_reco_xsecs( num_reco_bins, 0. );
 
   for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
-    cv_reco_events.at( rb ) = cv_univ.hist_reco_->GetBinContent( rb + 1 );
+    cv_reco_xsecs.at( rb ) = sc.forward_folded_xsec( cv_univ, rb + 1 );
   }
 
   // Loop over universes
-  size_t num_universes = universes.size();
-  for ( const auto& univ : universes ) {
+  int num_universes = universes.size();
+  for ( int u_idx = 0; u_idx < num_universes; ++u_idx ) {
 
-    // Get the expected event counts in each reco bin in the current universe.
-    std::vector< double > univ_reco_events( num_reco_bins, 0. );
+    const auto& univ = universes.at( u_idx );
+
+    // For flux variations, we also want to adjust the integrated flux
+    // used to compute the differential cross section. This is signaled
+    // by passing a nonnegative index for a flux systematic universe
+    // to SystematicsCalculator::forward_folded_xsec()
+    int flux_u_idx = -1;
+    if ( is_flux_variation ) flux_u_idx = u_idx;
+
+    // Get the expected differential cross section in each reco bin in the
+    // current universe.
+    std::vector< double > univ_reco_xsecs( num_reco_bins, 0. );
 
     for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
-      // We need to sum the contributions of the various true bins,
-      // so loop over them while checking whether each one is associated
-      // with either signal or background
-      for ( size_t tb = 0u; tb < num_true_bins; ++tb ) {
-        const auto& tbin = sc.true_bins_.at( tb );
-
-        if ( tbin.type_ == kSignalTrueBin ) {
-
-          // Get the CV event count for the current true bin
-          double denom_CV = cv_univ.hist_true_->GetBinContent( tb + 1 );
-
-          // For the systematic variation universes, we want to assess
-          // uncertainties on the signal only through the smearceptance
-          // matrix. We therefore compute the smearceptance matrix element
-          // here and then apply it to the CV expected event count in
-          // each true bin.
-          // NOTE: ROOT histogram bin numbers are one-based (bin zero is always
-          // the underflow bin). Our bin indices therefore need to be offset by
-          // +1 in all cases here.
-          double numer = univ->hist_2d_->GetBinContent( tb + 1, rb + 1 );
-          double denom = univ->hist_true_->GetBinContent( tb + 1 );
-
-          // I plan to extract the flux-averaged cross sections in terms of the
-          // *nominal* flux model (as opposed to the real flux). I therefore
-          // vary the numerator of the smearceptance matrix for these while
-          // keeping the denominator equal to the CV expectation under the
-          // nominal flux model. This is the same strategy as is used in the
-          // Wire-Cell CC inclusive analysis.
-          if ( is_flux_variation ) {
-            denom = denom_CV;
-          }
-
-          // If the denominator is nonzero actually calculate the fraction.
-          // Otherwise, just leave it zeroed out.
-          // TODO: revisit this, think about MC statistical uncertainties
-          // on the empty bins
-          double smearcept = 0.;
-          if ( denom > 0. ) smearcept = numer / denom;
-
-          // Compute the expected signal events in this universe
-          // by multiplying the varied smearceptance matrix element
-          // by the unaltered CV prediction in the current true bin.
-          double expected_CV = smearcept * denom_CV;
-
-          // Compute the expected signal events in the current reco bin
-          // with the varied smearceptance matrix (and, for flux universes,
-          // the varied integrated flux)
-          univ_reco_events.at( rb ) += expected_CV;
-        }
-        else if ( tbin.type_ == kBackgroundTrueBin ) {
-          // For background events, we can use the same procedure as
-          // in the CV universe
-          double background = univ->hist_2d_->GetBinContent( tb + 1, rb + 1 );
-          univ_reco_events.at( rb ) += background;
-        }
-      } // true bins
-    } // reco bins
+      univ_reco_xsecs.at( rb ) = sc.forward_folded_xsec( *univ,
+        rb + 1, flux_u_idx );
+    }
 
     // We have all the needed ingredients to get the contribution of this
     // universe to the covariance matrix. Loop over each pair of reco bins and
@@ -811,13 +769,13 @@ template < class UniversePointerContainer >
     // elements that you need.
     for ( size_t a = 0u; a < num_reco_bins; ++a ) {
 
-      double cv_a = cv_reco_events.at( a );
-      double univ_a = univ_reco_events.at( a );
+      double cv_a = cv_reco_xsecs.at( a );
+      double univ_a = univ_reco_xsecs.at( a );
 
       for ( size_t b = 0u; b < num_reco_bins; ++b ) {
 
-        double cv_b = cv_reco_events.at( b );
-        double univ_b = univ_reco_events.at( b );
+        double cv_b = cv_reco_xsecs.at( b );
+        double univ_b = univ_reco_xsecs.at( b );
 
         double covariance  = ( cv_a - univ_a ) * ( cv_b - univ_b );
 
@@ -900,10 +858,15 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       // always include an underflow bin
       for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
 
-        // To account for the underflow bin, we need to increment the
-        // zero-based index here by one
-        double err2 = cv_univ.hist_reco_->GetBinError( rb );
-        err2 *= err2;
+        double err2 = this->expected_mc_background( cv_univ, rb, true );
+
+        double eff = this->effective_efficiency( cv_univ, rb );
+        double scaling = this->scaling_factor( rb );
+
+        if ( eff <= 0. ) err2 = 0.;
+        else {
+          err2 *= std::pow( scaling / eff, 2 );
+        }
 
         temp_cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
 
@@ -916,15 +879,53 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get();
       int num_reco_bins = ext_hist->GetNbinsX();
 
+      const auto& cv_univ = this->cv_universe();
+
       // Note the one-based bin numbering convention for TH1D
       for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
         double err2 = ext_hist->GetBinError( rb );
         err2 *= err2;
 
+        // TODO: reduce code duplication with the MCstat type
+        double eff = this->effective_efficiency( cv_univ, rb );
+        double scaling = this->scaling_factor( rb );
+
+        if ( eff <= 0. ) err2 = 0.;
+        else {
+          err2 *= std::pow( scaling / eff, 2 );
+        }
+
         temp_cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
       } // reco bins
 
     } // EXTstat type
+
+    else if ( type == "BNBstat" ) {
+
+      // TODO: reduce code duplication with the EXTstat type
+      const TH1D* bnb_hist = data_hists_.at( NFT::kOnBNB ).get();
+      int num_reco_bins = bnb_hist->GetNbinsX();
+
+      const auto& cv_univ = this->cv_universe();
+
+      // Note the one-based bin numbering convention for TH1D
+      for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
+        double err2 = bnb_hist->GetBinError( rb );
+        err2 *= err2;
+
+        // TODO: reduce code duplication with the MCstat type
+        double eff = this->effective_efficiency( cv_univ, rb );
+        double scaling = this->scaling_factor( rb );
+
+        if ( eff <= 0. ) err2 = 0.;
+        else {
+          err2 *= std::pow( scaling / eff, 2 );
+        }
+
+        temp_cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
+      } // reco bins
+
+    } // BNBstat type
 
     else if ( type == "MCFullCorr" ) {
       // Read in the fractional uncertainty from the configuration file
@@ -937,11 +938,11 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       const auto& cv_univ = this->cv_universe();
       for ( int a = 1; a <= num_reco_bins; ++a ) {
 
-        double cv_a = cv_univ.hist_reco_->GetBinContent( a );
+        double cv_a = this->forward_folded_xsec( cv_univ, a );
 
         for ( int b = 1; b <= num_reco_bins; ++b ) {
 
-          double cv_b = cv_univ.hist_reco_->GetBinContent( b );
+          double cv_b = this->forward_folded_xsec( cv_univ, b );
 
           double covariance = cv_a * cv_b * frac2;
 
@@ -1059,7 +1060,7 @@ double SystematicsCalculator::effective_efficiency(
 
 // NOTE: this uses a one-based reco bin index
 double SystematicsCalculator::expected_mc_background(
-  const Universe& univ, int reco_bin ) const
+  const Universe& univ, int reco_bin, bool stat_var ) const
 {
   int num_true_bins = true_bins_.size();
   int num_reco_bins = reco_bins_.size();
@@ -1075,7 +1076,15 @@ double SystematicsCalculator::expected_mc_background(
     // If this isn't a background true bin, just skip it
     if ( tbin.type_ != kBackgroundTrueBin ) continue;
 
-    Bi += univ.hist_2d_->GetBinContent( tb, reco_bin );
+    // If this flag is set, then calculate the MC statistical variance
+    // on the prediction instead of the event count
+    if ( stat_var ) {
+      double stat_err = univ.hist_2d_->GetBinError( tb, reco_bin );
+      Bi += std::pow( stat_err, 2 );
+    }
+    else {
+      Bi += univ.hist_2d_->GetBinContent( tb, reco_bin );
+    }
   }
 
   return Bi;
