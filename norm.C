@@ -211,10 +211,11 @@ double get_chi2( const TH1D& data_hist, const TH1D& pred_hist,
   return chi2;
 }
 
-void norm() {
-
+void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
+  const std::string& mcc8_hist_suffix,
+  const std::string& mcc8_hist_title )
+{
   TFile* mcc8_file = new TFile( "CCNp_data_MC_cov_dataRelease.root", "read" );
-  std::string input_respmat_file_name( "respmat_mcc8-cth_mu.root" );
 
   auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name );
   auto& syst = *syst_ptr;
@@ -230,8 +231,9 @@ void norm() {
   TH1D* result_hist = new TH1D( "result_hist", "; reco bin; differential xsec"
     " (cm^{2} / Ar / x-axis unit)", num_reco_bins, 0., num_reco_bins );
   result_hist->Sumw2();
+  result_hist->SetDirectory( nullptr );
 
-  const auto& total_cov_matrix = matrix_map.at( "total" );
+  auto& total_cov_matrix = matrix_map.at( "total" );
   TH2D* total_cov_matrix_hist = total_cov_matrix.cov_matrix_.get();
 
   const auto& cv_univ = syst.cv_universe();
@@ -247,15 +249,13 @@ void norm() {
 
   // Get the MCC8 data and covariance matrix
   TH1D* mcc8_data = nullptr;
-  mcc8_file->GetObject( "DataXsec_muangle", mcc8_data );
-
-  std::string mcc8_hist_title( "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu}"
-    " (cm^{2} / Ar)" );
+  mcc8_file->GetObject( ("DataXsec_" + mcc8_hist_suffix).c_str(), mcc8_data );
 
   mcc8_data->SetTitle( mcc8_hist_title.c_str()  );
 
   TH2D* mcc8_cov_hist = nullptr;
-  mcc8_file->GetObject( "CovarianceMatrix_muangle", mcc8_cov_hist );
+  mcc8_file->GetObject( ("CovarianceMatrix_" + mcc8_hist_suffix).c_str(),
+    mcc8_cov_hist );
 
   // Convert the MCC8 units from 10^{-38} cm^2 / nucleon to cm^2 / Ar
   constexpr double mcc8_scale_factor = 1e-38 * 40;
@@ -285,6 +285,7 @@ void norm() {
 
   // Create an MCC9 histogram with "physics binning" to match the MCC8 data
   TH1D* mcc9_data = dynamic_cast< TH1D* >( mcc8_data->Clone("mcc9_data") );
+  mcc9_data->SetDirectory( nullptr );
   for ( int a = 1; a <= num_reco_bins; ++a ) {
     double xsec = result_hist->GetBinContent( a );
     double err = result_hist->GetBinError( a );
@@ -298,13 +299,41 @@ void norm() {
   mcc8_cov_hist->SetDirectory( nullptr );
   CovMatrix mcc8_cov_mat( mcc8_cov_hist );
 
+  // If we're comparing the muon momentum distributions, there's a small
+  // discrepancy: I included an overflow bin while MCC8 did not. This
+  // makes the covariance matrices have different dimensions, which causes
+  // problems when computing chi-squared. I'll manually fix this by dropping
+  // the overflow bin here.
+  if ( mcc8_hist_suffix == "mumom" ) {
+    // Create a new MCC9 covariance matrix using only the reco bins considered
+    // in MCC8. For convenience, clone the MCC8 histogram to start (we get
+    // the binning right "for free" and just have to overwrite the contents).
+    TH2D* mcc9_truncated_cov_hist = dynamic_cast< TH2D* >(
+      mcc8_cov_hist->Clone("mcc9_truncated_cov_hist") );
+    mcc9_truncated_cov_hist->SetDirectory( nullptr );
+
+    int num_mcc8_reco_bins = mcc8_data->GetNbinsX();
+    for ( int a = 1; a <= num_mcc8_reco_bins; ++a ) {
+      for ( int b = 1; b <= num_mcc8_reco_bins; ++b ) {
+        double covariance_mcc9 = total_cov_matrix_hist->GetBinContent( a, b );
+        mcc9_truncated_cov_hist->SetBinContent( a, b, covariance_mcc9 );
+      }
+    }
+
+    // We've made the truncated MCC9 covariance matrix. Replace the old one
+    // with it and move on.
+    total_cov_matrix.cov_matrix_.reset( mcc9_truncated_cov_hist );
+
+  } // muon momentum comparison
+
   CovMatrix comp_cov_mat;
   comp_cov_mat += total_cov_matrix;
   comp_cov_mat += mcc8_cov_mat;
 
   // Compute a chi-squared value for the comparison of the measurements
   double chi2 = get_chi2( *mcc9_data, *mcc8_data, comp_cov_mat );
-  std::cout << "chi2 = " << chi2 << '\n';
+  std::cout << mcc8_hist_suffix << ": \u03C7\u00b2 = " << chi2
+    << " / " << mcc8_data->GetNbinsX() << " bins\n";
 
   // Draw the comparison plot
   TCanvas* c1 = new TCanvas;
@@ -318,12 +347,29 @@ void norm() {
   mcc8_data->SetMarkerColor( kAzure - 1 );
   mcc8_data->SetLineWidth( 3 );
   mcc8_data->SetStats( false );
-  mcc8_data->Draw( "e" );
 
   mcc9_data->SetLineColor( kBlack );
   mcc9_data->SetLineWidth( 3 );
   mcc9_data->SetStats( false );
+
+  mcc8_data->Draw( "e" );
   mcc9_data->Draw( "e same" );
+
+  // Get a reasonable plot range by plotting the
+  // cross section with the greater maximum bin value first
+  double mcc8_max = mcc8_data->GetMaximum();
+  double mcc9_max = mcc9_data->GetMaximum();
+  if ( mcc8_max > mcc9_max ) {
+    mcc8_data->Draw( "e" );
+    mcc9_data->Draw( "e same" );
+  }
+  else {
+    mcc9_data->Draw( "e" );
+    mcc8_data->Draw( "e same" );
+    // We plotted MCC9 first, so redraw it on top of the MCC8
+    // result to ensure that it will be visible
+    mcc9_data->Draw( "e same" );
+  }
 
   TLegend* lg = new TLegend( 0.15, 0.65, 0.45, 0.88 );
 
@@ -332,7 +378,7 @@ void norm() {
 
   std::ostringstream lg_oss;
   lg_oss << std::setprecision(3) << "#chi^{2} = " << chi2
-    << " / " << num_reco_bins << " bins";
+    << " / " << mcc8_data->GetNbinsX() << " bins";
   TObject* dummy_ptr = nullptr;
   lg->AddEntry( dummy_ptr, lg_oss.str().c_str(), "" );
   lg->Draw( "same" );
@@ -343,6 +389,24 @@ void norm() {
   ltx->SetNDC( true ); // Use the pad coordinate system, not the axes
   ltx->Draw( "same" );
 
-  //TCanvas* c2 = new TCanvas;
-  //total_cov_matrix_hist->Draw( "colz" );
+}
+
+void norm() {
+
+  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
+    "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
+
+  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_p.root",
+    "pangle", "; cos#theta_{p}; d#sigma/dcos#theta_{p} (cm^{2} / Ar)" );
+
+  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-p_mu.root",
+    "mumom", "; p_{#mu} (GeV); d#sigma/dp_{#mu} (cm^{2} / GeV / Ar)" );
+
+  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-p_p.root",
+    "pmom", "; p_{p} (GeV); d#sigma/dp_{p} (cm^{2} / GeV / Ar)" );
+
+  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-th_mu_p.root",
+    "thetamup", "; #theta_{#mu-p} (radian); d#sigma/d#theta_{#mu-p}"
+    " (cm^{2} / radian / Ar)" );
+
 }
