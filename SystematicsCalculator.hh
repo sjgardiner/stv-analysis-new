@@ -69,6 +69,22 @@ struct CovMatrix {
     return *this;
   }
 
+  std::unique_ptr< TMatrixDSym > get_matrix() const {
+    // Note that ROOT histogram bin indices are one-based to allow for
+    // underflow. The TMatrixDSym element indices, on the other hand,
+    // are zero-based.
+    int num_reco_bins = cov_matrix_->GetNbinsX();
+    auto result = std::make_unique< TMatrixDSym >( num_reco_bins );
+    // TODO: consider doing something more efficient than setting each
+    // element manually
+    for ( int a = 0; a < num_reco_bins; ++a ) {
+      for ( int b = 0; b < num_reco_bins; ++b ) {
+        result->operator()( a, b ) = cov_matrix_->GetBinContent( a + 1, b + 1 );
+      }
+    }
+    return result;
+  }
+
 };
 
 using CovMatrixMap = std::map< std::string, CovMatrix >;
@@ -1105,6 +1121,9 @@ double SystematicsCalculator::scaling_factor( int reco_bin,
   numu_flux *= total_bnb_data_pot_;
 
   const auto& cv_univ = this->cv_universe();
+  // TODO: fix this. The universe histograms are expressed in terms of
+  // reco bin number, so the widths are always trivially one. You need
+  // to make this code aware of the physics units on the x-axis.
   double reco_bin_width = cv_univ.hist_reco_->GetBinWidth( reco_bin );
 
   constexpr double NUM_TARGETS_ACTIVE_VOL = 1.0068e30;
