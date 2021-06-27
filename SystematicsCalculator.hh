@@ -747,57 +747,6 @@ CovMatrix SystematicsCalculator::make_covariance_matrix(
   return result;
 }
 
-std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
-{
-  // Make an empty map to store the covariance matrices
-  auto matrix_map_ptr = std::make_unique< CovMatrixMap >();
-  auto& matrix_map = *matrix_map_ptr;
-
-  // Look up the location of the configuration file that defines the various
-  // covariance matrices that should be calculated
-  const auto& fpm = FilePropertiesManager::Instance();
-  std::string config_file_name = fpm.analysis_path() + "/systcalc.conf";
-
-  // Read in the definition of each covariance matrix and calculate it. Each
-  // definition contains at least a name and a type specifier
-  std::ifstream config_file( config_file_name );
-  std::string name, type;
-  while ( config_file >> name >> type ) {
-
-    CovMatrix temp_cov_mat = this->make_covariance_matrix( name );
-
-    // If the current covariance matrix is defined as a sum of others, then
-    // just add the existing ones together to compute it
-    if ( type == "sum" ) {
-      int count = 0;
-      config_file >> count;
-      std::string cm_name;
-      for ( int cm = 0; cm < count; ++cm ) {
-        config_file >> cm_name;
-        if ( !matrix_map.count(cm_name) ) {
-          throw std::runtime_error( "Undefined covariance matrix " + cm_name );
-        }
-        temp_cov_mat += matrix_map.at( cm_name );
-      } // terms in the sum
-
-    } // sum type
-
-    // Otherwise, calculate the covariance matrix elements in the usual way
-    else this->calculate_covariances( type, temp_cov_mat, config_file );
-
-    // Add the finished covariance matrix to the map. If an entry already
-    // exists with the same name, throw an exception.
-    if ( matrix_map.count(name) ) {
-      throw std::runtime_error( "Duplicate covariance matrix definition for "
-        + name );
-    }
-    matrix_map[ name ] = std::move( temp_cov_mat );
-
-  } // Covariance matrix definitions
-
-  return matrix_map_ptr;
-}
-
 template < class UniversePointerContainer >
   void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
   const Universe& cv_univ, const UniversePointerContainer& universes,
@@ -886,4 +835,135 @@ void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
 
   make_cov_mat( sc, cov_mat, cv_univ, temp_univ_vec, average_over_universes,
     is_flux_variation );
+}
+
+std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
+{
+  // Make an empty map to store the covariance matrices
+  auto matrix_map_ptr = std::make_unique< CovMatrixMap >();
+  auto& matrix_map = *matrix_map_ptr;
+
+  // Look up the location of the configuration file that defines the various
+  // covariance matrices that should be calculated
+  const auto& fpm = FilePropertiesManager::Instance();
+  std::string config_file_name = fpm.analysis_path() + "/systcalc.conf";
+
+  // Read in the definition of each covariance matrix and calculate it. Each
+  // definition contains at least a name and a type specifier
+  std::ifstream config_file( config_file_name );
+  std::string name, type;
+  while ( config_file >> name >> type ) {
+
+    CovMatrix temp_cov_mat = this->make_covariance_matrix( name );
+
+    // If the current covariance matrix is defined as a sum of others, then
+    // just add the existing ones together to compute it
+    if ( type == "sum" ) {
+      int count = 0;
+      config_file >> count;
+      std::string cm_name;
+      for ( int cm = 0; cm < count; ++cm ) {
+        config_file >> cm_name;
+        if ( !matrix_map.count(cm_name) ) {
+          throw std::runtime_error( "Undefined covariance matrix " + cm_name );
+        }
+        temp_cov_mat += matrix_map.at( cm_name );
+      } // terms in the sum
+
+    } // sum type
+
+    else if ( type == "MCFullCorr" ) {
+      // Read in the fractional uncertainty from the configuration file
+      double frac_unc = 0.;
+      config_file >> frac_unc;
+
+      const double frac2 = std::pow( frac_unc, 2 );
+      int num_reco_bins = reco_bins_.size();
+
+      const auto& cv_univ = this->cv_universe();
+      for ( size_t a = 0u; a < num_reco_bins; ++a ) {
+
+        double cv_a = this->evaluate_observable( cv_univ, a );
+
+        for ( int b = 0u; b < num_reco_bins; ++b ) {
+
+          double cv_b = this->evaluate_observable( cv_univ, b );
+
+          double covariance = cv_a * cv_b * frac2;
+
+          temp_cov_mat.cov_matrix_->SetBinContent( a + 1, b + 1, covariance );
+
+        } // reco bin b
+
+      } // reco bin a
+
+    } // MCFullCorr type
+
+    else if ( type == "DV" ) {
+      // Get the detector variation type represented by the current universe
+      std::string ntuple_type_str;
+      config_file >> ntuple_type_str;
+
+      const auto& fpm = FilePropertiesManager::Instance();
+      auto ntuple_type = fpm.string_to_ntuple_type( ntuple_type_str );
+
+      // Check that it's valid. If not, then complain.
+      bool is_not_detVar = !ntuple_type_is_detVar( ntuple_type );
+      if ( is_not_detVar ) {
+        throw std::runtime_error( "Invalid NtupleFileType!" );
+      }
+
+      const auto& detVar_cv_u = detvar_universes_.at( NFT::kDetVarMCCV );
+      const auto& detVar_alt_u = detvar_universes_.at( ntuple_type );
+
+      make_cov_mat( *this, temp_cov_mat, *detVar_cv_u,
+        *detVar_alt_u, false, false );
+    } // DV type
+
+    else if ( type == "RW" || type == "FluxRW" ) {
+
+      // Treat flux variations in a special way by setting a flag
+      bool is_flux_variation = false;
+      if ( type == "FluxRW" ) is_flux_variation = true;
+
+      // Get the key to use when looking up weights in the map of reweightable
+      // systematic variation universes
+      std::string weight_key;
+      config_file >> weight_key;
+
+      // Retrieve the vector of universes
+      auto end = rw_universes_.cend();
+      auto iter = rw_universes_.find( weight_key );
+      if ( iter == end ) {
+        throw std::runtime_error( "Missing weight key " + weight_key );
+      }
+      const auto& alt_univ_vec = iter->second;
+
+      // Also read in the flag for whether we should average over universes
+      // or not for the current covariance matrix
+      bool avg_over_universes = false;
+      config_file >> avg_over_universes;
+
+      const auto& cv_univ = this->cv_universe();
+      make_cov_mat( *this, temp_cov_mat, cv_univ, alt_univ_vec,
+        avg_over_universes, is_flux_variation );
+
+    } // RW and FluxRW types
+
+    // The options above work in the same way for all classes derived
+    // from SystematicsCalculator. If none of them apply, then calculate the
+    // covariance matrix elements using this pure virtual helper function.
+    else this->calculate_covariances( type, temp_cov_mat, config_file );
+
+    // Add the finished covariance matrix to the map. If an entry already
+    // exists with the same name, throw an exception.
+    if ( matrix_map.count(name) ) {
+      throw std::runtime_error( "Duplicate covariance matrix definition for "
+        + name );
+    }
+    matrix_map[ name ] = std::move( temp_cov_mat );
+
+  } // Covariance matrix definitions
+
+  return matrix_map_ptr;
 }
