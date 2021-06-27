@@ -11,7 +11,8 @@ using NFT = NtupleFileType;
 
 void covMat( const std::string& input_respmat_file_name ) {
 
-  auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name );
+  auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name,
+    "systcalc.conf" );
   auto& syst = *syst_ptr;
 
   // Keys are covariance matrix types, values are CovMatrix objects that
@@ -218,7 +219,8 @@ void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
 {
   TFile* mcc8_file = new TFile( "CCNp_data_MC_cov_dataRelease.root", "read" );
 
-  auto* syst_ptr = new MCC8ForwardFolder( input_respmat_file_name );
+  auto* syst_ptr = new MCC8ForwardFolder( input_respmat_file_name,
+    "systcalc_mcc8_comp.conf" );
   auto& syst = *syst_ptr;
 
   // Keys are covariance matrix types, values are CovMatrix objects that
@@ -397,8 +399,8 @@ void norm() {
   //covMat( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root" );
   covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
 
-  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
-  //  "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
+  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
+    "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
 
   //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_p.root",
   //  "pangle", "; cos#theta_{p}; d#sigma/dcos#theta_{p} (cm^{2} / Ar)" );

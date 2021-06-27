@@ -16,6 +16,7 @@ class MCC9Unfolder : public SystematicsCalculator {
   public:
 
     MCC9Unfolder( const std::string& input_respmat_file_name,
+      const std::string& syst_cfg_file_name = "",
       const std::string& respmat_tdirectoryfile_name = "" );
 
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
@@ -35,9 +36,10 @@ class MCC9Unfolder : public SystematicsCalculator {
 
 MCC9Unfolder::MCC9Unfolder(
   const std::string& input_respmat_file_name,
+  const std::string& syst_cfg_file_name,
   const std::string& respmat_tdirectoryfile_name )
   : SystematicsCalculator( input_respmat_file_name,
-  respmat_tdirectoryfile_name )
+  syst_cfg_file_name, respmat_tdirectoryfile_name )
 {
 
 }

@@ -13,6 +13,7 @@ class MCC8ForwardFolder : public SystematicsCalculator {
     using NFT = NtupleFileType;
 
     MCC8ForwardFolder( const std::string& input_respmat_file_name,
+      const std::string& syst_cfg_file_name = "",
       const std::string& respmat_tdirectoryfile_name = "" );
 
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
@@ -48,9 +49,10 @@ class MCC8ForwardFolder : public SystematicsCalculator {
 
 MCC8ForwardFolder::MCC8ForwardFolder(
   const std::string& input_respmat_file_name,
+  const std::string& syst_cfg_file_name,
   const std::string& respmat_tdirectoryfile_name )
   : SystematicsCalculator( input_respmat_file_name,
-  respmat_tdirectoryfile_name )
+  syst_cfg_file_name, respmat_tdirectoryfile_name )
 {
 
 }

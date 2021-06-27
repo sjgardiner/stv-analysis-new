@@ -94,6 +94,7 @@ class SystematicsCalculator {
   public:
 
     SystematicsCalculator( const std::string& input_respmat_file_name,
+      const std::string& syst_cfg_file_name = "",
       const std::string& respmat_tdirectoryfile_name = "" );
 
     void load_universes( TDirectoryFile& total_subdir );
@@ -162,12 +163,27 @@ class SystematicsCalculator {
 
     // Total POT exposure for the analyzed BNB data
     double total_bnb_data_pot_ = 0.;
+
+    // Name of the systematics configuration file that should be used
+    // when computing covariance matrices
+    std::string syst_config_file_name_;
 };
 
 SystematicsCalculator::SystematicsCalculator(
   const std::string& input_respmat_file_name,
+  const std::string& syst_cfg_file_name,
   const std::string& respmat_tdirectoryfile_name )
+  : syst_config_file_name_( syst_cfg_file_name )
 {
+  // If the user didn't specify a particular systematics configuration file
+  // to use when calculating covariance matrices, then use the default one
+  if ( syst_config_file_name_.empty() ) {
+    // Look up the location of the default configuration file using the
+    // FilePropertiesManager to get the directory name
+    const auto& fpm = FilePropertiesManager::Instance();
+    syst_config_file_name_ = fpm.analysis_path() + "/systcalc.conf";
+  }
+
   // Open in "update" mode so that we can save POT-summed histograms
   // for the combination of all analysis ntuples. Otherwise, we won't
   // write to the file.
@@ -856,14 +872,9 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
   auto matrix_map_ptr = std::make_unique< CovMatrixMap >();
   auto& matrix_map = *matrix_map_ptr;
 
-  // Look up the location of the configuration file that defines the various
-  // covariance matrices that should be calculated
-  const auto& fpm = FilePropertiesManager::Instance();
-  std::string config_file_name = fpm.analysis_path() + "/systcalc.conf";
-
   // Read in the definition of each covariance matrix and calculate it. Each
   // definition contains at least a name and a type specifier
-  std::ifstream config_file( config_file_name );
+  std::ifstream config_file( syst_config_file_name_ );
   std::string name, type;
   while ( config_file >> name >> type ) {
 
