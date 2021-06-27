@@ -4,13 +4,13 @@
 // STV analysis includes
 #include "FilePropertiesManager.hh"
 #include "PlotUtils.hh"
-#include "SystematicsCalculator.hh"
+#include "MCC8ForwardFolder.hh"
 
 using NFT = NtupleFileType;
 
 void covMat( const std::string& input_respmat_file_name ) {
 
-  auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name );
+  auto* syst_ptr = new MCC8ForwardFolder( input_respmat_file_name );
   auto& syst = *syst_ptr;
 
   // Keys are covariance matrix types, values are CovMatrix objects that
@@ -217,7 +217,7 @@ void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
 {
   TFile* mcc8_file = new TFile( "CCNp_data_MC_cov_dataRelease.root", "read" );
 
-  auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name );
+  auto* syst_ptr = new MCC8ForwardFolder( input_respmat_file_name );
   auto& syst = *syst_ptr;
 
   // Keys are covariance matrix types, values are CovMatrix objects that
