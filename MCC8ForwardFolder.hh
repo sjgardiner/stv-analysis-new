@@ -84,17 +84,20 @@ void MCC8ForwardFolder::calculate_covariances(
 
   } // MCstat type
 
-  else if ( cov_type == "EXTstat" ) {
+  else if ( cov_type == "BNBstat" || cov_type == "EXTstat" ) {
 
-    const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get();
-    int num_reco_bins = ext_hist->GetNbinsX();
+    const TH1D* d_hist = nullptr;
+    if ( cov_type == "BNBstat" ) d_hist = data_hists_.at( NFT::kOnBNB ).get();
+    else d_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXTstat
+
+    int num_reco_bins = d_hist->GetNbinsX();
 
     const auto& cv_univ = this->cv_universe();
 
     // Note the one-based bin numbering convention for TH1D
     for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
-      double err2 = ext_hist->GetBinError( rb );
-      err2 *= err2;
+      double err = d_hist->GetBinError( rb );
+      double err2 = err * err;
 
       // TODO: reduce code duplication with the MCstat type
       double eff = this->effective_efficiency( cv_univ, rb );
@@ -108,34 +111,7 @@ void MCC8ForwardFolder::calculate_covariances(
       cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
     } // reco bins
 
-  } // EXTstat type
-
-  else if ( cov_type == "BNBstat" ) {
-
-    // TODO: reduce code duplication with the EXTstat type
-    const TH1D* bnb_hist = data_hists_.at( NFT::kOnBNB ).get();
-    int num_reco_bins = bnb_hist->GetNbinsX();
-
-    const auto& cv_univ = this->cv_universe();
-
-    // Note the one-based bin numbering convention for TH1D
-    for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
-      double err2 = bnb_hist->GetBinError( rb );
-      err2 *= err2;
-
-      // TODO: reduce code duplication with the MCstat type
-      double eff = this->effective_efficiency( cv_univ, rb );
-      double scaling = this->xsec_scale_factor( rb );
-
-      if ( eff <= 0. ) err2 = 0.;
-      else {
-        err2 *= std::pow( scaling / eff, 2 );
-      }
-
-      cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
-    } // reco bins
-
-  } // BNBstat type
+  } // BNBstat and EXTstat types
 
   else {
     throw std::runtime_error( "Unrecognized covariance matrix type \""
