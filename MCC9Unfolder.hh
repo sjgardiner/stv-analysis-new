@@ -1,5 +1,8 @@
 #pragma once
 
+// Standard library includes
+#include <algorithm>
+
 // STV analysis includes
 #include "SystematicsCalculator.hh"
 
@@ -23,6 +26,11 @@ class MCC9Unfolder : public SystematicsCalculator {
 
     virtual double evaluate_data_stat_unc( int reco_bin,
       bool use_ext ) const override;
+
+  protected:
+
+    // Helper function for evaluate_observable()
+    bool is_detvar_universe( const Universe& univ ) const;
 };
 
 MCC9Unfolder::MCC9Unfolder(
@@ -41,10 +49,21 @@ double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
   // of events (signal + background) in the current bin in reco space
   double reco_bin_events = 0.;
 
+  bool use_detVar_CV = this->is_detvar_universe( univ );
+
   // Get access to the CV universe. We need it regardless of the input universe
   // so that we can use it in the denominator of the smearceptance matrix
-  // element
-  const Universe& cv_univ = this->cv_universe();
+  // element. Note that we should use the detVarCV universe as the CV when the
+  // input universe corresponds to a detector variation (or is the detVarCV
+  // universe itself). Based on the check above, we assign a pointer to
+  // either the regular or detVar CV here as appropriate.
+  const Universe* cv_univ = nullptr;
+  if ( use_detVar_CV ) {
+    cv_univ = detvar_universes_.at( NFT::kDetVarMCCV ).get();
+  }
+  else {
+    cv_univ = &this->cv_universe();
+  }
 
   size_t num_true_bins = true_bins_.size();
 
@@ -57,7 +76,7 @@ double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
     if ( tbin.type_ == kSignalTrueBin ) {
 
       // Get the CV event count for the current true bin
-      double denom_CV = cv_univ.hist_true_->GetBinContent( tb + 1 );
+      double denom_CV = cv_univ->hist_true_->GetBinContent( tb + 1 );
 
       // For the systematic variation universes, we want to assess
       // uncertainties on the signal only through the smearceptance
@@ -124,4 +143,28 @@ double MCC9Unfolder::evaluate_data_stat_unc( int reco_bin, bool use_ext ) const
   // ROOT histograms use one-based bin indices, so I correct for that here
   double err = d_hist->GetBinError( reco_bin + 1 );
   return err;
+}
+
+// Helper function that searches through the owned map of detector variation
+// universes. If the input Universe shares the same memory address as one
+// of the Universe objects stored in the map, then this function returns
+// true. Otherwise, false is returned. This is used to detect whether the
+// detVarCV is needed in MCC9Unfolder::evaluate_observable().
+//
+// TODO: This is a bit of a hack. Revisit the technique used, particularly
+// if it slows down calculations with this class significantly in the future.
+bool MCC9Unfolder::is_detvar_universe( const Universe& univ ) const {
+
+  using DetVarMapElement = std::pair< const NFT, std::unique_ptr<Universe> >;
+
+  const auto begin = detvar_universes_.cbegin();
+  const auto end = detvar_universes_.cend();
+
+  const auto iter = std::find_if( begin, end,
+    [ &univ ]( const DetVarMapElement& my_pair )
+      -> bool { return my_pair.second.get() == &univ; }
+  );
+
+  bool found_detvar_universe = ( iter != end );
+  return found_detvar_universe;
 }
