@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <map>
@@ -54,8 +55,9 @@ bool ntuple_type_is_detVar( const NtupleFileType& type ) {
     NtupleFileType::kDetVarMCWMYZ
   };
 
-  auto end = detVar_types.cend();
-  auto iter = std::find( detVar_types.cbegin(), end, type );
+  const auto begin = detVar_types.cbegin();
+  const auto end = detVar_types.cend();
+  const auto iter = std::find( begin, end, type );
   if ( iter != end ) return true;
   return false;
 }
@@ -95,7 +97,7 @@ class FilePropertiesManager {
 
     // Get a const reference to the singleton instance of the
     // FilePropertiesManager
-    inline static const FilePropertiesManager& Instance() {
+    inline static FilePropertiesManager& Instance() {
 
       // Create the FilePropertiesManager object using a static variable.
       // This ensures that the singleton instance is only created once.
@@ -171,13 +173,15 @@ class FilePropertiesManager {
 
     inline const std::string& analysis_path() const { return analysis_path_; }
 
-  private:
+    inline void load_file_properties(
+      const std::string& input_table_file_name = "" )
+    {
 
-    inline FilePropertiesManager() {
-      this->load_file_properties();
-    }
-
-    inline void load_file_properties() {
+      // Clear out any pre-existing contents of the owned maps storing
+      // analysis ntuple file properties
+      ntuple_file_map_.clear();
+      data_norm_map_.clear();
+      ntuple_to_weight_file_map_.clear();
 
       const char* path = std::getenv( "STV_ANALYSIS_DIR" );
       if ( path == nullptr ) throw std::runtime_error( "The environment"
@@ -185,8 +189,13 @@ class FilePropertiesManager {
 
       analysis_path_ = path;
 
-      std::string in_file_name( path );
-      in_file_name += "/file_properties.txt";
+      // If the user didn't manually specify a table of file properties, then
+      // use the default one
+      std::string in_file_name( input_table_file_name );
+      if ( in_file_name.empty() ) {
+        in_file_name = analysis_path_ + "/file_properties.txt";
+      }
+
       std::ifstream in_file( in_file_name );
 
       std::string temp_line;
@@ -250,6 +259,12 @@ class FilePropertiesManager {
           ntuple_to_weight_file_map_[ file_name ] = weight_file_name;
         }
       }
+    }
+
+  private:
+
+    inline FilePropertiesManager() {
+      this->load_file_properties();
     }
 
     // Outer keys are run numbers, inner keys are ntuple file types, values are
