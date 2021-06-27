@@ -115,6 +115,9 @@ class SystematicsCalculator {
 
     CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
 
+    // Evaluate the observable described by the covariance matrices in
+    // a given universe and reco-space bin. NOTE: the reco bin index given
+    // as an argument to this function is zero-based.
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const = 0;
 
@@ -808,7 +811,7 @@ template < class UniversePointerContainer >
   std::vector< double > cv_reco_obs( num_reco_bins, 0. );
 
   for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
-    cv_reco_obs.at( rb ) = sc.evaluate_observable( cv_univ, rb + 1 );
+    cv_reco_obs.at( rb ) = sc.evaluate_observable( cv_univ, rb );
   }
 
   // Loop over universes
@@ -830,7 +833,7 @@ template < class UniversePointerContainer >
 
     for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
       univ_reco_obs.at( rb ) = sc.evaluate_observable( *univ,
-        rb + 1, flux_u_idx );
+        rb, flux_u_idx );
     }
 
     // We have all the needed ingredients to get the contribution of this

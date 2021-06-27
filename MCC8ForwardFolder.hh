@@ -21,7 +21,13 @@ class MCC8ForwardFolder : public SystematicsCalculator {
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const override
     {
-      return this->forward_folded_xsec( univ, reco_bin, flux_universe_index );
+      // Note that the forward_folded_xsec() member function takes a
+      // one-based reco bin index (to match the ROOT histograms), while
+      // SystematicsCalculator::evaluate_observable() uses a zero-based
+      // index (to match the owned bin definitions in that class). I
+      // correct for this here in the call to forward_folded_xsec().
+      return this->forward_folded_xsec( univ, reco_bin + 1,
+        flux_universe_index );
     }
 
     // Helper functions for comparison to CCNp result
