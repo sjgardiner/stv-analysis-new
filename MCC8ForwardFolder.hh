@@ -4,6 +4,8 @@
 #include "IntegratedFluxUniverseManager.hh"
 #include "SystematicsCalculator.hh"
 
+// Calculates covariance matrices describing the uncertainty on the
+// MCC8-style forward-folded differential cross section
 class MCC8ForwardFolder : public SystematicsCalculator {
 
   public:
@@ -16,6 +18,12 @@ class MCC8ForwardFolder : public SystematicsCalculator {
     virtual void calculate_covariances( const std::string& cov_type,
       CovMatrix& cov_mat, std::istream& config_file ) const override;
 
+    virtual double evaluate_observable( const Universe& univ, int reco_bin,
+      int flux_universe_index = -1 ) const override
+    {
+      return this->forward_folded_xsec( univ, reco_bin, flux_universe_index );
+    }
+
     // Helper functions for comparison to CCNp result
     double effective_efficiency( const Universe& univ, int reco_bin ) const;
 
@@ -27,99 +35,7 @@ class MCC8ForwardFolder : public SystematicsCalculator {
 
     double forward_folded_xsec( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const;
-
 };
-
-template < class UniversePointerContainer >
-  void make_cov_mat( const MCC8ForwardFolder& mcc8f, CovMatrix& cov_mat,
-  const Universe& cv_univ, const UniversePointerContainer& universes,
-  bool average_over_universes, bool is_flux_variation )
-{
-  // Get the total number of true and reco bins for later reference
-  size_t num_true_bins = mcc8f.true_bins_.size();
-  size_t num_reco_bins = mcc8f.reco_bins_.size();
-
-  // Get the expected differential cross-section in each reco bin in the CV
-  // universe
-  std::vector< double > cv_reco_xsecs( num_reco_bins, 0. );
-
-  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
-    cv_reco_xsecs.at( rb ) = mcc8f.forward_folded_xsec( cv_univ, rb + 1 );
-  }
-
-  // Loop over universes
-  int num_universes = universes.size();
-  for ( int u_idx = 0; u_idx < num_universes; ++u_idx ) {
-
-    const auto& univ = universes.at( u_idx );
-
-    // For flux variations, we also want to adjust the integrated flux
-    // used to compute the differential cross section. This is signaled
-    // by passing a nonnegative index for a flux systematic universe
-    // to SystematicsCalculator::forward_folded_xsec()
-    int flux_u_idx = -1;
-    if ( is_flux_variation ) flux_u_idx = u_idx;
-
-    // Get the expected differential cross section in each reco bin in the
-    // current universe.
-    std::vector< double > univ_reco_xsecs( num_reco_bins, 0. );
-
-    for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
-      univ_reco_xsecs.at( rb ) = mcc8f.forward_folded_xsec( *univ,
-        rb + 1, flux_u_idx );
-    }
-
-    // We have all the needed ingredients to get the contribution of this
-    // universe to the covariance matrix. Loop over each pair of reco bins and
-    // fill the corresponding covariance matrix elements.
-    // TODO: the covariance matrix are symmetric by definition. You can
-    // therefore make this more efficient by calculating only the subset of
-    // elements that you need.
-    for ( size_t a = 0u; a < num_reco_bins; ++a ) {
-
-      double cv_a = cv_reco_xsecs.at( a );
-      double univ_a = univ_reco_xsecs.at( a );
-
-      for ( size_t b = 0u; b < num_reco_bins; ++b ) {
-
-        double cv_b = cv_reco_xsecs.at( b );
-        double univ_b = univ_reco_xsecs.at( b );
-
-        double covariance  = ( cv_a - univ_a ) * ( cv_b - univ_b );
-
-        // We cheat here by noting that the lower bound of each covariance
-        // matrix TH2D bin is the bin index. Filling using the zero-based bin
-        // indices and the covariance as the weight yields the desired behavior
-        // (increment the existing element by the current covariance value) in
-        // an easy-to-read (if slightly evil) way.
-        cov_mat.cov_matrix_->Fill( a, b, covariance );
-      } // reco bin index b
-    } // reco bin index a
-
-  } // universe
-
-  // If requested, average the final covariance matrix elements over all
-  // universes
-  if ( average_over_universes ) {
-    cov_mat.cov_matrix_->Scale( 1. / num_universes );
-  }
-
-}
-
-// Overloaded version that takes a single alternate universe wrapped in a
-// std::unique_ptr
-void make_cov_mat( const MCC8ForwardFolder& mcc8f, CovMatrix& cov_mat,
-  const Universe& cv_univ,
-  const Universe& alt_univ, bool average_over_universes = false,
-  bool is_flux_variation = false )
-{
-  std::vector< const Universe* > temp_univ_vec;
-
-  temp_univ_vec.emplace_back( &alt_univ );
-
-  make_cov_mat( mcc8f, cov_mat, cv_univ, temp_univ_vec, average_over_universes,
-    is_flux_variation );
-}
 
 MCC8ForwardFolder::MCC8ForwardFolder(
   const std::string& input_respmat_file_name,

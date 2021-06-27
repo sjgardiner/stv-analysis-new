@@ -115,6 +115,9 @@ class SystematicsCalculator {
 
     CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
 
+    virtual double evaluate_observable( const Universe& univ, int reco_bin,
+      int flux_universe_index = -1 ) const = 0;
+
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
 
@@ -790,4 +793,94 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
   } // Covariance matrix definitions
 
   return matrix_map_ptr;
+}
+
+template < class UniversePointerContainer >
+  void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
+  const Universe& cv_univ, const UniversePointerContainer& universes,
+  bool average_over_universes, bool is_flux_variation )
+{
+  // Get the total number of true and reco bins for later reference
+  size_t num_true_bins = sc.true_bins_.size();
+  size_t num_reco_bins = sc.reco_bins_.size();
+
+  // Get the expected observable values in each reco bin in the CV universe
+  std::vector< double > cv_reco_obs( num_reco_bins, 0. );
+
+  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+    cv_reco_obs.at( rb ) = sc.evaluate_observable( cv_univ, rb + 1 );
+  }
+
+  // Loop over universes
+  int num_universes = universes.size();
+  for ( int u_idx = 0; u_idx < num_universes; ++u_idx ) {
+
+    const auto& univ = universes.at( u_idx );
+
+    // For flux variations, we also want to be able to adjust the integrated
+    // flux used to compute the differential cross section. This is signaled by
+    // passing a nonnegative index for a flux systematic universe to
+    // SystematicsCalculator::evaluate_observable()
+    int flux_u_idx = -1;
+    if ( is_flux_variation ) flux_u_idx = u_idx;
+
+    // Get the expected observable values in each reco bin in the
+    // current universe.
+    std::vector< double > univ_reco_obs( num_reco_bins, 0. );
+
+    for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+      univ_reco_obs.at( rb ) = sc.evaluate_observable( *univ,
+        rb + 1, flux_u_idx );
+    }
+
+    // We have all the needed ingredients to get the contribution of this
+    // universe to the covariance matrix. Loop over each pair of reco bins and
+    // fill the corresponding covariance matrix elements.
+    // TODO: the covariance matrix are symmetric by definition. You can
+    // therefore make this more efficient by calculating only the subset of
+    // elements that you need.
+    for ( size_t a = 0u; a < num_reco_bins; ++a ) {
+
+      double cv_a = cv_reco_obs.at( a );
+      double univ_a = univ_reco_obs.at( a );
+
+      for ( size_t b = 0u; b < num_reco_bins; ++b ) {
+
+        double cv_b = cv_reco_obs.at( b );
+        double univ_b = univ_reco_obs.at( b );
+
+        double covariance  = ( cv_a - univ_a ) * ( cv_b - univ_b );
+
+        // We cheat here by noting that the lower bound of each covariance
+        // matrix TH2D bin is the bin index. Filling using the zero-based bin
+        // indices and the covariance as the weight yields the desired behavior
+        // (increment the existing element by the current covariance value) in
+        // an easy-to-read (if slightly evil) way.
+        cov_mat.cov_matrix_->Fill( a, b, covariance );
+      } // reco bin index b
+    } // reco bin index a
+
+  } // universe
+
+  // If requested, average the final covariance matrix elements over all
+  // universes
+  if ( average_over_universes ) {
+    cov_mat.cov_matrix_->Scale( 1. / num_universes );
+  }
+
+}
+
+// Overloaded version that takes a single alternate universe wrapped in a
+// std::unique_ptr
+void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
+  const Universe& cv_univ,
+  const Universe& alt_univ, bool average_over_universes = false,
+  bool is_flux_variation = false )
+{
+  std::vector< const Universe* > temp_univ_vec;
+
+  temp_univ_vec.emplace_back( &alt_univ );
+
+  make_cov_mat( sc, cov_mat, cv_univ, temp_univ_vec, average_over_universes,
+    is_flux_variation );
 }
