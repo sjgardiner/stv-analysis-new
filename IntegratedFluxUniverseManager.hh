@@ -62,9 +62,13 @@ class IntegratedFluxUniverseManager {
 
     IntegratedFluxUniverseManager() {
       // Get the latest MCC9 flux histograms from the standard location
-      TFile in_file( "/pnfs/uboone/persistent/uboonebeam/bnb_gsimple/"
-        "bnb_gsimple_fluxes_01.09.2019_463_hist/MCC9_FluxHist_volTPC"
-        "Active.root" );
+      //TFile in_file( "/pnfs/uboone/persistent/uboonebeam/bnb_gsimple/"
+      //  "bnb_gsimple_fluxes_01.09.2019_463_hist/MCC9_FluxHist_volTPC"
+      //  "Active.root" );
+
+      // Use a local copy in /uboone/app/ to deal with /pnfs outages
+      TFile in_file( "/uboone/app/users/gardiner/stv/analysis/"
+        "MCC9_FluxHist_volTPCActive.root" );
 
       // Get the integrated CV numu flux. Note that, since factors like the
       // bin width will cancel out in the ratios that we'll take below, we
