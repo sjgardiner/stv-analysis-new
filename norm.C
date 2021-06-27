@@ -395,21 +395,22 @@ void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
 void norm() {
 
   //covMat( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root" );
+  covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
 
-  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
-    "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
+  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
+  //  "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
 
-  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_p.root",
-    "pangle", "; cos#theta_{p}; d#sigma/dcos#theta_{p} (cm^{2} / Ar)" );
+  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_p.root",
+  //  "pangle", "; cos#theta_{p}; d#sigma/dcos#theta_{p} (cm^{2} / Ar)" );
 
-  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-p_mu.root",
-    "mumom", "; p_{#mu} (GeV); d#sigma/dp_{#mu} (cm^{2} / GeV / Ar)" );
+  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-p_mu.root",
+  //  "mumom", "; p_{#mu} (GeV); d#sigma/dp_{#mu} (cm^{2} / GeV / Ar)" );
 
-  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-p_p.root",
-    "pmom", "; p_{p} (GeV); d#sigma/dp_{p} (cm^{2} / GeV / Ar)" );
+  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-p_p.root",
+  //  "pmom", "; p_{p} (GeV); d#sigma/dp_{p} (cm^{2} / GeV / Ar)" );
 
-  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-th_mu_p.root",
-    "thetamup", "; #theta_{#mu-p} (radian); d#sigma/d#theta_{#mu-p}"
-    " (cm^{2} / radian / Ar)" );
+  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-th_mu_p.root",
+  //  "thetamup", "; #theta_{#mu-p} (radian); d#sigma/d#theta_{#mu-p}"
+  //  " (cm^{2} / radian / Ar)" );
 
 }
