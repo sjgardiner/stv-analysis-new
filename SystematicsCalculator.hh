@@ -108,9 +108,6 @@ class SystematicsCalculator {
 
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
-    virtual void calculate_covariances( const std::string& cov_type,
-      CovMatrix& cov_mat, std::istream& config_file ) const = 0;
-
   //protected:
 
     CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
@@ -1001,10 +998,10 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
 
     } // RW and FluxRW types
 
-    // The options above work in the same way for all classes derived
-    // from SystematicsCalculator. If none of them apply, then calculate the
-    // covariance matrix elements using this pure virtual helper function.
-    else this->calculate_covariances( type, temp_cov_mat, config_file );
+    // Complain if we don't know how to calculate the requested covariance
+    // matrix
+    else throw std::runtime_error( "Unrecognized covariance matrix type \""
+      + type + '\"' );
 
     // Add the finished covariance matrix to the map. If an entry already
     // exists with the same name, throw an exception.

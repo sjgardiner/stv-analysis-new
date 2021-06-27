@@ -15,9 +15,6 @@ class MCC8ForwardFolder : public SystematicsCalculator {
     MCC8ForwardFolder( const std::string& input_respmat_file_name,
       const std::string& respmat_tdirectoryfile_name = "" );
 
-    virtual void calculate_covariances( const std::string& cov_type,
-      CovMatrix& cov_mat, std::istream& config_file ) const override;
-
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const override
     {
@@ -56,14 +53,6 @@ MCC8ForwardFolder::MCC8ForwardFolder(
   respmat_tdirectoryfile_name )
 {
 
-}
-
-void MCC8ForwardFolder::calculate_covariances(
-  const std::string& cov_type, CovMatrix& cov_mat,
-  std::istream& config_file ) const
-{
-  throw std::runtime_error( "Unrecognized covariance matrix type \""
-    + cov_type + '\"' );
 }
 
 // NOTE: this uses a one-based reco bin index
