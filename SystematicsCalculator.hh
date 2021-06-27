@@ -121,6 +121,22 @@ class SystematicsCalculator {
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const = 0;
 
+    // Evaluate a one-sigma data statistical uncertainty on the observable of
+    // interest in a given reco bin. Do the calculation either for BNB data
+    // (use_ext = false) or for EXT data (use_ext = true). NOTE: the reco bin
+    // index consumed by this function is zero-based.
+    virtual double evaluate_data_stat_unc( int reco_bin,
+      bool use_ext ) const = 0;
+
+    // Evaluate a one-sigma MC statistical uncertainty on the observable of
+    // interest (including contributions from both signal and background
+    // events) in a given reco bin within a particular universe. Typically the
+    // CV universe should be used. However, MC statistical uncertainties are
+    // tracked for all Universe objects in case they are needed. NOTE: the reco
+    // bin index consumed by this function is zero-based.
+    virtual double evaluate_mc_stat_unc( const Universe& univ,
+      int reco_bin ) const = 0;
+
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
 
@@ -871,6 +887,41 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       } // terms in the sum
 
     } // sum type
+
+    else if ( type == "MCstat" ) {
+
+      size_t num_reco_bins = reco_bins_.size();
+      const auto& cv_univ = this->cv_universe();
+
+      for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+        // Calculate the MC stat uncertainty in the current reco bin
+        // for the observable of interest. Use the CV universe.
+        double err = this->evaluate_mc_stat_unc( cv_univ, rb );
+        double err2 = err * err;
+
+        // Note the one-based reco bin index used by ROOT histograms
+        temp_cov_mat.cov_matrix_->SetBinContent( rb + 1, rb + 1, err2 );
+
+      } // reco bins
+
+    } // MCstat type
+
+    else if ( type == "BNBstat" || type == "EXTstat" ) {
+
+      bool use_ext = false;
+      if ( type == "EXTstat" ) use_ext = true;
+
+      size_t num_reco_bins = reco_bins_.size();
+
+      for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+        double err = this->evaluate_data_stat_unc( rb, use_ext );
+        double err2 = err * err;
+
+        // Note the one-based reco bin index used by ROOT histograms
+        temp_cov_mat.cov_matrix_->SetBinContent( rb + 1, rb + 1, err2 );
+      } // reco bins
+
+    } // BNBstat and EXTstat types
 
     else if ( type == "MCFullCorr" ) {
       // Read in the fractional uncertainty from the configuration file

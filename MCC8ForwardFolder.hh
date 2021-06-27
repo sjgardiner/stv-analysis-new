@@ -30,6 +30,12 @@ class MCC8ForwardFolder : public SystematicsCalculator {
         flux_universe_index );
     }
 
+    virtual double evaluate_data_stat_unc( int reco_bin,
+      bool use_ext ) const override;
+
+    virtual double evaluate_mc_stat_unc( const Universe& univ,
+      int reco_bin ) const override;
+
     // Helper functions for comparison to CCNp result
     double effective_efficiency( const Universe& univ, int reco_bin ) const;
 
@@ -56,67 +62,8 @@ void MCC8ForwardFolder::calculate_covariances(
   const std::string& cov_type, CovMatrix& cov_mat,
   std::istream& config_file ) const
 {
-  if ( cov_type == "MCstat" ) {
-
-    int num_reco_bins = reco_bins_.size();
-    const auto& cv_univ = this->cv_universe();
-
-    // TODO: optimize so that you can use the Sumw2 array entries instead.
-    // This avoids needing to take many square roots only to square them
-    // again.
-    // NOTE: The reco bin index used here is one-based since ROOT histograms
-    // always include an underflow bin
-    for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
-
-      double err2 = this->expected_mc_background( cv_univ, rb, true );
-
-      double eff = this->effective_efficiency( cv_univ, rb );
-      double scaling = this->xsec_scale_factor( rb );
-
-      if ( eff <= 0. ) err2 = 0.;
-      else {
-        err2 *= std::pow( scaling / eff, 2 );
-      }
-
-      cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
-
-    } // reco bins
-
-  } // MCstat type
-
-  else if ( cov_type == "BNBstat" || cov_type == "EXTstat" ) {
-
-    const TH1D* d_hist = nullptr;
-    if ( cov_type == "BNBstat" ) d_hist = data_hists_.at( NFT::kOnBNB ).get();
-    else d_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXTstat
-
-    int num_reco_bins = d_hist->GetNbinsX();
-
-    const auto& cv_univ = this->cv_universe();
-
-    // Note the one-based bin numbering convention for TH1D
-    for ( int rb = 1; rb <= num_reco_bins; ++rb ) {
-      double err = d_hist->GetBinError( rb );
-      double err2 = err * err;
-
-      // TODO: reduce code duplication with the MCstat type
-      double eff = this->effective_efficiency( cv_univ, rb );
-      double scaling = this->xsec_scale_factor( rb );
-
-      if ( eff <= 0. ) err2 = 0.;
-      else {
-        err2 *= std::pow( scaling / eff, 2 );
-      }
-
-      cov_mat.cov_matrix_->SetBinContent( rb, rb, err2 );
-    } // reco bins
-
-  } // BNBstat and EXTstat types
-
-  else {
-    throw std::runtime_error( "Unrecognized covariance matrix type \""
-      + cov_type + '\"' );
-  }
+  throw std::runtime_error( "Unrecognized covariance matrix type \""
+    + cov_type + '\"' );
 }
 
 // NOTE: this uses a one-based reco bin index
@@ -235,4 +182,49 @@ double MCC8ForwardFolder::forward_folded_xsec( const Universe& univ,
 
   double xsec = ( data_counts - ext_counts - mc_bkgd_counts ) * scaling / eff;
   return xsec;
+}
+
+double MCC8ForwardFolder::evaluate_mc_stat_unc( const Universe& univ,
+  int reco_bin ) const
+{
+  // The input reco bin index is zero-based, but the helper functions defined
+  // below use a one-based index. Correct for this here before proceeding.
+  int rb = reco_bin + 1;
+
+  double err2 = this->expected_mc_background( univ, rb, true );
+
+  double eff = this->effective_efficiency( univ, rb );
+  double scaling = this->xsec_scale_factor( rb );
+
+  if ( eff <= 0. ) err2 = 0.;
+  else {
+    err2 *= std::pow( scaling / eff, 2 );
+  }
+
+  double err = std::sqrt( err2 );
+  return err;
+}
+
+double MCC8ForwardFolder::evaluate_data_stat_unc( int reco_bin,
+  bool use_ext ) const
+{
+  const TH1D* d_hist = nullptr;
+  if ( use_ext ) d_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
+  else d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
+
+  const auto& cv_univ = this->cv_universe();
+
+  // The input reco bin index is zero-based, but the ROOT histograms are
+  // one-based, so I correct for that here. The helper functions below
+  // also work with the one-based index.
+  int rb = reco_bin + 1;
+  double err = d_hist->GetBinError( rb );
+
+  double eff = this->effective_efficiency( cv_univ, rb );
+  double scaling = this->xsec_scale_factor( rb );
+
+  if ( eff <= 0. ) err = 0.;
+  else err *= ( scaling / eff );
+
+  return err;
 }
