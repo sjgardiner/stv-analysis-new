@@ -5,12 +5,13 @@
 #include "FilePropertiesManager.hh"
 #include "PlotUtils.hh"
 #include "MCC8ForwardFolder.hh"
+#include "MCC9Unfolder.hh"
 
 using NFT = NtupleFileType;
 
 void covMat( const std::string& input_respmat_file_name ) {
 
-  auto* syst_ptr = new MCC8ForwardFolder( input_respmat_file_name );
+  auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name );
   auto& syst = *syst_ptr;
 
   // Keys are covariance matrix types, values are CovMatrix objects that
@@ -392,6 +393,8 @@ void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
 }
 
 void norm() {
+
+  //covMat( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root" );
 
   compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
     "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
