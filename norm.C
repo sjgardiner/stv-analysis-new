@@ -30,21 +30,40 @@ void covMat( const std::string& input_respmat_file_name ) {
   TH1D* reco_bnb_hist = syst.data_hists_.at( NFT::kOnBNB ).get();
   TH1D* reco_ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
 
+  TH2D* category_hist = syst.cv_universe().hist_categ_.get();
+
   // Add in the EXT event counts
   reco_pred_hist->Add( reco_ext_hist );
 
   // Add in the CV MC prediction
   reco_pred_hist->Add( syst.cv_universe().hist_reco_.get() );
 
-  // Also make an EXT + CV bkgd plot
-  TH1D* reco_ext_plus_bkgd_hist
-    = (TH1D*)reco_ext_hist->Clone( "ext_plus_bkgd" );
+  // Build a stack of categorized central-value MC predictions plus the extBNB
+  // contribution
+  const auto& eci = EventCategoryInterpreter::Instance();
+  eci.set_ext_histogram_style( reco_ext_hist );
 
-  int num_true_bins = syst.true_bins_.size();
-  TH1D* reco_bkgd_hist = syst.cv_universe().hist_2d_->ProjectionY(
-    "reco_bkgd", num_reco_bins + 1, num_true_bins );
+  THStack* pred_stack = new THStack( "mc+ext", "" );
+  pred_stack->Add( reco_ext_hist ); // extBNB
 
-  reco_ext_plus_bkgd_hist->Add( reco_bkgd_hist );
+  const auto& cat_map = eci.label_map();
+
+  // Go in reverse so that signal ends up on top. Note that this index is
+  // one-based to match the ROOT histograms
+  int cat_bin_index = cat_map.size();
+  for ( auto iter = cat_map.crbegin(); iter != cat_map.crend(); ++iter )
+  {
+    EventCategory cat = iter->first;
+    TH1D* temp_mc_hist = category_hist->ProjectionY( "temp_mc_hist",
+      cat_bin_index, cat_bin_index );
+    temp_mc_hist->SetDirectory( nullptr );
+
+    eci.set_mc_histogram_style( cat, temp_mc_hist );
+
+    pred_stack->Add( temp_mc_hist );
+
+    --cat_bin_index;
+  }
 
   // Keys are labels, values are fractional uncertainty histograms
   auto* fr_unc_hists = new std::map< std::string, TH1D* >();
@@ -111,19 +130,13 @@ void covMat( const std::string& input_respmat_file_name ) {
   reco_bnb_hist->SetStats( false );
   reco_bnb_hist->Draw( "e" );
 
+  pred_stack->Draw( "hist same" );
+
   //reco_pred_hist->SetLineWidth( 3 );
   reco_pred_hist->Draw( "same hist e" );
 
   reco_bnb_hist->GetYaxis()->SetRangeUser( 0., 40e3 );
   reco_bnb_hist->Draw( "same e" );
-
-  reco_ext_hist->SetLineColor( kRed );
-  reco_ext_hist->SetLineWidth( 2 );
-  reco_ext_hist->Draw( "same hist e" );
-
-  reco_ext_plus_bkgd_hist->SetLineColor( 28 );
-  reco_ext_plus_bkgd_hist->SetLineWidth( 2 );
-  reco_ext_plus_bkgd_hist->Draw( "same hist e" );
 
   TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
 
@@ -132,8 +145,6 @@ void covMat( const std::string& input_respmat_file_name ) {
 
   lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
   lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
-  lg->AddEntry( reco_ext_hist, "EXT BNB (stat)", "l" );
-  lg->AddEntry( reco_ext_plus_bkgd_hist, "Background (stat)", "l" );
   lg->Draw( "same" );
 
   TCanvas* c2 = new TCanvas;
@@ -397,10 +408,11 @@ void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
 void norm() {
 
   //covMat( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root" );
-  covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
+  //covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
+  covMat( "newresp-onebin-test.root" );
 
-  compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
-    "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
+  //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
+  //  "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
 
   //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_p.root",
   //  "pangle", "; cos#theta_{p}; d#sigma/dcos#theta_{p} (cm^{2} / Ar)" );
