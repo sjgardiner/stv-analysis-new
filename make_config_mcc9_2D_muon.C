@@ -1,6 +1,6 @@
 #include "ResponseMatrixMaker.hh"
 
-void make_config() {
+void make_config_mcc9_2D_muon() {
 
   // Using floating-point numbers as std::map keys is admittedly evil, but
   // it's safe in this case: all we'll do with this map is iterate over the
@@ -122,7 +122,7 @@ void make_config() {
   true_bins.emplace_back( true_bin_def, kSignalTrueBin );
 
   std::stringstream reco_ss;
-  reco_ss << selection << " && mc_p3_mu.Mag() >= " << pmu_overflow_min;
+  reco_ss << selection << " && p3_mu.Mag() >= " << pmu_overflow_min;
 
   std::string reco_bin_def = reco_ss.str();
   reco_bins.emplace_back( reco_bin_def );
@@ -133,7 +133,7 @@ void make_config() {
   }
 
   // Dump this information to the output file
-  std::ofstream out_file( "myconfig_muon2D.txt" );
+  std::ofstream out_file( "myconfig_mcc9_2D_muon.txt" );
   out_file << "Muon2D\n";
   out_file << "stv_tree\n";
   out_file << true_bins.size() << '\n';
