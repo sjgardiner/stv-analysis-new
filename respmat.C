@@ -12,21 +12,26 @@
 int main( int argc, char* argv[] ) {
 
   if ( argc != 3 ) {
-    std::cout << "Usage: respmat CONFIG_FILE OUTPUT_ROOT_FILE\n";
+    std::cout << "Usage: respmat FILE_PROPERTIES_CONFIG_FILE"
+      << " RESPMAT_CONFIG_FILE OUTPUT_ROOT_FILE\n";
     return 1;
   }
 
-  std::string config_file_name( argv[1] );
-  std::string output_file_name( argv[2] );
+  std::string fp_config_file_name( argv[1] );
+  std::string respmat_config_file_name( argv[2] );
+  std::string output_file_name( argv[3] );
 
   // Build a vector of input ntuple file names using the singleton
-  // FilePropertiesManager. For now, include every ntuple file that we
-  // plan to use in the STV analysis.
-  // TODO: consider adding command-line options to allow the user to specify a
-  // subset of the full set of files managed by the FilePropertiesManager.
+  // FilePropertiesManager. Use the file properties configuration file
+  // specified by the user on the command line.
   std::vector< std::string > input_file_names;
 
-  const auto& fpm = FilePropertiesManager::Instance();
+  std::cout << "Loading FilePropertiesManager configuration from "
+    << fp_config_file_name << '\n';
+
+  auto& fpm = FilePropertiesManager::Instance();
+  fpm.load_file_properties( fp_config_file_name );
+
   for ( const auto& run_and_type_pair : fpm.ntuple_file_map() ) {
 
     const auto& type_map = run_and_type_pair.second;
@@ -54,9 +59,9 @@ int main( int argc, char* argv[] ) {
     std::cout << "Calculating response matrices for ntuple input file "
       << input_file_name << '\n';
     std::cout << "Loading ResponseMatrixMaker configuration from "
-      << config_file_name << '\n';
+      << respmat_config_file_name << '\n';
 
-    ResponseMatrixMaker resp_mat( config_file_name );
+    ResponseMatrixMaker resp_mat( respmat_config_file_name );
 
     resp_mat.add_input_file( input_file_name.c_str() );
 
