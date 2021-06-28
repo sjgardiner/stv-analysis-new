@@ -1,7 +1,20 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 27 June 2021
+// *************************************************************************
+// NOTE: This version applies the MCC8 CCNp signal definition. It differs in
+// two ways from the one adopted in MCC9:
+//
+//   1. The leading proton threshold is raised to 300 MeV/c. This is also
+//   changed in the event selection criteria for consistency.
+//
+//   2. Events containing non-pion final-state (anti)mesons are allowed.
+//
+// Ntuple files processed using this version of the script allow for an
+// apples-to-apples comparison with the published MCC8 results from
+// Phys. Rev. D 102, 112013 (2020).
+//
+// Updated 28 June 2021
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -92,7 +105,9 @@ constexpr int PI_PLUS = 211;
 
 // Values of parameters to use in analysis cuts
 constexpr float DEFAULT_PROTON_PID_CUT = 0.2;
-constexpr float LEAD_P_MIN_MOM_CUT = 0.250; // GeV/c
+// NOTE: the lower momentum cut on the leading proton is changed here to 300
+// MeV/c in agreement with the MCC8 analysis. The MCC9 version uses 250 MeV/c.
+constexpr float LEAD_P_MIN_MOM_CUT = 0.300; // GeV/c
 constexpr float LEAD_P_MAX_MOM_CUT = 1.200; // GeV/c
 constexpr float MUON_MOM_CUT = 0.100; // GeV/c
 constexpr float CHARGED_PI_MOM_CUT = 0.; // GeV/c
@@ -307,13 +322,15 @@ class AnalysisEvent {
     bool mc_vertex_in_FV_ = false;
     bool mc_pmu_above_threshold_ = false;
     bool mc_lead_p_in_mom_range_ = false;
-    bool mc_no_fs_mesons_ = false;
+    bool mc_no_fs_pi0_ = false;
+    bool mc_no_charged_pi_above_threshold_ = false;
+
     // Intersection of all of these requirements
     bool mc_is_signal_ = false;
 
-    // Extra flags for looking specifically at final-state pions
-    bool mc_no_fs_pi0_ = false;
-    bool mc_no_charged_pi_above_threshold_ = false;
+    // Extra flag for looking at events containing any true final-state mesons
+    // (pions or otherwise)
+    bool mc_no_fs_mesons_ = false;
 
     EventCategory category_ = kUnknown;
 
@@ -1156,9 +1173,17 @@ EventCategory AnalysisEvent::categorize_event() {
     mc_lead_p_in_mom_range_ = true;
   }
 
+  // NOTE: The signal definition given here has been changed from its MCC9
+  // version to match the one from the MCC8 CCNp analysis. Events are required
+  // to have zero final-state pions, but any number of other mesons is allowed.
+  // The MCC9 version cuts out events containing any mesons in the final state.
+  // The content of the kNuMuCCOther category is also effected. Pionless CCNp
+  // events which contain other final-state mesons are labeled kNuMuCCOther
+  // if MCC9 if the fulfill the signal definition apart from their meson
+  // content. The same events fall into the signal category in MCC8.
   mc_is_signal_ = mc_vertex_in_FV_ && mc_neutrino_is_numu_
     && mc_pmu_above_threshold_ && mc_lead_p_in_mom_range_
-    && mc_no_fs_mesons_;
+    && mc_no_fs_pi0_ && mc_no_charged_pi_above_threshold_;
 
   // Sort signal by interaction mode
   if ( mc_is_signal_ ) {
