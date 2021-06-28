@@ -17,6 +17,7 @@
 #include "TTreeFormula.h"
 
 // STV analysis includes
+#include "EventCategory.hh"
 #include "TreeUtils.hh"
 #include "WeightHandler.hh"
 
@@ -213,23 +214,38 @@ class Universe {
         "; true bin number; reco bin number; counts", num_true_bins, 0.,
         num_true_bins, num_reco_bins, 0., num_reco_bins );
 
+      // Get the number of defined EventCategory values by checking the number
+      // of elements in the "label map" managed by the EventCategoryInterpreter
+      // singleton class
+      const auto& eci = EventCategoryInterpreter::Instance();
+      size_t num_categories = eci.label_map().size();
+
+      hist_categ_ = std::make_unique< TH2D >(
+        (hist_name_prefix + "_categ").c_str(),
+        "; true event category; reco bin number; counts", num_categories, 0.,
+        num_categories, num_reco_bins, 0., num_reco_bins );
+
       // Store summed squares of event weights (for calculations of the MC
       // statistical uncertainty on bin contents)
       hist_true_->Sumw2();
       hist_reco_->Sumw2();
       hist_2d_->Sumw2();
+      hist_categ_->Sumw2();
     }
 
     // Note: the new Universe object takes ownership of the histogram
     // pointers passed to this constructor
     Universe( const std::string& universe_name,
-      size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d )
+      size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d,
+      TH2D* hist_categ )
       : universe_name_( universe_name ), index_( universe_index ),
-      hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d )
+      hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d ),
+      hist_categ_( hist_categ )
     {
       hist_true_->SetDirectory( nullptr );
       hist_reco_->SetDirectory( nullptr );
       hist_2d_->SetDirectory( nullptr );
+      hist_categ_->SetDirectory( nullptr );
     }
 
     std::unique_ptr< Universe > clone() const {
@@ -241,6 +257,7 @@ class Universe {
       result->hist_true_->Add( this->hist_true_.get() );
       result->hist_reco_->Add( this->hist_reco_.get() );
       result->hist_2d_->Add( this->hist_2d_.get() );
+      result->hist_categ_->Add( this->hist_categ_.get() );
 
       return result;
     }
@@ -250,6 +267,7 @@ class Universe {
     std::unique_ptr< TH1D > hist_true_;
     std::unique_ptr< TH1D > hist_reco_;
     std::unique_ptr< TH2D > hist_2d_;
+    std::unique_ptr< TH2D > hist_categ_;
 };
 
 class ResponseMatrixMaker {
@@ -324,6 +342,10 @@ class ResponseMatrixMaker {
     // into each reco bin
     std::vector< std::unique_ptr<TTreeFormula> > reco_bin_formulas_;
 
+    // TTreeFormula objects used to test whether the current TChain entry falls
+    // into each true EventCategory
+    std::vector< std::unique_ptr<TTreeFormula> > category_formulas_;
+
     // Stores Universe objects used to accumulate event weights
     std::map< std::string, std::vector<Universe> > universes_;
 
@@ -397,9 +419,17 @@ void ResponseMatrixMaker::add_input_file( const std::string& input_file_name )
 }
 
 void ResponseMatrixMaker::prepare_formulas() {
+
   // Remove any pre-existing TTreeFormula objects from the owned vectors
   true_bin_formulas_.clear();
   reco_bin_formulas_.clear();
+  category_formulas_.clear();
+
+  // Get the number of defined EventCategory values by checking the number
+  // of elements in the "label map" managed by the EventCategoryInterpreter
+  // singleton class
+  const auto& eci = EventCategoryInterpreter::Instance();
+  size_t num_categories = eci.label_map().size();
 
   // Create one TTreeFormula for each true bin definition
   for ( size_t tb = 0u; tb < true_bins_.size(); ++tb ) {
@@ -425,6 +455,25 @@ void ResponseMatrixMaker::prepare_formulas() {
     rbf->SetQuickLoad( true );
 
     reco_bin_formulas_.emplace_back( std::move(rbf) );
+  }
+
+  // Create one TTreeFormula for each true EventCategory
+  const auto& category_map = eci.label_map();
+  for ( const auto& category_pair : category_map ) {
+
+    EventCategory cur_category = category_pair.first;
+    std::string str_category = std::to_string( cur_category );
+
+    std::string category_formula_name = "category_formula_" + str_category;
+
+    std::string category_cuts = "category == " + str_category;
+
+    auto cbf = std::make_unique< TTreeFormula >(
+      category_formula_name.c_str(), category_cuts.c_str(), &input_chain_ );
+
+    cbf->SetQuickLoad( true );
+
+    category_formulas_.emplace_back( std::move(cbf) );
   }
 
 }
@@ -479,6 +528,7 @@ void ResponseMatrixMaker::build_response_matrices(
       treenumber = input_chain_.GetTreeNumber();
       for ( auto& tbf : true_bin_formulas_ ) tbf->Notify();
       for ( auto& rbf : reco_bin_formulas_ ) rbf->Notify();
+      for ( auto& cbf : category_formulas_ ) cbf->Notify();
     }
 
     // Find the reco bin(s) that should be filled for the current event
@@ -486,6 +536,13 @@ void ResponseMatrixMaker::build_response_matrices(
     for ( size_t rb = 0u; rb < reco_bin_formulas_.size(); ++rb ) {
       auto& rbf = reco_bin_formulas_.at( rb );
       if ( rbf->EvalInstance() ) matched_reco_bins.push_back( rb );
+    }
+
+    // Find the EventCategory label(s) that apply to the current event
+    std::vector< size_t > matched_category_indices;
+    for ( size_t c = 0u; c < category_formulas_.size(); ++c ) {
+      auto& cbf = category_formulas_.at( c );
+      if ( cbf->EvalInstance() ) matched_category_indices.push_back( c );
     }
 
     input_chain_.GetEntry( entry );
@@ -544,6 +601,9 @@ void ResponseMatrixMaker::build_response_matrices(
 
         for ( const int& rb : matched_reco_bins ) {
           universe.hist_reco_->Fill( rb, safe_wgt );
+          for ( const int& c : matched_category_indices ) {
+            universe.hist_categ_->Fill( c, rb, safe_wgt );
+          }
         } // reco bins
       } // universes
     } // weight names
@@ -560,6 +620,9 @@ void ResponseMatrixMaker::build_response_matrices(
 
     for ( const int& rb : matched_reco_bins ) {
       univ.hist_reco_->Fill( rb );
+      for ( const int& c : matched_category_indices ) {
+        univ.hist_categ_->Fill( c, rb );
+      }
     } // reco bins
 
   } // TChain entries
@@ -702,6 +765,7 @@ void ResponseMatrixMaker::save_histograms(
       if ( univ.hist_true_->GetEntries() > 0. ) {
         univ.hist_true_->Write();
         univ.hist_2d_->Write();
+        univ.hist_categ_->Write();
       }
     } // universes
   } // weight names

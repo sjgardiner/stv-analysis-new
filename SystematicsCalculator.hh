@@ -23,6 +23,9 @@ void set_stats_and_dir( Universe& univ ) {
 
   univ.hist_2d_->SetStats( false );
   univ.hist_2d_->SetDirectory( nullptr );
+
+  univ.hist_categ_->SetStats( false );
+  univ.hist_categ_->SetDirectory( nullptr );
 }
 
 // Tests whether a string ends with another string. Taken from
@@ -295,19 +298,21 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     TH1D* hist_true = nullptr;
     TH1D* hist_reco = nullptr;
     TH2D* hist_2d = nullptr;
+    TH2D* hist_categ = nullptr;
 
     total_subdir.GetObject( (key + "_true").c_str(), hist_true );
     total_subdir.GetObject( (key + "_reco").c_str(), hist_reco );
     total_subdir.GetObject( (key + "_2d").c_str(), hist_2d );
+    total_subdir.GetObject( (key + "_categ").c_str(), hist_categ );
 
-    if ( !hist_true || !hist_reco || !hist_2d ) {
+    if ( !hist_true || !hist_reco || !hist_2d || !hist_categ ) {
       throw std::runtime_error( "Failed to retrieve histograms for the "
         + key + " universe" );
     }
 
     // Reconstruct the Universe object from the retrieved histograms
     auto temp_univ = std::make_unique< Universe >( univ_name, univ_index,
-      hist_true, hist_reco, hist_2d );
+      hist_true, hist_reco, hist_2d, hist_categ );
 
     // Determine whether the current universe represents a detector
     // variation or a reweightable variation. We'll use this information to
@@ -526,7 +531,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
 
         // If we've made it here, then we're working with an MC ntuple
-        // file. For these, all three histograms for the "unweighted"
+        // file. For these, all four histograms for the "unweighted"
         // universe are always evaluated. Use this to determine the number
         // of true and reco bins easily.
         TH2D* temp_2d_hist = nullptr;
@@ -561,10 +566,12 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           TH1D* hist_reco = nullptr;
           TH1D* hist_true = nullptr;
           TH2D* hist_2d = nullptr;
+          TH2D* hist_categ = nullptr;
 
           subdir->GetObject( "unweighted_0_reco", hist_reco );
           subdir->GetObject( "unweighted_0_true", hist_true );
           subdir->GetObject( "unweighted_0_2d", hist_2d );
+          subdir->GetObject( "unweighted_0_categ", hist_categ );
 
           // Scale all detVar universe histograms from the simulated POT to
           // the *total* BNB data POT for all runs analyzed. Since we only
@@ -574,12 +581,14 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           hist_reco->Scale( total_bnb_data_pot_ / file_pot );
           hist_true->Scale( total_bnb_data_pot_ / file_pot );
           hist_2d->Scale( total_bnb_data_pot_ / file_pot );
+          hist_categ->Scale( total_bnb_data_pot_ / file_pot );
 
           // Add the scaled contents of these histograms to the
           // corresponding histograms in the new Universe object
           temp_univ_ptr->hist_reco_->Add( hist_reco );
           temp_univ_ptr->hist_true_->Add( hist_true );
           temp_univ_ptr->hist_2d_->Add( hist_2d );
+          temp_univ_ptr->hist_categ_->Add( hist_categ );
 
           // Adjust the owned histograms to avoid auto-deletion problems
           set_stats_and_dir( *temp_univ_ptr );
@@ -679,6 +688,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               TH1D* h_reco = nullptr;
               TH1D* h_true = nullptr;
               TH2D* h_2d = nullptr;
+              TH2D* h_categ = nullptr;
 
               subdir->GetObject( (hist_name_prefix + "_reco").c_str(),
                 h_reco );
@@ -688,17 +698,22 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
               subdir->GetObject( (hist_name_prefix + "_2d").c_str(), h_2d );
 
+              subdir->GetObject( (hist_name_prefix + "_categ").c_str(),
+                h_categ );
+
               // Scale these histograms to the appropriate BNB data POT for
               // the current run
               h_reco->Scale( rw_scale_factor );
               h_true->Scale( rw_scale_factor );
               h_2d->Scale( rw_scale_factor );
+              h_categ->Scale( rw_scale_factor );
 
               // Add their contributions to the owned histograms for the
               // current Universe object
               universe.hist_reco_->Add( h_reco );
               universe.hist_true_->Add( h_true );
               universe.hist_2d_->Add( h_2d );
+              universe.hist_categ_->Add( h_categ );
 
             } // universes indices
 
@@ -740,6 +755,7 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     universe->hist_reco_->Write();
     universe->hist_true_->Write();
     universe->hist_2d_->Write();
+    universe->hist_categ_->Write();
   }
 
   // Save the reweightable systematic histograms
@@ -750,6 +766,7 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
       universe->hist_reco_->Write();
       universe->hist_true_->Write();
       universe->hist_2d_->Write();
+      universe->hist_categ_->Write();
     }
 
   }
