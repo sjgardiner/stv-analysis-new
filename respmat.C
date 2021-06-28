@@ -11,7 +11,7 @@
 
 int main( int argc, char* argv[] ) {
 
-  if ( argc != 3 ) {
+  if ( argc != 4 ) {
     std::cout << "Usage: respmat FILE_PROPERTIES_CONFIG_FILE"
       << " RESPMAT_CONFIG_FILE OUTPUT_ROOT_FILE\n";
     return 1;
