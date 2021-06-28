@@ -6,8 +6,8 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
+#include "MCC9Unfolder.hh"
 #include "ResponseMatrixMaker.hh"
-
 
 int main( int argc, char* argv[] ) {
 
@@ -42,6 +42,13 @@ int main( int argc, char* argv[] ) {
 
   ROOT::EnableImplicitMT();
 
+  // Store the name of the root TDirectoryFile created by the
+  // ResponseMatrixMaker objects below. We will use it to ensure that
+  // the MCC9Unfolder object used to calculate the total event counts
+  // will always be working with the correct sets of universes.
+  std::string tdirfile_name;
+  bool set_tdirfile_name = false;
+
   for ( const auto& input_file_name : input_file_names ) {
 
     std::cout << "Calculating response matrices for ntuple input file "
@@ -57,7 +64,22 @@ int main( int argc, char* argv[] ) {
 
     resp_mat.save_histograms( output_file_name, input_file_name );
 
+    // The root TDirectoryFile name is the same across all iterations of this
+    // loop, so just set it once on the first iteration
+    if ( !set_tdirfile_name ) {
+      tdirfile_name = resp_mat.dir_name();
+      set_tdirfile_name = true;
+    }
+
   } // loop over input files
+
+  // Use a temporary MCC9Unfolder object to automatically calculate the total
+  // event counts in each universe across all input files. Since the
+  // get_covariances() member function is never called, the specific
+  // systematics configuration file used doesn't matter. The empty string
+  // passed as the second argument to the constructor just instructs the
+  // MCC9Unfolder class to use the default systematics configuration file.
+  MCC9Unfolder unfolder( output_file_name, "", tdirfile_name );
 
   return 0;
 }

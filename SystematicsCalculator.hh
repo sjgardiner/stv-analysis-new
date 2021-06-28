@@ -1,10 +1,15 @@
 #pragma once
 
+// Standard library includes
+#include <memory>
+
 // ROOT includes
 #include "TDirectoryFile.h"
 #include "TFile.h"
 #include "TH1D.h"
 #include "TH2D.h"
+#include "TMatrixDSym.h"
+#include "TParameter.h"
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
