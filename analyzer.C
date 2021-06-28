@@ -1602,9 +1602,17 @@ void analyzer(const std::string& in_file_name,
   analyze( in_files, output_filename );
 }
 
-int main() {
-  //analyzer("/pnfs/uboone/persistent/users/davidc/searchingfornues/v08_00_00_43/0928/prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root", "/uboone/data/users/gardiner/ntuples-stv/out.root");
-  //analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_41/cc0pinp/0617/nslice/run1_neutrinoselection_filt_numu_ALL.root", "/uboone/data/users/gardiner/ntuples-stv/out.root");
-  analyzer("/uboone/data/users/davidc/searchingfornues/v08_00_00_44/0724/noweights/prodgenie_bnb_nu_overlay_DetVar_CV_reco2_v08_00_00_38_run3b_reco2_reco2.root", "/uboone/data/users/gardiner/ntuples-stv/out.root");
+int main( int argc, char* argv[] ) {
+
+  if ( argc != 3 ) {
+    std::cout << "Usage: analyzer INPUT_PELEE_NTUPLE_FILE OUTPUT_FILE\n";
+    return 1;
+  }
+
+  std::string input_file_name( argv[1] );
+  std::string output_file_name( argv[2] );
+
+  analyzer( input_file_name, output_file_name );
+
   return 0;
 }

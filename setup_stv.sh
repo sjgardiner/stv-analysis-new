@@ -11,3 +11,4 @@ setup uboonecode v08_00_00_52 -q e17:prof
 THIS_DIRECTORY="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 export STV_ANALYSIS_DIR=${THIS_DIRECTORY}
+export PATH=${PATH}:${STV_ANALYSIS_DIR}
