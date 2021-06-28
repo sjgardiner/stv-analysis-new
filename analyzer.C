@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 1 March 2021
+// Updated 27 June 2021
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -29,6 +29,45 @@
 double real_sqrt( double x ) {
   if ( x < 0. ) return 0.;
   else return std::sqrt( x );
+}
+
+// Helper function that returns true if a given PDG code represents a meson or
+// antimeson. Otherwise returns false. Based on points 10, 12, and 13 of the
+// Particle Data Group's "Monte Carlo Particle Numbering Scheme"
+// (2019 revision).
+bool is_meson_or_antimeson( int pdg_code ) {
+
+  // Ignore differences between mesons and antimesons for this test. Mesons
+  // will have positive PDG codes, while antimesons will have negative ones.
+  int abs_pdg = std::abs( pdg_code );
+
+  // Meson PDG codes have no more than seven digits. Seven-digit
+  // codes beginning with "99" are reserved for generator-specific
+  // particles
+  if ( abs_pdg >= 9900000 ) return false;
+
+  // Mesons have a value of zero for $n_{q1}$, the thousands digit
+  int thousands_digit = ( abs_pdg / 1000 ) % 10;
+  if ( thousands_digit != 0 ) return false;
+
+  // They also have a nonzero value for $n_{q2}$, the hundreds digit
+  int hundreds_digit = ( abs_pdg / 100 ) % 10;
+  if ( hundreds_digit == 0 ) return false;
+
+  // Reserved codes for Standard Model parton distribution functions
+  if ( abs_pdg >= 901 && abs_pdg <= 930 ) return false;
+
+  // Reggeon and pomeron
+  if ( abs_pdg == 110 || abs_pdg == 990 ) return false;
+
+  // Reserved codes for GEANT tracking purposes
+  if ( abs_pdg == 998 || abs_pdg == 999 ) return false;
+
+  // Reserved code for generator-specific pseudoparticles
+  if ( abs_pdg == 100 ) return false;
+
+  // If we've passed all of the tests above, then the particle is a meson
+  return true;
 }
 
 // A few helpful dummy constants
@@ -268,10 +307,13 @@ class AnalysisEvent {
     bool mc_vertex_in_FV_ = false;
     bool mc_pmu_above_threshold_ = false;
     bool mc_lead_p_in_mom_range_ = false;
-    bool mc_no_fs_pi0_ = false;
-    bool mc_no_charged_pi_above_threshold_ = false;
+    bool mc_no_fs_mesons_ = false;
     // Intersection of all of these requirements
     bool mc_is_signal_ = false;
+
+    // Extra flags for looking specifically at final-state pions
+    bool mc_no_fs_pi0_ = false;
+    bool mc_no_charged_pi_above_threshold_ = false;
 
     EventCategory category_ = kUnknown;
 
@@ -581,6 +623,9 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "mc_no_charged_pi_above_threshold",
     &ev.mc_no_charged_pi_above_threshold_, create,
     "mc_no_charged_pi_above_threshold/O" );
+
+  set_output_branch_address( out_tree, "mc_no_fs_mesons",
+    &ev.mc_no_fs_mesons_, create, "mc_no_fs_mesons/O" );
 
   set_output_branch_address( out_tree, "mc_is_signal",
     &ev.mc_is_signal_, create, "mc_is_signal/O" );
@@ -1071,12 +1116,19 @@ EventCategory AnalysisEvent::categorize_event() {
   mc_lead_p_in_mom_range_ = false;
   mc_no_fs_pi0_ = true;
   mc_no_charged_pi_above_threshold_ = true;
+  mc_no_fs_mesons_ = true;
 
   double lead_p_mom = LOW_FLOAT;
 
   for ( size_t p = 0u; p < mc_nu_daughter_pdg_->size(); ++p ) {
     int pdg = mc_nu_daughter_pdg_->at( p );
     float energy = mc_nu_daughter_energy_->at( p );
+
+    // Do the general check for (anti)mesons first before considering
+    // any individual PDG codes
+    if ( is_meson_or_antimeson(pdg) ) {
+      mc_no_fs_mesons_ = false;
+    }
 
     if ( pdg == MUON ) {
       double mom = real_sqrt( std::pow(energy, 2) - std::pow(MUON_MASS, 2) );
@@ -1106,7 +1158,7 @@ EventCategory AnalysisEvent::categorize_event() {
 
   mc_is_signal_ = mc_vertex_in_FV_ && mc_neutrino_is_numu_
     && mc_pmu_above_threshold_ && mc_lead_p_in_mom_range_
-    && mc_no_fs_pi0_ && mc_no_charged_pi_above_threshold_;
+    && mc_no_fs_mesons_;
 
   // Sort signal by interaction mode
   if ( mc_is_signal_ ) {
