@@ -482,8 +482,8 @@ void make_res_plots( const std::string& rmm_config_file_name,
 
 void res_plots() {
 
-  auto& fpm = FilePropertiesManager::Instance();
-  fpm.load_file_properties( "new_file_properties.txt" );
+  //auto& fpm = FilePropertiesManager::Instance();
+  //fpm.load_file_properties( "new_file_properties.txt" );
 
   //make_res_plots( "myconfig_muon2D.txt", {1} );
 
