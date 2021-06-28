@@ -73,14 +73,15 @@ double proton_pid_cut( double track_length ) {
 
   double cut = DEFAULT_PROTON_PID_CUT;
 
-  // All track length values are in cm
-  if ( track_length >= 0. && track_length <= 10.5 ) {
-    cut = -0.0034219305*std::pow( track_length, 2 );
-    cut += 0.018436866*track_length + 0.062718401;
-  }
-  else if ( track_length > 10.5 && track_length <= 33.1776508 ) {
-    cut = 0.014153245*( track_length - 10.5 ) - 0.12096235;
-  }
+  // Piecewise cut removed 27 June 2021
+  //// All track length values are in cm
+  //if ( track_length >= 0. && track_length <= 10.5 ) {
+  //  cut = -0.0034219305*std::pow( track_length, 2 );
+  //  cut += 0.018436866*track_length + 0.062718401;
+  //}
+  //else if ( track_length > 10.5 && track_length <= 33.1776508 ) {
+  //  cut = 0.014153245*( track_length - 10.5 ) - 0.12096235;
+  //}
 
   return cut;
 
