@@ -482,6 +482,9 @@ void make_res_plots( const std::string& rmm_config_file_name,
 
 void res_plots() {
 
+  auto& fpm = FilePropertiesManager::Instance();
+  fpm.load_file_properties( "new_file_properties.txt" );
+
   //make_res_plots( "myconfig_muon2D.txt", {1} );
 
   //make_res_plots( "p3_mu.CosTheta()", "cos(#theta_{#mu})",
@@ -491,11 +494,11 @@ void res_plots() {
   //    0.575, 0.65, 0.725, 0.8, 0.85, 0.875, 0.9, 0.925, 0.950, 0.975, 1.00 },
   // false );
 
-  make_res_plots( "p3_lead_p.Mag()", "p_{lead p}",
-   "sel_CCNp0pi", {1},
-  { 0.250, 0.325, 0.4, 0.45, 0.5, 0.550, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
-    0.975, 1.20 },
-  true );
+  //make_res_plots( "p3_lead_p.Mag()", "p_{lead p}",
+  // "sel_CCNp0pi", {1},
+  //{ 0.250, 0.325, 0.4, 0.45, 0.5, 0.550, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+  //  0.975, 1.20 },
+  //true );
 
   //make_res_plots( "pn", "p_{n}", "sel_CCNp0pi", {2},
   //  { 0., 0.125, 0.225, 0.325, 0.425, 0.525, 0.65, 0.85 },
@@ -584,4 +587,67 @@ void res_plots() {
   //{ -1, 0.5, 0.8, 0.875, 0.950, 1.00 },
 
   //false );
+
+  ///////////////////////////////////////////////////////
+  // 2D proton binning study
+  ///////////////////////////////////////////////////////
+
+  //make_res_plots( "p3_lead_p.Mag()", "p_{lead p}",
+  // "sel_CCNp0pi", {1},
+  //{ 0.250, 0.325, 0.4, 0.45, 0.5, 0.550, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
+  //  0.975, 1.20 },
+  //false );
+
+  //make_res_plots( "p3_lead_p.CosTheta()", "cos#theta_{p}",
+  // "sel_CCNp0pi", {1},
+  // { -1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8,
+  //    0.85, 0.9, 0.95, 1.0 },
+  // false );
+
+  //make_res_plots( "p3_lead_p.CosTheta()", "cos#theta_{p}",
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.250 && p3_lead_p.Mag() < 0.325", {1},
+  //  { -1, -0.5, 0.1, 0.6, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.325 && p3_lead_p.Mag() < 0.4", {1},
+  //  { -1, -0.7, -0.4, 0, 0.4, 0.6, 0.8, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.4 && p3_lead_p.Mag() < 0.45", {1},
+  //   { -1, -0.6, -0.2, 0.2, 0.5, 0.65, 0.85, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.45 && p3_lead_p.Mag() < 0.5", {1},
+  //   { -1, -0.4, 0, 0.2, 0.4, 0.55, 0.65, 0.8, 0.92, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.5 && p3_lead_p.Mag() < 0.550", {1},
+  //  { -1, -0.4, 0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.550 && p3_lead_p.Mag() < 0.6", {1},
+  //  { -1, 0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.6 && p3_lead_p.Mag() < 0.65", {1},
+  //  { -1, 0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.65 && p3_lead_p.Mag() < 0.7", {1},
+  //  { -1, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.7 && p3_lead_p.Mag() < 0.75", {1},
+  //  { -1, 0.4, 0.6, 0.75, 0.82, 0.9, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.75 && p3_lead_p.Mag() < 0.8", {1},
+  //  { -1, 0.4, 0.6, 0.75, 0.87, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.8 && p3_lead_p.Mag() < 0.85", {1},
+  //  { -1, 0.6, 0.73, 0.86, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.85 && p3_lead_p.Mag() < 0.9", {1},
+  //  { -1, 0.6, 0.73, 0.86, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.9 && p3_lead_p.Mag() < 0.975", {1},
+  //  { -1, 0.7, 0.85, 1.0 },
+
+  //  "sel_CCNp0pi && p3_lead_p.Mag() >= 0.975 && p3_lead_p.Mag() < 1.20", {1},
+  //  { -1, 0.8, 1.0 },
+
+  //false );
+
+  make_res_plots( "myconfig_mcc9_2D_proton.txt", {1} );
 }
