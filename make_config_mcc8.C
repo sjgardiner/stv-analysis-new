@@ -85,6 +85,19 @@ void make_config_mcc8() {
     std::string reco_branchexpr = pair.first;
     std::string true_branchexpr = "mc_" + reco_branchexpr;
 
+    // I didn't yet make a separate branch for the opening angle between
+    // the muon and proton, so fix the branch expressions for that case
+    // with this ugly hack
+    if ( reco_branchexpr == "thMuP" ) {
+      reco_branchexpr = "TMath::ACos( (p3_mu.X()*p3_lead_p.X() + p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) / p3_mu.Mag() / p3_lead_p.Mag() )";
+      true_branchexpr = "TMath::ACos( (mc_p3_mu.X()*mc_p3_lead_p.X() + mc_p3_mu.Y()*mc_p3_lead_p.Y() + mc_p3_mu.Z()*mc_p3_lead_p.Z()) / mc_p3_mu.Mag() / mc_p3_lead_p.Mag() )";
+
+      // Add to the necessary maps as well so we don't break the lookups below
+      mcc8_var_name_map[ reco_branchexpr ] = mcc8_var_name_map.at( "thMuP" );
+      mcc8_under_overflow_map[ reco_branchexpr ]
+        = mcc8_under_overflow_map.at( "thMuP" );
+    }
+
     const auto flag_pair = mcc8_under_overflow_map.at( reco_branchexpr );
     bool needs_underflow_bin = flag_pair.first;
     bool needs_overflow_bin = flag_pair.second;
