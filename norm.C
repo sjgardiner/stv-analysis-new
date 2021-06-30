@@ -135,8 +135,14 @@ void covMat( const std::string& input_respmat_file_name ) {
   //reco_pred_hist->SetLineWidth( 3 );
   reco_pred_hist->Draw( "same hist e" );
 
-  reco_bnb_hist->GetYaxis()->SetRangeUser( 0., 40e3 );
+  reco_bnb_hist->GetYaxis()->SetRangeUser( 0., 1.6e3 );
   reco_bnb_hist->Draw( "same e" );
+
+  for ( int b = 0; b <= reco_bnb_hist->GetNbinsX() + 1; ++b ) {
+    std::cout << "bin " << b << ": data = "
+      << reco_bnb_hist->GetBinContent( b )
+      << ", MC+EXT = " << reco_pred_hist->GetBinContent( b ) << '\n';
+  }
 
   TLegend* lg = new TLegend( 0.7, 0.7, 0.9, 0.9 );
 
@@ -145,7 +151,7 @@ void covMat( const std::string& input_respmat_file_name ) {
 
   lg->AddEntry( reco_bnb_hist, "BNB data", "l" );
   lg->AddEntry( reco_pred_hist, "MC (stat+syst)", "l" );
-  lg->Draw( "same" );
+  //lg->Draw( "same" );
 
   TCanvas* c2 = new TCanvas;
   TLegend* lg2 = new TLegend( 0.7, 0.7, 0.9, 0.9 );
@@ -409,7 +415,8 @@ void norm() {
 
   //covMat( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root" );
   //covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
-  covMat( "newresp-onebin-test.root" );
+  covMat( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/"
+    "respmat-files/RespMat-mcc9-2D_proton.root" );
 
   //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
   //  "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
