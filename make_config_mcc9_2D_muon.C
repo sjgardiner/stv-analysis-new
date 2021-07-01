@@ -141,4 +141,52 @@ void make_config_mcc9_2D_muon() {
 
   out_file << reco_bins.size() << '\n';
   for ( const auto& rb : reco_bins ) out_file << rb << '\n';
+
+  // Also write a SliceBinning configuration file
+  std::ofstream sb_file( "mybins_mcc9_2D_muon.txt" );
+  sb_file << "2\n";
+  sb_file << "\"reco p_{#mu}\" \"GeV/c\" \"reco $p_{\\mu}$\" \"GeV$/c$\"\n";
+  sb_file << "\"reco cos#theta_{#mu}\" \"\" \"reco $\\cos\\theta_{\\mu}$\""
+    " \"\"\n";
+  size_t num_slices = muon_2D_bin_edges.size() - 1;
+  sb_file << num_slices << '\n';
+
+  // Get an iterator to the final entry in the edge map (this is the
+  // upper edge of the last bin)
+  auto last_edge = muon_2D_bin_edges.cend();
+  --last_edge;
+
+  // The reco bins are numbered in the order that their edges appear in the
+  // map, so just keep a running counter here to keep track of which reco
+  // bin we are on.
+  size_t cur_reco_bin = 0u;
+
+  for ( auto iter = muon_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
+    // Each 1D slice uses the same y-axis units (reco events)
+    sb_file << "\"events\"\n";
+    const auto& edges = iter->second;
+    int num_edges = edges.size();
+    int num_bins = num_edges - 1;
+    // The muon cosine is the sole "active variable" in each slice
+    sb_file << "1 1 " << num_edges;
+    for ( const auto& edge : edges ) {
+      sb_file << ' ' << edge;
+    }
+    // The muon momentum is the sole "other variable" in each slice
+    double pmu_low = iter->first;
+    auto next = iter;
+    ++next;
+    double pmu_high = next->first;
+    sb_file << "\n1 0 " << pmu_low << ' ' << pmu_high << '\n';
+    sb_file << num_bins;
+
+    for ( int b = 0; b < num_bins; ++b ) {
+      int root_bin_idx = b + 1;
+      sb_file << '\n' << cur_reco_bin << " 1 " << root_bin_idx;
+      ++cur_reco_bin;
+    } // cosine bins
+    sb_file << '\n';
+
+  } // pmu slices
+
 }
