@@ -3,9 +3,10 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
-#include "PlotUtils.hh"
 #include "MCC8ForwardFolder.hh"
 #include "MCC9Unfolder.hh"
+#include "PlotUtils.hh"
+#include "SliceBinning.hh"
 
 using NFT = NtupleFileType;
 
@@ -411,12 +412,232 @@ void compare_mcc8_mcc9( const std::string& input_respmat_file_name,
 
 }
 
+struct SliceHistogram {
+
+  SliceHistogram() {}
+
+  std::unique_ptr< TH1 > hist_;
+  CovMatrix cmat_;
+};
+
+// Creates a new event histogram and an associated covariance matrix for a
+// particular slice of phase space. The histogram is filled from the
+// appropriate bin(s) of a 1D histogram of reco bin event counts. The mapping
+// from reco bin number to the slice histogram bins is described by the input
+// Slice object. Bin errors are set according to the reco-bin-space CovMatrix
+// object pointed to by the input_cov_mat argument. If it is null, the bin
+// errors are set to a default value of zero, and the output CovMatrix object
+// owns a nullptr.
+SliceHistogram* make_slice_histogram( TH1D& reco_bin_histogram,
+  const Slice& slice, const CovMatrix* input_cov_mat = nullptr )
+{
+  // Get the binning and axis labels for the current slice by cloning the
+  // (empty) histogram owned by the Slice object
+  TH1* slice_hist = dynamic_cast< TH1* >(
+    slice.hist_->Clone("slice_hist") );
+
+  slice_hist->SetDirectory( nullptr );
+
+  // Fill the slice bins based on the input reco bins
+  for ( const auto& pair : slice.bin_map_ ) {
+
+    // One-based index for the global TH1 bin number in the slice
+    int slice_bin_idx = pair.first;
+
+    const auto& reco_bin_set = pair.second;
+
+    double slice_bin_content = 0.;
+    for ( const auto& rb_idx : reco_bin_set ) {
+      // The ResponseMatrixMaker reco bin indices are zero-based, so I correct
+      // for this here when pulling values from the one-based input ROOT
+      // histogram
+      slice_bin_content += reco_bin_histogram.GetBinContent( rb_idx + 1 );
+    }
+
+    slice_hist->SetBinContent( slice_bin_idx, slice_bin_content );
+
+  } // slice bins
+
+  // If we've been handed a non-null pointer to a CovMatrix object, then
+  // we will use it to propagate uncertainties.
+  TH2D* covmat_hist = nullptr;
+  if ( input_cov_mat ) {
+
+    // Create a new TH2D to hold the covariance matrix elements associated with
+    // the slice histogram.
+    // NOTE: I assume here that every slice bin is represented in the bin_map.
+    // If this isn't the case, the bin counting will be off.
+    // TODO: revisit this assumption and perhaps do something better
+    int num_slice_bins = slice.bin_map_.size();
+
+    covmat_hist = new TH2D( "covmat_hist", "covariance; slice bin;"
+      " slice bin; covariance", num_slice_bins, 0., num_slice_bins,
+      num_slice_bins, 0., num_slice_bins );
+    covmat_hist->SetDirectory( nullptr );
+    covmat_hist->SetStats( false );
+
+    // We're ready. Populate the new covariance matrix using the elements
+    // of the one for the reco bin space
+    for ( const auto& pair_a : slice.bin_map_ ) {
+      // Global slice bin index
+      int sb_a = pair_a.first;
+      // Set of reco bins that correspond to slice bin sb_a
+      const auto& rb_set_a = pair_a.second;
+      for ( const auto& pair_b : slice.bin_map_ ) {
+        int sb_b = pair_b.first;
+        const auto& rb_set_b = pair_b.second;
+
+        double cov = 0.;
+        const TH2D* cmat = input_cov_mat->cov_matrix_.get();
+        for ( const auto& rb_m : rb_set_a ) {
+          for ( const auto& rb_n : rb_set_b ) {
+            // The covariance matrix TH2D uses one-based indices even though
+            // the ResponseMatrixMaker numbering scheme is zero-based. I
+            // correct for this here.
+            cov += cmat->GetBinContent( rb_m + 1, rb_n + 1 );
+          } // reco bin index m
+        } // reco bin index n
+        covmat_hist->SetBinContent( sb_a, sb_b, cov );
+      } // slice bin index b
+    } // slice bin index a
+
+
+    // We have a finished covariance matrix for the slice. Use it to set
+    // the bin errors on the slice histogram.
+    for ( const auto& pair : slice.bin_map_ ) {
+
+      int slice_bin_idx = pair.first;
+      double bin_variance = covmat_hist->GetBinContent( slice_bin_idx,
+        slice_bin_idx );
+      double bin_error = std::sqrt( std::max(0., bin_variance) );
+
+      // This works for a multidimensional slice because a global bin index
+      // (as returned by TH1::GetBin) is used for slice_bin_idx.
+      slice_hist->SetBinError( slice_bin_idx, bin_error );
+
+    } // slice bins
+
+  } // non-null input_cov_mat
+
+  // We're done. Prepare the SliceHistogram object and return it.
+  auto* result = new SliceHistogram;
+  result->hist_.reset( slice_hist );
+  result->cmat_.cov_matrix_.reset( covmat_hist );
+
+  return result;
+}
+
 void norm() {
+
+  auto* syst_ptr = new MCC9Unfolder( "/uboone/data/users/gardiner/"
+    "ntuples-stv-MCC9InternalNote/respmat-files/RespMat-mcc9-2D_proton.root",
+    "systcalc.conf" );
+  auto& syst = *syst_ptr;
+
+  //// Keys are covariance matrix types, values are CovMatrix objects that
+  //// represent the corresponding matrices
+  auto* matrix_map_ptr = syst.get_covariances().release();
+  auto& matrix_map = *matrix_map_ptr;
+
+  auto* sb_ptr = new SliceBinning( "mybins_mcc9_2D_proton.txt" );
+  auto& sb = *sb_ptr;
+
+  for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
+
+    const auto& slice = sb.slices_.at( sl_idx );
+
+    // Get access to the relevant histograms owned by the SystematicsCalculator
+    // object. These contain the reco bin counts we need to populate the
+    // current slice
+    TH1D* reco_bnb_hist = syst.data_hists_.at( NFT::kOnBNB ).get();
+    TH1D* reco_ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
+    TH2D* category_hist = syst.cv_universe().hist_categ_.get();
+
+    // Total MC+EXT prediction in reco bin space. Start by getting EXT.
+    TH1D* reco_mc_plus_ext_hist = dynamic_cast< TH1D* >(
+      reco_ext_hist->Clone("reco_mc_plus_ext_hist") );
+    reco_mc_plus_ext_hist->SetDirectory( nullptr );
+
+    // Add in the CV MC prediction
+    reco_mc_plus_ext_hist->Add( syst.cv_universe().hist_reco_.get() );
+
+    // We now have all of the reco bin space histograms that we need as input.
+    // Use them to make new histograms in slice space.
+    SliceHistogram* slice_bnb = make_slice_histogram( *reco_bnb_hist,
+      slice, &matrix_map.at("BNBstats") );
+
+    SliceHistogram* slice_ext = make_slice_histogram(
+      *reco_ext_hist, slice  );
+
+    SliceHistogram* slice_mc_plus_ext = make_slice_histogram(
+      *reco_mc_plus_ext_hist, slice, &matrix_map.at("total") );
+
+    // Build a stack of categorized central-value MC predictions plus the
+    // extBNB contribution in slice space
+    const auto& eci = EventCategoryInterpreter::Instance();
+    eci.set_ext_histogram_style( slice_ext->hist_.get() );
+
+    THStack* slice_pred_stack = new THStack( "mc+ext", "" );
+    slice_pred_stack->Add( slice_ext->hist_.get() ); // extBNB
+
+    const auto& cat_map = eci.label_map();
+
+    // Go in reverse so that signal ends up on top. Note that this index is
+    // one-based to match the ROOT histograms
+    int cat_bin_index = cat_map.size();
+    for ( auto iter = cat_map.crbegin(); iter != cat_map.crend(); ++iter )
+    {
+      EventCategory cat = iter->first;
+      TH1D* temp_mc_hist = category_hist->ProjectionY( "temp_mc_hist",
+        cat_bin_index, cat_bin_index );
+      temp_mc_hist->SetDirectory( nullptr );
+
+      SliceHistogram* temp_slice_mc = make_slice_histogram(
+        *temp_mc_hist, slice  );
+
+      eci.set_mc_histogram_style( cat, temp_slice_mc->hist_.get() );
+
+      slice_pred_stack->Add( temp_slice_mc->hist_.get() );
+
+      --cat_bin_index;
+    }
+
+    TCanvas* c1 = new TCanvas;
+    //eci.set_bnb_data_histogram_style( slice_bnb->hist_.get() );
+    slice_bnb->hist_->SetLineColor( kBlack );
+    slice_bnb->hist_->SetLineWidth( 3 );
+    slice_bnb->hist_->SetMarkerStyle( kFullCircle );
+    slice_bnb->hist_->SetMarkerSize( 0.8 );
+    slice_bnb->hist_->SetStats( false );
+    double ymax = std::max( slice_bnb->hist_->GetMaximum(),
+      slice_mc_plus_ext->hist_->GetMaximum() ) * 1.07;
+    slice_bnb->hist_->GetYaxis()->SetRangeUser( 0., ymax );
+
+    slice_bnb->hist_->Draw( "e" );
+
+    slice_pred_stack->Draw( "hist same" );
+
+    slice_mc_plus_ext->hist_->SetLineWidth( 3 );
+    slice_mc_plus_ext->hist_->Draw( "same hist e" );
+
+    slice_bnb->hist_->Draw( "same e" );
+
+    std::string out_pdf_name = "plot_slice_";
+    if ( sl_idx < 10 ) out_pdf_name += "0";
+    out_pdf_name += std::to_string( sl_idx ) + ".pdf";
+    c1->SaveAs( out_pdf_name.c_str() );
+  }
+
+  //for ( int b = 0; b <= reco_bnb_hist->GetNbinsX() + 1; ++b ) {
+  //  std::cout << "bin " << b << ": data = "
+  //    << reco_bnb_hist->GetBinContent( b )
+  //    << ", MC+EXT = " << reco_pred_hist->GetBinContent( b ) << '\n';
+  //}
 
   //covMat( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root" );
   //covMat( "/uboone/data/users/gardiner/respmat-myconfig_one_bin.root" );
-  covMat( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/"
-    "respmat-files/RespMat-mcc9-2D_proton.root" );
+  //covMat( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/"
+  //  "respmat-files/RespMat-mcc9-2D_proton.root" );
 
   //compare_mcc8_mcc9( "/uboone/data/users/gardiner/respmat_mcc8-cth_mu.root",
   //  "muangle", "; cos#theta_{#mu}; d#sigma/dcos#theta_{#mu} (cm^{2} / Ar)" );
