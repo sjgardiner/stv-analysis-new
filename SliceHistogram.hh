@@ -7,6 +7,7 @@
 
 // ROOT includes
 #include "TH1.h"
+#include "TDecompQRH.h"
 #include "TMatrixD.h"
 #include "Math/SpecFuncMathCore.h" // Needed for ROOT::Math::inc_gamma_c()
 
@@ -206,8 +207,13 @@ SliceHistogram::Chi2Result SliceHistogram::get_chi2(
   double scaling_factor = 1. / min_abs;
   inverse_cov_matrix->operator*=( scaling_factor );
 
-  // Do the inversion
-  inverse_cov_matrix->Invert();
+  // Do the inversion. Here we try the QR method. Other options involve using
+  // TDecompLU, TDecompBK, TDecompChol, TDecompQRH and TDecompSVD. The
+  // Invert() member function of TMatrixDSym uses a TDecompBK object to do
+  // the same thing internally.
+  //inverse_cov_matrix->Invert();
+  TDecompQRH qr_decomp( *inverse_cov_matrix, DBL_EPSILON );
+  qr_decomp.Invert( *inverse_cov_matrix );
 
   // Undo the scaling by re-applying it to the inverse matrix
   inverse_cov_matrix->operator*=( scaling_factor );

@@ -8,7 +8,7 @@
 #include "TFile.h"
 #include "TH1D.h"
 #include "TH2D.h"
-#include "TMatrixDSym.h"
+#include "TMatrixD.h"
 #include "TParameter.h"
 
 // STV analysis includes
@@ -76,12 +76,12 @@ struct CovMatrix {
     return *this;
   }
 
-  std::unique_ptr< TMatrixDSym > get_matrix() const {
+  std::unique_ptr< TMatrixD > get_matrix() const {
     // Note that ROOT histogram bin indices are one-based to allow for
     // underflow. The TMatrixDSym element indices, on the other hand,
     // are zero-based.
     int num_reco_bins = cov_matrix_->GetNbinsX();
-    auto result = std::make_unique< TMatrixDSym >( num_reco_bins );
+    auto result = std::make_unique< TMatrixD >( num_reco_bins, num_reco_bins );
     // TODO: consider doing something more efficient than setting each
     // element manually
     for ( int a = 0; a < num_reco_bins; ++a ) {

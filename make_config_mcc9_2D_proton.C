@@ -128,10 +128,12 @@ void make_config_mcc9_2D_proton() {
 
   // Also write a SliceBinning configuration file
   std::ofstream sb_file( "mybins_mcc9_2D_proton.txt" );
-  sb_file << "2\n";
-  sb_file << "\"p_{p}\" \"GeV\" \"$p_{p}$\" \"GeV\"\n";
-  sb_file << "\"cos#theta_{p}\" \"\" \"$\\cos\\theta_{p}$\" \"\"\n";
-  size_t num_slices = proton_2D_bin_edges.size() - 1;
+  sb_file << "3\n";
+  sb_file << "\"reco p_{p}\" \"GeV/c\" \"reco $p_{p}$\" \"GeV$/c$\"\n";
+  sb_file << "\"reco cos#theta_{p}\" \"\" \"$\\cos\\theta_{p}$\" \"\"\n";
+  sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
+  // Include an extra slice which shows everything in terms of reco bin number
+  size_t num_slices = proton_2D_bin_edges.size();
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -171,4 +173,25 @@ void make_config_mcc9_2D_proton() {
     sb_file << '\n';
 
   } // pp slices
+
+  // Make a final slice with everything expressed in terms of reco bin number
+  sb_file << "\"events\"\n"; // y-axis label
+  sb_file << "1 2 ";
+  size_t num_reco_bins = cur_reco_bin;
+  // There is one more edge than the number of bins
+  sb_file << num_reco_bins + 1;
+  for ( size_t e = 0u; e <= num_reco_bins; ++e ) {
+    sb_file << ' ' << e;
+  }
+  sb_file << '\n';
+  // For the "overall slice," there is no other variable apart from reco bin
+  // number
+  sb_file << "0\n";
+  // Loop over each ResponseMatrixMaker bin and assign it to the matching
+  // ROOT histogram bin
+  sb_file << num_reco_bins << '\n';
+  for ( size_t b = 0u; b < num_reco_bins; ++b ) {
+    sb_file << b << " 1 " << b + 1 << '\n';
+  }
+
 }

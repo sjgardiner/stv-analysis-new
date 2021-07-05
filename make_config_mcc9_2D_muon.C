@@ -144,11 +144,14 @@ void make_config_mcc9_2D_muon() {
 
   // Also write a SliceBinning configuration file
   std::ofstream sb_file( "mybins_mcc9_2D_muon.txt" );
-  sb_file << "2\n";
+  sb_file << "3\n";
   sb_file << "\"reco p_{#mu}\" \"GeV/c\" \"reco $p_{\\mu}$\" \"GeV$/c$\"\n";
   sb_file << "\"reco cos#theta_{#mu}\" \"\" \"reco $\\cos\\theta_{\\mu}$\""
     " \"\"\n";
-  size_t num_slices = muon_2D_bin_edges.size() - 1;
+  sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
+  // Includes a slice for the overflow bin and an extra slice for everything
+  // in terms of reco bin number
+  size_t num_slices = muon_2D_bin_edges.size() + 1;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -189,4 +192,38 @@ void make_config_mcc9_2D_muon() {
 
   } // pmu slices
 
+  // Handle the overflow bin separately
+  sb_file << "\"events\"\n"; // y-axis label
+  // Still treat the muon cosine as the single active variable in a single bin
+  // spanning the entire range
+  sb_file << "1 1 2 -1.0 1.0\n";
+  // The muon momentum is the sole "other" variable. This is an overflow bin,
+  // which we signal by making the lower and upper edges equal
+  double last_pmu_edge_value = last_edge->first;
+  sb_file << "1 0 " << last_pmu_edge_value
+    << ' ' << last_pmu_edge_value << '\n';
+  // A single ResponseMatrixMaker reco bin contributes to the sole ROOT bin
+  // in this histogram
+  sb_file << "1\n" << cur_reco_bin << " 1 1";
+
+  // Make a final slice with everything expressed in terms of reco bin number
+  sb_file << "\"events\"\n"; // y-axis label
+  sb_file << "1 2 ";
+  // Acount for the zero-based ResponseMatrixMaker bin indices
+  size_t num_reco_bins = cur_reco_bin + 1;
+  // There is one more edge than the number of bins
+  sb_file << num_reco_bins + 1;
+  for ( size_t e = 0u; e <= num_reco_bins; ++e ) {
+    sb_file << ' ' << e;
+  }
+  sb_file << '\n';
+  // For the "overall slice," there is no other variable apart from reco bin
+  // number
+  sb_file << "0\n";
+  // Loop over each ResponseMatrixMaker bin and assign it to the matching
+  // ROOT histogram bin
+  sb_file << num_reco_bins << '\n';
+  for ( size_t b = 0u; b < num_reco_bins; ++b ) {
+    sb_file << b << " 1 " << b + 1 << '\n';
+  }
 }
