@@ -1,5 +1,5 @@
 // Standard library includes
-#include <variant>
+#include <algorithm>
 
 // ROOT includes
 #include "TAxis.h"
@@ -167,7 +167,7 @@ void dump_slice_plot_limits( const SliceHistogram& slice_bnb,
   pgfplots_params_table[ "y_min" ] = std::to_string( 0. );
 
   // Find a y_max value that allows all bins in the slice to be fully seen in a
-  // plot
+  // plot.
   double y_max = std::numeric_limits<double>::lowest();
   std::array< const SliceHistogram*, 2 > temp_slice_hists = { &slice_bnb,
     &slice_mc_plus_ext };
@@ -184,8 +184,43 @@ void dump_slice_plot_limits( const SliceHistogram& slice_bnb,
 
   // Use a margin of an extra 3% on the maximum detected y value
   y_max *= 1.03;
-
   pgfplots_params_table[ "y_max" ] = std::to_string( y_max );
+
+  // Also find the maximum deviation from unity to use when setting the y-axis
+  // range for a data/MC+EXT ratio plot.
+  double ratio_max = std::numeric_limits<double>::lowest();
+  for ( const auto& bin_pair : slice.bin_map_ ) {
+    int global_bin_idx = bin_pair.first;
+
+    double yBNB = slice_bnb.hist_->GetBinContent( global_bin_idx );
+    double yBNBerror = slice_bnb.hist_->GetBinError( global_bin_idx );
+
+    double yMC = slice_mc_plus_ext.hist_->GetBinContent( global_bin_idx );
+    double yMCerror = slice_mc_plus_ext.hist_->GetBinError( global_bin_idx );
+
+    // Consider several different calculations of the ratio that will appear
+    // in the plot. Pick the one that differs the most from unity.
+    std::array< double, 4 > abs_diffs;
+    abs_diffs[0] = ( yBNB + yBNBerror ) / yMC;
+    abs_diffs[1] = ( yBNB - yBNBerror ) / yMC;
+    abs_diffs[2] = ( yMC + yMCerror ) / yMC;
+    abs_diffs[3] = ( yMC - yMCerror ) / yMC;
+
+    for ( auto& ad : abs_diffs ) {
+      ad = std::abs( ad - 1 );
+    }
+
+    double max_abs_diff = *std::max_element( abs_diffs.cbegin(),
+      abs_diffs.cend() );
+
+    if ( ratio_max < max_abs_diff ) ratio_max = max_abs_diff;
+  }
+
+  // Use a margin of an extra 30% on the maximum detected absolute deviation
+  // from unity
+  ratio_max *= 1.30;
+  pgfplots_params_table[ "ratio_max" ] = std::to_string( ratio_max );
+
 }
 
 void dump_slice_histogram( const std::string& hist_col_prefix,
