@@ -1,12 +1,21 @@
 #pragma once
 
+// Needed for the weight range limits used in DEFAULT_MC_EVENT_WEIGHT. We pull
+// them from the ResponseMatrixMaker header file to ensure consistency
+// with the safe_weight() function.
+#include "ResponseMatrixMaker.hh"
+
 // **** Helper code to facilitate making histograms ****
 
 // By default, weight the MC events using the MicroBooNE CV tune. The
 // TTree::Draw() expression below includes some workarounds for problematic
-// weights.
-const std::string DEFAULT_MC_EVENT_WEIGHT = "spline_weight * (std::isfinite("
-  "tuned_cv_weight) && tuned_cv_weight <= 100. ? tuned_cv_weight : 1)";
+// weights. They are equivalent to the safe_weight() function defined in
+// ResponseMatrixMaker.hh.
+const std::string DEFAULT_MC_EVENT_WEIGHT = "(std::isfinite(spline_weight*"
+  "tuned_cv_weight) && spline_weight*tuned_cv_weight >= "
+  + std::to_string( MIN_WEIGHT ) + " && spline_weight*"
+  "tuned_cv_weight <= " + std::to_string( MAX_WEIGHT )
+  + " ? spline_weight*tuned_cv_weight : 1)";
 
 // Generates a vector of bin low edges equivalent to the approach used by the
 // TH1 constructor that takes xmin and xmax in addition to the number of bins
