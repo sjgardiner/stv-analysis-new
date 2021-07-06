@@ -6,6 +6,7 @@
 #include "TCanvas.h"
 #include "TFile.h"
 #include "THStack.h"
+#include "TLegend.h"
 
 // STV analysis includes
 #include "../FilePropertiesManager.hh"
@@ -458,7 +459,100 @@ void slice_dump() {
     //if ( sl_idx < 10 ) out_pdf_name += "0";
     //out_pdf_name += std::to_string( sl_idx ) + ".pdf";
     //c1->SaveAs( out_pdf_name.c_str() );
-  }
+
+    // Get the binning and axis labels for the current slice by cloning the
+    // (empty) histogram owned by the Slice object
+    TH1* slice_hist = dynamic_cast< TH1* >(
+      slice.hist_->Clone("slice_hist") );
+
+    slice_hist->SetDirectory( nullptr );
+
+    // Keys are labels, values are fractional uncertainty histograms
+    auto* fr_unc_hists = new std::map< std::string, TH1* >();
+    auto& frac_uncertainty_hists = *fr_unc_hists;
+
+    // Terms needed for the total covariance matrix
+    const std::vector< std::string > total_cov_mat_keys = { "total",
+      "detVar_total", "flux", "reint", "xsec_total", "POT", "numTargets",
+      "MCstats", "EXTstats"
+    };
+
+    int color = 0;
+    for ( const auto& key : total_cov_mat_keys ) {
+
+      SliceHistogram* slice_for_syst = SliceHistogram::make_slice_histogram(
+        *reco_mc_plus_ext_hist, slice, &matrix_map.at(key) );
+
+      // Get the binning and axis labels for the current slice by cloning the
+      // histogram owned by the new SliceHistogram object
+      TH1* temp_hist = dynamic_cast< TH1* >(
+        slice_for_syst->hist_->Clone( ("myfrac_temp_hist_" + key
+          + '_' + std::to_string(sl_idx) ).c_str() )
+      );
+
+      // The SliceHistogram object already set the bin errors appropriately
+      // based on the slice covariance matrix. Just change the bin contents
+      // for the current histogram to be fractional uncertainties. Also set
+      // the uncertainties on the uncertainties to zero.
+      // TODO: revisit this last bit, possibly assign bin errors here
+      // TODO: make this work for multidimensional histograms like the rest
+      // of the SliceHistogram stuff
+      for ( int b = 1; b <= temp_hist->GetNbinsX(); ++b ) {
+        double cv = temp_hist->GetBinContent( b );
+        double err = temp_hist->GetBinError( b );
+        double frac = cv > 0. ? err / cv : 0.;
+        temp_hist->SetBinContent( b, frac );
+        temp_hist->SetBinError( b, 0. );
+      }
+
+      temp_hist->SetStats( false );
+      //temp_hist->SetDirectory( nullptr );
+
+      frac_uncertainty_hists[ key ] = temp_hist;
+
+      if ( color <= 9 ) ++color;
+      if ( color == 5 ) ++color;
+      if ( color >= 10 ) color += 10;
+
+      temp_hist->SetLineColor( color );
+      temp_hist->SetLineWidth( 3 );
+      //temp_hist->GetYaxis()->SetRangeUser( 0., 1. );
+    }
+
+    TCanvas* c2 = new TCanvas;
+    TLegend* lg2 = new TLegend( 0.7, 0.7, 0.9, 0.9 );
+
+    auto* total_frac_err_hist = frac_uncertainty_hists.at( "total" );
+    total_frac_err_hist->SetStats( false );
+    total_frac_err_hist->GetYaxis()->SetRangeUser( 0.,
+      total_frac_err_hist->GetMaximum() * 1.05 );
+    total_frac_err_hist->SetLineColor( kBlack );
+    total_frac_err_hist->SetLineWidth( 3 );
+    total_frac_err_hist->Draw( "hist" );
+
+    lg2->AddEntry( total_frac_err_hist, "total", "l" );
+
+    for ( auto& pair : frac_uncertainty_hists ) {
+      const auto& name = pair.first;
+      TH1* hist = pair.second;
+      // We already plotted the "total" one above
+      if ( name == "total" ) continue;
+
+      lg2->AddEntry( hist, name.c_str(), "l" );
+      hist->Draw( "same hist" );
+
+      std::cout << name << " frac err in bin #1 = "
+        << hist->GetBinContent( 1 )*100. << "%\n";
+    }
+
+    lg2->Draw( "same" );
+
+    std::cout << "Total frac error in bin #1 = "
+      << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";
+
+    break;
+
+  } // slices
 
 }
 
