@@ -427,15 +427,6 @@ void slice_dump() {
       --cat_bin_index;
     }
 
-    // We're ready to dump information about the current slice. Write
-    // the PGFPlots files now before making a ROOT plot
-    std::string output_file_prefix = "pgfplots_slice_";
-    if ( sl_idx < 10 ) output_file_prefix += '0';
-    output_file_prefix += std::to_string( sl_idx );
-
-    write_pgfplots_files( output_file_prefix, pgfplots_hist_table,
-      pgfplots_params_table );
-
     TCanvas* c1 = new TCanvas;
     slice_bnb->hist_->SetLineColor( kBlack );
     slice_bnb->hist_->SetLineWidth( 3 );
@@ -471,52 +462,62 @@ void slice_dump() {
     auto* fr_unc_hists = new std::map< std::string, TH1* >();
     auto& frac_uncertainty_hists = *fr_unc_hists;
 
-    // Terms needed for the total covariance matrix
-    const std::vector< std::string > total_cov_mat_keys = { "total",
+    // Show fractional uncertainties computed using these covariance matrices
+    // in the ROOT plot. All configured fractional uncertainties will be
+    // included in the output pgfplots file regardless of whether they appear
+    // in this vector.
+    const std::vector< std::string > cov_mat_keys = { "total",
       "detVar_total", "flux", "reint", "xsec_total", "POT", "numTargets",
       "MCstats", "EXTstats"
     };
 
+    // Loop over the various systematic uncertainties
     int color = 0;
-    for ( const auto& key : total_cov_mat_keys ) {
+    for ( const auto& pair : matrix_map ) {
+
+      const auto& key = pair.first;
+      const auto& cov_matrix = pair.second;
 
       SliceHistogram* slice_for_syst = SliceHistogram::make_slice_histogram(
-        *reco_mc_plus_ext_hist, slice, &matrix_map.at(key) );
-
-      // Get the binning and axis labels for the current slice by cloning the
-      // histogram owned by the new SliceHistogram object
-      TH1* temp_hist = dynamic_cast< TH1* >(
-        slice_for_syst->hist_->Clone( ("myfrac_temp_hist_" + key
-          + '_' + std::to_string(sl_idx) ).c_str() )
-      );
+        *reco_mc_plus_ext_hist, slice, &cov_matrix );
 
       // The SliceHistogram object already set the bin errors appropriately
       // based on the slice covariance matrix. Just change the bin contents
       // for the current histogram to be fractional uncertainties. Also set
-      // the uncertainties on the uncertainties to zero.
+      // the "uncertainties on the uncertainties" to zero.
       // TODO: revisit this last bit, possibly assign bin errors here
-      // TODO: make this work for multidimensional histograms like the rest
-      // of the SliceHistogram stuff
-      for ( int b = 1; b <= temp_hist->GetNbinsX(); ++b ) {
-        double cv = temp_hist->GetBinContent( b );
-        double err = temp_hist->GetBinError( b );
-        double frac = cv > 0. ? err / cv : 0.;
-        temp_hist->SetBinContent( b, frac );
-        temp_hist->SetBinError( b, 0. );
+      for ( const auto& bin_pair : slice.bin_map_ ) {
+        int global_bin_idx = bin_pair.first;
+        double y = slice_for_syst->hist_->GetBinContent( global_bin_idx );
+        double err = slice_for_syst->hist_->GetBinError( global_bin_idx );
+        double frac = 0.;
+        if ( y > 0. ) frac = err / y;
+        slice_for_syst->hist_->SetBinContent( global_bin_idx, frac );
+        slice_for_syst->hist_->SetBinError( global_bin_idx, 0. );
       }
 
-      temp_hist->SetStats( false );
-      //temp_hist->SetDirectory( nullptr );
+      // Dump the current fractional errors in new columns for use with
+      // pgfplots
+      std::string frac_err_column_name( "frac_err_" + key );
+      dump_slice_histogram( frac_err_column_name, *slice_for_syst, slice,
+        pgfplots_hist_table, false, false );
 
-      frac_uncertainty_hists[ key ] = temp_hist;
+      // Check whether the current covariance matrix name is present in
+      // the vector defined above this loop. If it isn't, don't bother to
+      // plot it, and just move on to the next one.
+      auto cbegin = cov_mat_keys.cbegin();
+      auto cend = cov_mat_keys.cend();
+      auto iter = std::find( cbegin, cend, key );
+      if ( iter == cend ) continue;
+
+      frac_uncertainty_hists[ key ] = slice_for_syst->hist_.get();
 
       if ( color <= 9 ) ++color;
       if ( color == 5 ) ++color;
       if ( color >= 10 ) color += 10;
 
-      temp_hist->SetLineColor( color );
-      temp_hist->SetLineWidth( 3 );
-      //temp_hist->GetYaxis()->SetRangeUser( 0., 1. );
+      slice_for_syst->hist_->SetLineColor( color );
+      slice_for_syst->hist_->SetLineWidth( 3 );
     }
 
     TCanvas* c2 = new TCanvas;
@@ -550,7 +551,16 @@ void slice_dump() {
     std::cout << "Total frac error in bin #1 = "
       << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";
 
-    break;
+    // Before moving on to the next slice, dump information about the
+    // current one to new pgfplots files that can be used for offline plotting
+    std::string output_file_prefix = "pgfplots_slice_";
+    // Use at least three digits for numbering the slice output files
+    if ( sl_idx < 10 ) output_file_prefix += '0';
+    if ( sl_idx < 100 ) output_file_prefix += '0';
+    output_file_prefix += std::to_string( sl_idx );
+
+    write_pgfplots_files( output_file_prefix, pgfplots_hist_table,
+      pgfplots_params_table );
 
   } // slices
 
