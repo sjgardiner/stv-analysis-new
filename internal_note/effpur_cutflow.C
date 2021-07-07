@@ -266,11 +266,10 @@ void effpur_cutflow() {
 
   } // selection definitions
 
-
   const std::vector< std::string > bin_labels = { "no cuts",
   "in FV", "starts contained", "topo score OK", "has muon candidate",
   "no showers", "has p candidate", "p contained",
-  "proton PID", "#mu threshold", "p limits" };
+  "proton PID", "muon threshold", "p limits" };
 
   TCanvas* c1 = new TCanvas;
   c1->SetBottomMargin(0.21);
@@ -307,4 +306,20 @@ void effpur_cutflow() {
   lg->AddEntry( mc_pur_graph, "MC purity", "lp" );
   lg->Draw("same");
 
+  // We've finished making the ROOT plot. Dump the results to an input file for
+  // plotting offline with pgfplots. The keys of the map are column names,
+  // while the values are the corresponding entries in each row.
+  std::map< std::string, std::vector<std::string> > pgfplots_table;
+  dump_tgraph( "eff", *eff_graph, pgfplots_table );
+  dump_tgraph( "pur", *pur_graph, pgfplots_table );
+  dump_tgraph( "mcpur", *mc_pur_graph, pgfplots_table );
+
+  // Add the x labels in their own column
+  pgfplots_table[ "x_label" ] = std::vector< std::string >();
+  for ( const auto& label : bin_labels ) {
+    std::string entry = '{' + label + '}';
+    pgfplots_table.at( "x_label" ).push_back( entry );
+  }
+
+  write_pgfplots_file( "cutflow.txt", pgfplots_table );
 }
