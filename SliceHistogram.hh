@@ -24,6 +24,10 @@ class SliceHistogram {
     static SliceHistogram* make_slice_histogram( TH1D& reco_bin_histogram,
       const Slice& slice, const CovMatrix* input_cov_mat = nullptr );
 
+    // TODO: revisit this implementation
+    static SliceHistogram* make_slice_efficiency_histogram(
+      const TH1D& true_bin_histogram, const TH2D& hist_2d, const Slice& slice );
+
     struct Chi2Result {
       Chi2Result( double chi2, int nbins, int dof, double pval )
         : chi2_( chi2 ), num_bins_( nbins ), dof_( dof ), p_value_( pval ) {}
@@ -142,6 +146,61 @@ SliceHistogram* SliceHistogram::make_slice_histogram( TH1D& reco_bin_histogram,
   auto* result = new SliceHistogram;
   result->hist_.reset( slice_hist );
   result->cmat_.cov_matrix_.reset( covmat_hist );
+
+  return result;
+}
+
+// TODO: revisit this rough draft. Right now, an assumption is made that the
+// true and reco bins are defined in the same way with the same indices. This
+// isn't enforced by the ResponseMatrixMaker configuration itself, although
+// it is currently consistent with what you've done so far.
+SliceHistogram* SliceHistogram::make_slice_efficiency_histogram(
+  const TH1D& true_bin_histogram, const TH2D& hist_2d, const Slice& slice )
+{
+  // Get the binning and axis labels for the current slice by cloning the
+  // (empty) histogram owned by the Slice object
+  TH1* slice_hist = dynamic_cast< TH1* >(
+    slice.hist_->Clone("slice_hist") );
+
+  slice_hist->SetDirectory( nullptr );
+
+  // Fill the slice bins based on the input reco bins
+  for ( const auto& pair : slice.bin_map_ ) {
+
+    // One-based index for the global TH1 bin number in the slice
+    int slice_bin_idx = pair.first;
+
+    const auto& reco_bin_set = pair.second;
+
+    double selected_signal_evts = 0.;
+    double all_signal_evts = 0.;
+    for ( const auto& rb_idx : reco_bin_set ) {
+      // The ResponseMatrixMaker reco bin indices are zero-based, so I correct
+      // for this here when pulling values from the one-based input ROOT
+      // histogram.
+      all_signal_evts += true_bin_histogram.GetBinContent( rb_idx + 1 );
+
+      // Include selected signal events in the current true bin that fall into
+      // any of the reco bins
+      selected_signal_evts += hist_2d.Integral( rb_idx + 1, rb_idx + 1,
+        1, hist_2d.GetNbinsY() );
+    }
+
+    double bin_efficiency = selected_signal_evts / all_signal_evts;
+    // See DocDB #32401, Eq. (5.2)
+    double bin_stat_err = std::sqrt( std::max(0., bin_efficiency
+      * (1. - bin_efficiency) / all_signal_evts) );
+    slice_hist->SetBinContent( slice_bin_idx, bin_efficiency );
+    slice_hist->SetBinError( slice_bin_idx, bin_stat_err );
+
+  } // slice bins
+
+  TH2D* covmat_hist = nullptr;
+
+  // We're done. Prepare the SliceHistogram object and return it.
+  auto* result = new SliceHistogram;
+  result->hist_.reset( slice_hist );
+  result->cmat_.cov_matrix_.reset( nullptr );
 
   return result;
 }

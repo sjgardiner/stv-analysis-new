@@ -551,6 +551,19 @@ void slice_dump() {
     std::cout << "Total frac error in bin #1 = "
       << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";
 
+//// NEW CODE
+    const TH1D* hist_true = syst.cv_universe().hist_true_.get();
+    const TH2D* hist_2d = syst.cv_universe().hist_2d_.get();
+    auto* slice_eff = SliceHistogram::make_slice_efficiency_histogram(
+      *hist_true, *hist_2d, slice );
+
+    TCanvas* c3 = new TCanvas;
+    slice_eff->hist_->Draw( "hist e" );
+
+    dump_slice_histogram( "efficiency", *slice_eff, slice,
+      pgfplots_hist_table, true, false );
+//// END NEW CODE
+
     // Before moving on to the next slice, dump information about the
     // current one to new pgfplots files that can be used for offline plotting
     std::string output_file_prefix = "pgfplots_slice_";

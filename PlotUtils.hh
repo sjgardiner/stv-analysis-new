@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+// ROOT includes
+#include "TGraph.h"
+#include "TH1D.h"
+
 // Helper function that produces the standard MicroBooNE plot legend title
 // with the BNB POT displayed
 std::string get_legend_title( double bnb_pot ) {

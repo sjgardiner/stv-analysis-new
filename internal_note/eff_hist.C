@@ -4,7 +4,7 @@
 // Equivalent to mc_is_signal with phase space cuts removed for the muon
 // and proton momenta
 const std::string signal_cuts = "mc_vertex_in_FV && mc_neutrino_is_numu"
-  " && mc_no_fs_mesons";
+  " && mc_no_fs_mesons && category != 9";
 // && mc_pmu_above_threshold
 // && mc_lead_p_in_mom_range
 
@@ -28,8 +28,10 @@ void plot_eff_hist( TTree& stv_tree, const std::string& branch,
 
   std::string unit_part;
   if ( !unit_name.empty() ) unit_part = " [" + unit_name + ']';
-  std::string eff_title = "Efficiency in true " + variable_name + " bins; "
-    + variable_name + unit_part + "; Efficiency";
+  //std::string eff_title = "Efficiency in true " + variable_name + " bins; "
+  //  + variable_name + unit_part + "; Efficiency";
+
+  std::string eff_title = ";" + variable_name + unit_part + "; efficiency";
 
   // Create a histogram to store the efficiency values
   TH1D* eff_hist = new TH1D( hist_name.c_str(), eff_title.c_str(), num_bins,
@@ -57,13 +59,13 @@ void plot_eff_hist( TTree& stv_tree, const std::string& branch,
 
   TCanvas* c1 = new TCanvas;
   eff_hist->SetStats( false );
-  eff_hist->GetYaxis()->SetRangeUser( 0., 1. );
+  eff_hist->GetYaxis()->SetRangeUser( 0., 0.45 );
 
   c1->SetBottomMargin(0.15);
 
   eff_hist->SetLineWidth(4);
   eff_hist->SetLineColor(kBlack);
-  eff_hist->GetYaxis()->SetRangeUser(0., 1.);
+  eff_hist->GetYaxis()->SetRangeUser(0., 0.45);
   eff_hist->GetYaxis()->CenterTitle(true);
   eff_hist->GetYaxis()->SetTitleOffset(0.95);
   eff_hist->GetYaxis()->SetTitleSize(0.05);
@@ -86,8 +88,8 @@ void eff_hist() {
   stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root" );
 
   plot_eff_hist( stv_ch, "mc_p3_mu.Mag()", "p_{#mu}^{true}", "pmutrue",
-    "GeV", 80, 0., 2.);
+    "GeV/c", 80, 0., 2.);
 
   plot_eff_hist( stv_ch, "mc_p3_lead_p.Mag()", "p_{p}^{true}",
-    "pptrue", "GeV", 120, 0., 1.5 );
+    "pptrue", "GeV/c", 120, 0., 1.5 );
 }

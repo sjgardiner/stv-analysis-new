@@ -13,10 +13,12 @@
 #include "TH1D.h"
 #include "THStack.h"
 #include "TLegend.h"
+#include "TLegendEntry.h"
 #include "TLine.h"
 #include "TParameter.h"
 #include "TStyle.h"
 #include "TPad.h"
+#include "TVector3.h"
 
 // STV analysis includes
 #include "../../EventCategory.hh"
@@ -43,19 +45,21 @@ using NFT = NtupleFileType;
 // plot generated using the LaTeX pgfplots package
 void dump_pgfplot_params( const std::string& output_file_name,
   double on_data_pot, double beam_off_fraction,
-  const std::map< int, double >& pdg_fraction_map )
+  const std::map< int, double >& pdg_fraction_map, const TH1D& mc_plus_ext_hist )
 {
   std::ofstream out_file( output_file_name );
-  out_file << "bnb_data_pot ext_fraction";
+  out_file << "bnb_data_pot ext_fraction MC+EXT_integral";
   for ( const auto& pair : pdg_fraction_map ) {
     const int& pdg = pair.first;
-    out_file << " mc_" << pdg << "_fraction";
+    out_file << " MC" << pdg << "_fraction" << " MC" << pdg << "_integral";
   }
   out_file << '\n';
-  out_file << on_data_pot << ' ' << beam_off_fraction;
+  double mc_plus_ext_integ = mc_plus_ext_hist.Integral();
+  out_file << on_data_pot << ' ' << beam_off_fraction
+    << ' ' << mc_plus_ext_integ;
   for ( const auto& pair : pdg_fraction_map ) {
     double mc_frac = pair.second;
-    out_file << ' ' << mc_frac;
+    out_file << ' ' << mc_frac << ' ' << mc_frac * mc_plus_ext_integ;
   }
 }
 
@@ -447,7 +451,7 @@ void make_pfp_plots( const std::string& branchexpr,
   // Dump the extra information needed for the plot legend, etc. This will
   // go in a separate "parameters" file with one column per parameter
   dump_pgfplot_params( pgfplot_name + "_params.txt", pot_on,
-    beam_off_fraction, pdg_fraction_map );
+    beam_off_fraction, pdg_fraction_map, *stat_err_hist );
 }
 
 // Overloaded version with constant-width binning
@@ -509,4 +513,9 @@ void pfparticle_plots() {
     -1., 1., 80, "llr_pid_score_proton", "LLR PID score",
     "PFParticles", "Runs 1-3" );
 
+}
+
+int main() {
+  pfparticle_plots();
+  return 0;
 }
