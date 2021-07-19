@@ -128,13 +128,13 @@ double proton_pid_cut( double track_length ) {
 
 // Boundaries of the proton containment volume (used in reco only) in cm
 double PCV_X_MIN =   10.;
-double PCV_X_MAX =  245.;
+double PCV_X_MAX =  246.35;
 
-double PCV_Y_MIN = -100.;
-double PCV_Y_MAX =  100.;
+double PCV_Y_MIN = -106.5;
+double PCV_Y_MAX =  106.5;
 
 double PCV_Z_MIN =   10.;
-double PCV_Z_MAX = 1030.;
+double PCV_Z_MAX = 1026.8;
 
 // Mass values from GENIE v3.0.6
 constexpr double TARGET_MASS = 37.215526; // 40Ar, GeV
