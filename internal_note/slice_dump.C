@@ -302,7 +302,8 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 void slice_dump() {
 
   auto* syst_ptr = new MCC9Unfolder( "/uboone/data/users/gardiner/"
-    "ntuples-stv-MCC9InternalNote/respmat-files/RespMat-mcc9-2D_proton.root",
+    "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
+    "RespMat-myconfig_mcc9_2D_muon.root",
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
@@ -311,7 +312,7 @@ void slice_dump() {
   auto* matrix_map_ptr = syst.get_covariances().release();
   auto& matrix_map = *matrix_map_ptr;
 
-  auto* sb_ptr = new SliceBinning( "../mybins_mcc9_2D_proton.txt" );
+  auto* sb_ptr = new SliceBinning( "../mybins_mcc9_2D_muon.txt" );
   auto& sb = *sb_ptr;
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
