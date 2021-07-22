@@ -83,9 +83,9 @@ void plot_eff_hist( TTree& stv_tree, const std::string& branch,
 void eff_hist() {
 
   TChain stv_ch( "stv_tree" );
-  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root" );
-  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
-  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote-NewVol/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote-NewVol/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-MCC9InternalNote-NewVol/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root" );
 
   plot_eff_hist( stv_ch, "mc_p3_mu.Mag()", "p_{#mu}^{true}", "pmutrue",
     "GeV/c", 80, 0., 2.);

@@ -559,10 +559,12 @@ void slice_dump() {
       *hist_true, *hist_2d, slice );
 
     TCanvas* c3 = new TCanvas;
+    slice_eff->hist_->SetLineWidth( 3 );
     slice_eff->hist_->Draw( "hist e" );
 
     dump_slice_histogram( "efficiency", *slice_eff, slice,
       pgfplots_hist_table, true, false );
+    c3->SaveAs( ("eff_slice_" + std::to_string(sl_idx) + ".pdf").c_str() );
 //// END NEW CODE
 
     // Before moving on to the next slice, dump information about the

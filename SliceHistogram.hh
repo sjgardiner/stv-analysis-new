@@ -163,6 +163,8 @@ SliceHistogram* SliceHistogram::make_slice_efficiency_histogram(
     slice.hist_->Clone("slice_hist") );
 
   slice_hist->SetDirectory( nullptr );
+  slice_hist->GetYaxis()->SetTitle( "efficiency" );
+  slice_hist->GetYaxis()->SetRangeUser( 0., 1. );
 
   // Fill the slice bins based on the input reco bins
   for ( const auto& pair : slice.bin_map_ ) {

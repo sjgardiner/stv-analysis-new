@@ -26,7 +26,7 @@ source /cvmfs/uboone.opensciencegrid.org/products/setup_uboone.sh
 setup uboonecode v08_00_00_51 -q e17:prof
 
 # Remove any pre-existing processed STV ntuple files from the output directory
-rm -f ${output_dir}/stv-*.root
+#rm -f ${output_dir}/stv-*.root
 
 # Loop over each line of the ntuple list file
 while read line; do

@@ -3,8 +3,8 @@
 
 // STV analysis includes
 #include "../FilePropertiesManager.hh"
+#include "../MCC9Unfolder.hh"
 #include "../PlotUtils.hh"
-#include "../SystematicsCalculator.hh"
 
 // ROOT integer code for Arial font
 constexpr int FONT_STYLE = 62; // Arial
@@ -39,10 +39,12 @@ void dump_pgfplots_smearing_histogram( const std::string& output_table_file,
 
 void smear_matrix() {
 
-  const std::string input_respmat_file_name(
-    "/uboone/data/users/gardiner/respmat_mcc8-cth_p.root" );
+  const std::string input_respmat_file_name( "/uboone/data/users/gardiner/"
+    "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
+    "RespMat-myconfig_mcc9_2D_muon.root" );
 
-  auto* syst_ptr = new SystematicsCalculator( input_respmat_file_name );
+  auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name,
+    "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
   // Create a new TH2D to store the smearing matrix. Use the 2D event counts
@@ -50,6 +52,26 @@ void smear_matrix() {
   const auto& cv_univ = syst.cv_universe();
   TH2D* smear_hist = dynamic_cast< TH2D* >( cv_univ.hist_2d_
     ->Clone("smear_hist") );
+
+  // Get the bin index for the first true bin that represents background events
+  const auto& true_bins = syst.true_bins_;
+  size_t num_true_bins = true_bins.size();
+  size_t first_bkgd_bin_idx = num_true_bins;
+  for ( size_t t = 0u; t < num_true_bins; ++t ) {
+    const auto& tbin = true_bins.at( t );
+    if ( tbin.type_ == TrueBinType::kBackgroundTrueBin ) {
+      first_bkgd_bin_idx = t;
+      break;
+    }
+  }
+
+  TH1D* expected_signal_hist = smear_hist->ProjectionY(
+    "expected_signal_hist", 1, first_bkgd_bin_idx );
+  TCanvas* c = new TCanvas;
+  expected_signal_hist->SetLineWidth( 3 );
+  expected_signal_hist->SetStats( false );
+  expected_signal_hist->GetYaxis()->SetTitle( "expected signal events" );
+  expected_signal_hist->Draw( "hist e" );
 
   // Normalize the smearing matrix elements so that a sum over all reco bins
   // (including the under/overflow bins) yields a value of one. This means that
@@ -111,19 +133,7 @@ void smear_matrix() {
 
   smear_hist->Draw( "colz" );
 
-  // Get the bin index for the first true bin that represents background events
-  const auto& true_bins = syst.true_bins_;
-  size_t num_true_bins = true_bins.size();
-  size_t first_bkgd_bin_idx = num_true_bins;
-  for ( size_t t = 0u; t < num_true_bins; ++t ) {
-    const auto& tbin = true_bins.at( t );
-    if ( tbin.type_ == TrueBinType::kBackgroundTrueBin ) {
-      first_bkgd_bin_idx = t;
-      break;
-    }
-  }
-
-  dump_pgfplots_smearing_histogram( "mcc8CthP_respmat_table.txt",
-    "mcc8CthP_respmat_params.txt", smear_hist, first_bkgd_bin_idx );
+  dump_pgfplots_smearing_histogram( "muon2D_respmat_table.txt",
+    "muon2D_respmat_params.txt", smear_hist, first_bkgd_bin_idx );
 
 }
