@@ -130,10 +130,12 @@ void make_config_mcc9_2D_proton() {
   std::ofstream sb_file( "mybins_mcc9_2D_proton.txt" );
   sb_file << "3\n";
   sb_file << "\"reco p_{p}\" \"GeV/c\" \"reco $p_{p}$\" \"GeV$/c$\"\n";
-  sb_file << "\"reco cos#theta_{p}\" \"\" \"$\\cos\\theta_{p}$\" \"\"\n";
+  sb_file << "\"reco cos#theta_{p}\" \"\" \"reco $\\cos\\theta_{p}$\" \"\"\n";
   sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
-  // Include an extra slice which shows everything in terms of reco bin number
-  size_t num_slices = proton_2D_bin_edges.size();
+  // Include an extra slice which shows everything in terms of reco bin number.
+  // Also include two integrated slices (one for the 1D p_p distribution, the
+  // other for all events)
+  size_t num_slices = proton_2D_bin_edges.size() + 2;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -174,7 +176,8 @@ void make_config_mcc9_2D_proton() {
 
   } // pp slices
 
-  // Make a final slice with everything expressed in terms of reco bin number
+  // Make an "overall" slice with everything expressed in terms of reco bin
+  // number
   sb_file << "\"events\"\n"; // y-axis label
   sb_file << "1 2 ";
   size_t num_reco_bins = cur_reco_bin;
@@ -194,4 +197,64 @@ void make_config_mcc9_2D_proton() {
     sb_file << b << " 1 " << b + 1 << '\n';
   }
 
+  // Make a 1D slice in which the angles have been integrated out. This is a
+  // measurement of the leading proton momentum distribution. For this slice,
+  // we're still working in terms of reco event counts
+  sb_file << "\"events\"\n";
+  int num_pp_edges = proton_2D_bin_edges.size();
+  int num_pp_bins = num_pp_edges - 1;
+  // The proton momentum is the sole "active variable" in each slice
+  sb_file << "1 0 " << num_pp_edges;
+  for ( const auto& pp_edge_pair : proton_2D_bin_edges ) {
+    const auto pp_edge = pp_edge_pair.first;
+    sb_file << ' ' << pp_edge;
+  }
+  // There is no "other" variable for this slice since we've integrated out
+  // the angular information
+  sb_file << "\n0\n";
+  // Now we're ready to build the 1D proton momentum bins from the 2D ones.
+  // We need one entry in the list per reco bin, although multiple reco bins
+  // will contribute to each slice bin in this case.
+  sb_file << num_reco_bins;
+
+  // Iterate through the 2D reco bins, noting that they are numbered in the
+  // order that their edges appear in the map. In this case, all angular reco
+  // bins with the same reco proton momentum should contribute to a particular
+  // slice p_p bin.
+  cur_reco_bin = 0u;
+
+  // Keep track of the ROOT slice bin index (one-based) with this counter
+  int cur_slice_bin_idx = 1;
+
+  for ( auto iter = proton_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
+    const auto& angle_bin_edges = iter->second;
+    int num_angle_bins = angle_bin_edges.size() - 1;
+    for ( int b = 0; b < num_angle_bins; ++b ) {
+      sb_file << '\n' << cur_reco_bin << " 1 " << cur_slice_bin_idx;
+      ++cur_reco_bin;
+    } // cosine bins
+
+    // Move to the next proton momentum bin in the slice
+    ++cur_slice_bin_idx;
+  } // pp slices
+
+  sb_file << '\n';
+
+  // Also make a fully-integrated slice which contains a single angular
+  // bin (containing the whole range) and all momenta.
+  sb_file << "\"events\"\n";
+  // The proton angle will be treated as the "active variable" in this slice
+  sb_file << "1 1 2 -1.0 1.0";
+  // Treat the proton as the "other" variable, but use the full range
+  // the angular information
+  double pp_low = proton_2D_bin_edges.cbegin()->first;
+  double pp_high = proton_2D_bin_edges.crbegin()->first;
+  sb_file << "\n1 0 " << pp_low << ' ' << pp_high << '\n';
+  // We once again need an entry below for every reco bin that contributes
+  // (and all of them contribute in this case)
+  sb_file << num_reco_bins;
+  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+    sb_file << '\n' << rb << " 1 1";
+  }
+  sb_file << '\n';
 }
