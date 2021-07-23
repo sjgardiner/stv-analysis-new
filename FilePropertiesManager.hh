@@ -127,9 +127,6 @@ class FilePropertiesManager {
       std::set<std::string> > >& ntuple_file_map() const
       { return ntuple_file_map_; }
 
-    inline const std::map< std::string, std::string >
-      ntuple_to_weight_file_map() const { return ntuple_to_weight_file_map_; }
-
     // NOTE: This function assumes that there are no duplicate entries in the
     // nested ntuple file type map. That should always be the case, but beware
     // any odd situations that might break the approach used here.
@@ -182,7 +179,6 @@ class FilePropertiesManager {
       // analysis ntuple file properties
       ntuple_file_map_.clear();
       data_norm_map_.clear();
-      ntuple_to_weight_file_map_.clear();
 
       const char* path = std::getenv( "STV_ANALYSIS_DIR" );
       if ( path == nullptr ) throw std::runtime_error( "The environment"
@@ -246,19 +242,6 @@ class FilePropertiesManager {
           // Store this information in the normalization map
           data_norm_map_[ file_name ] = TriggersAndPOT( trigs, pot );
         }
-
-        // For non-detVar MC files, also read in the name for the corresponding
-        // "weight dump" file created via post-processing
-        if ( type == NtupleFileType::kNumuMC
-          || type == NtupleFileType::kIntrinsicNueMC
-          || type == NtupleFileType::kDirtMC )
-        {
-          std::string weight_file_name;
-          temp_ss >> weight_file_name;
-
-          // Store it in the ntuple -> weight file map
-          ntuple_to_weight_file_map_[ file_name ] = weight_file_name;
-        }
       }
     }
 
@@ -275,11 +258,6 @@ class FilePropertiesManager {
     // Keys are file names for processed data ntuples, values are objects
     // storing the corresponding number of triggers and POT exposure
     std::map< std::string, TriggersAndPOT > data_norm_map_;
-
-    // Keys are regular ntuple file names, values are the corresponding "weight
-    // dump" files created via post-processing. Only non-detVar MC files are
-    // expected to be present in the map.
-    std::map< std::string, std::string > ntuple_to_weight_file_map_;
 
     std::map< std::string, NtupleFileType > string_to_file_type_map_ = {
       { "onBNB", NtupleFileType::kOnBNB },
