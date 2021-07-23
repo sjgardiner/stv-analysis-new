@@ -994,8 +994,20 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
         throw std::runtime_error( "Invalid NtupleFileType!" );
       }
 
-      const auto& detVar_cv_u = detvar_universes_.at( NFT::kDetVarMCCV );
+      // Use a bare pointer for the CV universe so that we can reassign it
+      // below if needed. References can't be reassigned after they are
+      // initialized.
+      const auto* detVar_cv_u = detvar_universes_.at( NFT::kDetVarMCCV ).get();
       const auto& detVar_alt_u = detvar_universes_.at( ntuple_type );
+
+      // The Recomb2 and SCE variations use an alternate "extra CV" universe
+      // since they were generated with smaller MC statistics.
+      // TODO: revisit this if your detVar samples change in the future
+      if ( ntuple_type == NFT::kDetVarMCSCE
+        || ntuple_type == NFT::kDetVarMCRecomb2 )
+      {
+        detVar_cv_u = detvar_universes_.at( NFT::kDetVarMCCVExtra ).get();
+      }
 
       make_cov_mat( *this, temp_cov_mat, *detVar_cv_u,
         *detVar_alt_u, false, false );

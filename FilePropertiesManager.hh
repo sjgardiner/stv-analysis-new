@@ -39,6 +39,7 @@ enum class NtupleFileType {
   kDetVarMCWMdEdx, // wireMod dE/dx
   kDetVarMCWMX, // wireMod X
   kDetVarMCWMYZ, // wireMod YZ
+  kDetVarMCCVExtra, // alternate CV for small samples
 
   // Placeholder for invalid values
   kUnknown,
@@ -46,13 +47,13 @@ enum class NtupleFileType {
 
 // Utility functions for manipulating NtupleFileType values
 bool ntuple_type_is_detVar( const NtupleFileType& type ) {
-  constexpr std::array< NtupleFileType, 11 > detVar_types = {
+  constexpr std::array< NtupleFileType, 12 > detVar_types = {
     NtupleFileType::kDetVarMCCV, NtupleFileType::kDetVarMCLYatten,
     NtupleFileType::kDetVarMCLYdown, NtupleFileType::kDetVarMCLYrayl,
     NtupleFileType::kDetVarMCRecomb2, NtupleFileType::kDetVarMCSCE,
     NtupleFileType::kDetVarMCWMAngleXZ, NtupleFileType::kDetVarMCWMAngleYZ,
     NtupleFileType::kDetVarMCWMdEdx, NtupleFileType::kDetVarMCWMX,
-    NtupleFileType::kDetVarMCWMYZ
+    NtupleFileType::kDetVarMCWMYZ, NtupleFileType::kDetVarMCCVExtra
   };
 
   const auto begin = detVar_types.cbegin();
@@ -297,6 +298,7 @@ class FilePropertiesManager {
       { "detVarWMdEdx", NtupleFileType::kDetVarMCWMdEdx },
       { "detVarWMX", NtupleFileType::kDetVarMCWMX },
       { "detVarWMYZ", NtupleFileType::kDetVarMCWMYZ },
+      { "detVarCVExtra", NtupleFileType::kDetVarMCCVExtra },
     };
 
     // Folder that stores the STV analysis configuration files. This is set
