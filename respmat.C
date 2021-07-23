@@ -21,10 +21,10 @@ int main( int argc, char* argv[] ) {
   std::string respmat_config_file_name( argv[2] );
   std::string output_file_name( argv[3] );
 
-  // Build a vector of input ntuple file names using the singleton
+  // Build a vector of input ntuple file name/type pairs using the singleton
   // FilePropertiesManager. Use the file properties configuration file
   // specified by the user on the command line.
-  std::vector< std::string > input_file_names;
+  std::vector< std::pair<std::string, NtupleFileType> > input_files;
 
   std::cout << "Loading FilePropertiesManager configuration from "
     << fp_config_file_name << '\n';
@@ -37,10 +37,11 @@ int main( int argc, char* argv[] ) {
     const auto& type_map = run_and_type_pair.second;
 
     for ( const auto& type_and_files_pair : type_map ) {
+      const auto& type = type_and_files_pair.first;
       const auto& file_set = type_and_files_pair.second;
 
       for ( const std::string& file_name : file_set ) {
-        input_file_names.push_back( file_name );
+        input_files.emplace_back( file_name, type );
       }
     }
   }
@@ -54,7 +55,10 @@ int main( int argc, char* argv[] ) {
   std::string tdirfile_name;
   bool set_tdirfile_name = false;
 
-  for ( const auto& input_file_name : input_file_names ) {
+  for ( const auto& pair : input_files ) {
+
+    const auto& input_file_name = pair.first;
+    const auto& type = pair.second;
 
     std::cout << "Calculating response matrices for ntuple input file "
       << input_file_name << '\n';
@@ -65,7 +69,15 @@ int main( int argc, char* argv[] ) {
 
     resp_mat.add_input_file( input_file_name.c_str() );
 
-    resp_mat.build_response_matrices();
+    if ( ntuple_type_is_detVar(type) ) {
+      // Ignore all event weights in the detVar post-processed ntuples
+      // TODO: revisit this if you get new samples in which the CV correction
+      // weights are calculated correctly
+      resp_mat.build_response_matrices( { "FAKE_BRANCH_NAME" } );
+    }
+    else {
+      resp_mat.build_response_matrices();
+    }
 
     resp_mat.save_histograms( output_file_name, input_file_name );
 
