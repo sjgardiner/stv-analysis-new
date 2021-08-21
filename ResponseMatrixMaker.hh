@@ -316,6 +316,19 @@ class ResponseMatrixMaker {
 
   protected:
 
+    // Helper struct that keeps track of bin indices and TTreeFormula weights
+    // when filling universe histograms
+    struct FormulaMatch {
+      // The weight given here is from an evaluation of a TTreeFormula for
+      // filling an individual bin (as opposed to an overall event weight which
+      // may be given separately)
+      FormulaMatch( size_t bin_idx, double wgt ) : bin_index_( bin_idx ),
+        weight_( wgt ) {}
+
+      size_t bin_index_;
+      double weight_;
+    };
+
     // Prepares the TTreeFormula objects needed to test each entry for
     // membership in each bin
     void prepare_formulas();
@@ -532,23 +545,33 @@ void ResponseMatrixMaker::build_response_matrices(
     }
 
     // Find the reco bin(s) that should be filled for the current event
-    std::vector< size_t > matched_reco_bins;
+    std::vector< FormulaMatch > matched_reco_bins;
     for ( size_t rb = 0u; rb < reco_bin_formulas_.size(); ++rb ) {
       auto& rbf = reco_bin_formulas_.at( rb );
-      if ( rbf->EvalInstance() ) matched_reco_bins.push_back( rb );
+      int num_formula_elements = rbf->GetNdata();
+      for ( int el = 0; el < num_formula_elements; ++el ) {
+        double formula_wgt = rbf->EvalInstance( el );
+        if ( formula_wgt ) matched_reco_bins.emplace_back( rb, formula_wgt );
+      }
     }
 
     // Find the EventCategory label(s) that apply to the current event
-    std::vector< size_t > matched_category_indices;
+    std::vector< FormulaMatch > matched_category_indices;
     for ( size_t c = 0u; c < category_formulas_.size(); ++c ) {
       auto& cbf = category_formulas_.at( c );
-      if ( cbf->EvalInstance() ) matched_category_indices.push_back( c );
+      int num_formula_elements = cbf->GetNdata();
+      for ( int el = 0; el < num_formula_elements; ++el ) {
+        double formula_wgt = cbf->EvalInstance( el );
+        if ( formula_wgt ) {
+          matched_category_indices.emplace_back( c, formula_wgt );
+        }
+      }
     }
 
     input_chain_.GetEntry( entry );
     //std::cout << "Entry " << entry << '\n';
 
-    std::vector< size_t > matched_true_bins;
+    std::vector< FormulaMatch > matched_true_bins;
     double spline_weight = 0.;
     double tune_weight = 0.;
 
@@ -557,7 +580,11 @@ void ResponseMatrixMaker::build_response_matrices(
     if ( is_mc ) {
       for ( size_t tb = 0u; tb < true_bin_formulas_.size(); ++tb ) {
         auto& tbf = true_bin_formulas_.at( tb );
-        if ( tbf->EvalInstance() ) matched_true_bins.push_back( tb );
+        int num_formula_elements = tbf->GetNdata();
+        for ( int el = 0; el < num_formula_elements; ++el ) {
+          double formula_wgt = tbf->EvalInstance( el );
+          if ( formula_wgt ) matched_true_bins.emplace_back( tb, formula_wgt );
+        }
       } // true bins
 
       // If we have event weights in the map at all, then get the current
@@ -592,36 +619,44 @@ void ResponseMatrixMaker::build_response_matrices(
         // event weight
         auto& universe = u_vec.at( u );
 
-        for ( const int& tb : matched_true_bins ) {
-          universe.hist_true_->Fill( tb, safe_wgt );
-          for ( const int& rb : matched_reco_bins ) {
-            universe.hist_2d_->Fill( tb, rb, safe_wgt );
+        for ( const auto& tb : matched_true_bins ) {
+          // TODO: consider including the TTreeFormula weight(s) in the check
+          // applied via safe_weight() above
+          universe.hist_true_->Fill( tb.bin_index_, tb.weight_ * safe_wgt );
+          for ( const auto& rb : matched_reco_bins ) {
+            universe.hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
+              tb.weight_ * rb.weight_ * safe_wgt );
           } // reco bins
         } // true bins
 
-        for ( const int& rb : matched_reco_bins ) {
-          universe.hist_reco_->Fill( rb, safe_wgt );
-          for ( const int& c : matched_category_indices ) {
-            universe.hist_categ_->Fill( c, rb, safe_wgt );
+        for ( const auto& rb : matched_reco_bins ) {
+          universe.hist_reco_->Fill( rb.bin_index_, rb.weight_ * safe_wgt );
+          for ( const auto& c : matched_category_indices ) {
+            universe.hist_categ_->Fill( c.bin_index_, rb.bin_index_,
+              c.weight_ * rb.weight_ * safe_wgt );
           }
         } // reco bins
       } // universes
     } // weight names
 
     // Fill the unweighted histograms now that we're done with the
-    // weighted ones
+    // weighted ones. Note that "unweighted" in this context applies to
+    // the universe event weights, but that any implicit weights from
+    // the TTreeFormula evaluations will still be applied.
     auto& univ = universes_.at( UNWEIGHTED_NAME ).front();
-    for ( const int& tb : matched_true_bins ) {
-      univ.hist_true_->Fill( tb );
-      for ( const int& rb : matched_reco_bins ) {
-        univ.hist_2d_->Fill( tb, rb );
+    for ( const auto& tb : matched_true_bins ) {
+      univ.hist_true_->Fill( tb.bin_index_, tb.weight_ );
+      for ( const auto& rb : matched_reco_bins ) {
+        univ.hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
+          tb.weight_ * rb.weight_ );
       } // reco bins
     } // true bins
 
-    for ( const int& rb : matched_reco_bins ) {
-      univ.hist_reco_->Fill( rb );
-      for ( const int& c : matched_category_indices ) {
-        univ.hist_categ_->Fill( c, rb );
+    for ( const auto& rb : matched_reco_bins ) {
+      univ.hist_reco_->Fill( rb.bin_index_, rb.weight_ );
+      for ( const auto& c : matched_category_indices ) {
+        univ.hist_categ_->Fill( c.bin_index_, rb.bin_index_,
+          c.weight_ * rb.weight_ );
       }
     } // reco bins
 
