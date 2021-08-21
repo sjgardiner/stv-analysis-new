@@ -303,7 +303,7 @@ void slice_dump() {
 
   auto* syst_ptr = new MCC9Unfolder( "/uboone/data/users/gardiner/"
     "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
-    "RespMat-myconfig_mcc9_2D_muon.root",
+    "RespMat-HighStatsDetVar-myconfig_mcc9_2D_muon.root",
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
@@ -564,6 +564,14 @@ void slice_dump() {
 
     dump_slice_histogram( "efficiency", *slice_eff, slice,
       pgfplots_hist_table, true, false );
+
+    std::ofstream out_eff_table_file( "eff_slice_table_"
+      + std::to_string(sl_idx) + ".txt" );
+    for ( int b = 1; b <= slice_eff->hist_->GetNbinsX(); ++b ) {
+      out_eff_table_file << b - 1 << " & "
+        << slice_eff->hist_->GetBinContent( b ) << '\n';
+    }
+
     c3->SaveAs( ("eff_slice_" + std::to_string(sl_idx) + ".pdf").c_str() );
 //// END NEW CODE
 

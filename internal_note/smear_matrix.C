@@ -41,7 +41,7 @@ void smear_matrix() {
 
   const std::string input_respmat_file_name( "/uboone/data/users/gardiner/"
     "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
-    "RespMat-myconfig_mcc9_2D_muon.root" );
+    "RespMat-myconfig_mcc9_2D_proton.root" );
 
   auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name,
     "../systcalc.conf" );
@@ -133,7 +133,14 @@ void smear_matrix() {
 
   smear_hist->Draw( "colz" );
 
-  dump_pgfplots_smearing_histogram( "muon2D_respmat_table.txt",
-    "muon2D_respmat_params.txt", smear_hist, first_bkgd_bin_idx );
+  dump_pgfplots_smearing_histogram( "proton2D_respmat_table.txt",
+    "proton2D_respmat_params.txt", smear_hist, first_bkgd_bin_idx );
+
+  // Dump a table of bin occupancies
+  std::ofstream occup_table_file( "occupancy_table.txt" );
+  for ( size_t bin_idx = 0u; bin_idx < first_bkgd_bin_idx; ++bin_idx ) {
+    occup_table_file << bin_idx << " & "
+      << smear_hist->GetBinContent( bin_idx + 1, bin_idx + 1 ) << '\n';
+  }
 
 }
