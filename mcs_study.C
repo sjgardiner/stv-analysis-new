@@ -18,19 +18,31 @@ constexpr double TRACK_SCORE_CUT = 0.5;
 
 // Boundaries of the containment volume in cm. Chosen to leave a 10-cm border
 // between all edges and the active volume boundary
-double VOL_X_MIN =   10.;
-double VOL_X_MAX =  246.4;
+double VOL_X_MIN =   00.;
+double VOL_X_MAX =  256.4;
 
-double VOL_Y_MIN = -106.5;
-double VOL_Y_MAX =  106.5;
+double VOL_Y_MIN = -116.5;
+double VOL_Y_MAX =  116.5;
 
-double VOL_Z_MIN =   10.;
-double VOL_Z_MAX = 1026.8;
+double VOL_Z_MIN =   0.;
+double VOL_Z_MAX = 1036.8;
 
-bool in_volume( double x, double y, double z ) {
+bool in_active_volume( double x, double y, double z ) {
   bool x_inside_V = ( VOL_X_MIN < x ) && ( x < VOL_X_MAX );
   bool y_inside_V = ( VOL_Y_MIN < y ) && ( y < VOL_Y_MAX );
   bool z_inside_V = ( VOL_Z_MIN < z ) && ( z < VOL_Z_MAX );
+  return ( x_inside_V && y_inside_V && z_inside_V );
+}
+
+constexpr double PCV_OFFSET = 10.; // cm
+
+bool in_pcv( double x, double y, double z ) {
+  bool x_inside_V = ( VOL_X_MIN + PCV_OFFSET < x )
+    && ( x < VOL_X_MAX - PCV_OFFSET );
+  bool y_inside_V = ( VOL_Y_MIN + PCV_OFFSET < y )
+    && ( y < VOL_Y_MAX - PCV_OFFSET );
+  bool z_inside_V = ( VOL_Z_MIN + PCV_OFFSET < z )
+    && ( z < VOL_Z_MAX - PCV_OFFSET );
   return ( x_inside_V && y_inside_V && z_inside_V );
 }
 
@@ -227,7 +239,7 @@ void mcs_study() {
     "stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_"
     "run1_reco2_reco2.root" );
 
-  TFile out_file( "my_out.root", "recreate" );
+  TFile out_file( "my_out_av.root", "recreate" );
   TTree* out_tree = new TTree( "out_tree", "out tree" );
   double trkl, pmu, mc_pmu, full_trkl;
   int num_intersections;
@@ -273,14 +285,14 @@ void mcs_study() {
       double start_x = cur_event.track_startx_->at( p );
       double start_y = cur_event.track_starty_->at( p );
       double start_z = cur_event.track_startz_->at( p );
-      bool start_in_vol = in_volume( start_x, start_y, start_z );
+      bool start_in_vol = in_pcv( start_x, start_y, start_z );
       if ( !start_in_vol ) continue;
 
       // Skip muons whose reco end points are contained
       double end_x = cur_event.track_endx_->at( p );
       double end_y = cur_event.track_endy_->at( p );
       double end_z = cur_event.track_endz_->at( p );
-      bool end_in_vol = in_volume( end_x, end_y, end_z );
+      bool end_in_vol = in_pcv( end_x, end_y, end_z );
       if ( end_in_vol ) continue;
 
       // Get the true muon momentum
