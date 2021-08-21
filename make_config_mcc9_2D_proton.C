@@ -46,12 +46,35 @@ void make_config_mcc9_2D_proton() {
   std::vector< TrueBin > true_bins;
   std::vector< RecoBin > reco_bins;
 
+  // Also save the bin definitions to an output file that will be used to
+  // make a LaTeX table
+  std::ofstream tex_bin_table_file( "mybintable_mcc9_proton2D.tex" );
+  tex_bin_table_file << "\\documentclass{standalone}\n"
+    << "\\usepackage{booktabs}\n"
+    << "\\usepackage{siunitx}\n"
+    << "\\DeclareSIUnit\\clight{\\text{\\ensuremath{c}}}\n"
+    << "\\sisetup{per-mode=symbol}\n"
+    << "\\begin{document}\n"
+    << "\\begin{tabular}{cSSSScc}\n"
+    << "\\toprule\n"
+    << "bin number\n"
+    << "& {$p_p^\\mathrm{low}$ (\\si{\\GeV\\per\\clight})}"
+    << "& {$p_p^\\mathrm{high}$ (\\si{\\GeV\\per\\clight})}"
+    << " & {$\\cos\\theta_p^\\mathrm{low}$}\n"
+    << "& {$\\cos\\theta_p^\\mathrm{high}$} & efficiency & occupancy \\\\\n"
+    << "\\midrule\n";
+
   // Configure kinematic limits for all of the signal bins
 
   // Get an iterator to the last map element. They are sorted numerically,
   // so this will be the upper edge of the last non-overflow bin.
   auto last = proton_2D_bin_edges.cend();
   --last;
+
+  // The reco bins are numbered in the order that their edges appear in the
+  // map, so just keep a running counter here to keep track of which reco
+  // bin we are on.
+  size_t cur_reco_bin = 0u;
 
   auto iter = proton_2D_bin_edges.cbegin();
   for ( auto iter = proton_2D_bin_edges.cbegin(); iter != last; ++iter ) {
@@ -103,6 +126,27 @@ void make_config_mcc9_2D_proton() {
 
       reco_bins.emplace_back( reco_bin_def );
 
+      tex_bin_table_file << cur_reco_bin << " & ";
+      ++cur_reco_bin;
+      if ( b == 0u ) {
+        tex_bin_table_file << p_lead_p_low << " & " << p_lead_p_high << " & ";
+      }
+      else tex_bin_table_file << " & & ";
+
+      tex_bin_table_file << cos_lead_p_low << " & "
+        << cos_lead_p_high << " &  & \\\\";
+      // Add extra space at the end of each momentum bin except the last one
+      if ( b == num_cosine_bins - 1 && p_lead_p_high != last->first ) {
+        tex_bin_table_file << "[2mm]";
+      }
+      tex_bin_table_file << '\n';
+
+      // If this is indeed the last bin, then write the rest of the
+      // LaTeX output file
+      if ( b == num_cosine_bins - 1 && p_lead_p_high == last->first ) {
+        tex_bin_table_file << "\\bottomrule\n\\end{tabular}\n\\end{document}";
+      }
+
       // We don't need an underflow or overflow cosine bin because the entire
       // angular range is covered in all cases.
 
@@ -146,7 +190,7 @@ void make_config_mcc9_2D_proton() {
   // The reco bins are numbered in the order that their edges appear in the
   // map, so just keep a running counter here to keep track of which reco
   // bin we are on.
-  size_t cur_reco_bin = 0u;
+  cur_reco_bin = 0u;
 
   for ( auto iter = proton_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
     // Each 1D slice uses the same y-axis units (reco events)

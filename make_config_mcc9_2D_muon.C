@@ -51,7 +51,30 @@ void make_config_mcc9_2D_muon() {
   std::vector< TrueBin > true_bins;
   std::vector< RecoBin > reco_bins;
 
+  // Also save the bin definitions to an output file that will be used to
+  // make a LaTeX table
+  std::ofstream tex_bin_table_file( "mybintable_mcc9_muon2D.tex" );
+  tex_bin_table_file << "\\documentclass{standalone}\n"
+    << "\\usepackage{booktabs}\n"
+    << "\\usepackage{siunitx}\n"
+    << "\\DeclareSIUnit\\clight{\\text{\\ensuremath{c}}}\n"
+    << "\\sisetup{per-mode=symbol}\n"
+    << "\\begin{document}\n"
+    << "\\begin{tabular}{cSSSScc}\n"
+    << "\\toprule\n"
+    << "bin number\n"
+    << "& {$p_\\mu^\\mathrm{low}$ (\\si{\\GeV\\per\\clight})}"
+    << "& {$p_\\mu^\\mathrm{high}$ (\\si{\\GeV\\per\\clight})}"
+    << " & {$\\cos\\theta_\\mu^\\mathrm{low}$}\n"
+    << "& {$\\cos\\theta_\\mu^\\mathrm{high}$} & efficiency & occupancy \\\\\n"
+    << "\\midrule\n";
+
   // Configure kinematic limits for all of the signal bins
+
+  // The reco bins are numbered in the order that their edges appear in the
+  // map, so just keep a running counter here to keep track of which reco
+  // bin we are on.
+  size_t cur_reco_bin = 0u;
 
   // Get an iterator to the last map element. They are sorted numerically,
   // so this will be the upper edge of the last non-overflow bin.
@@ -108,6 +131,19 @@ void make_config_mcc9_2D_muon() {
 
       reco_bins.emplace_back( reco_bin_def );
 
+      tex_bin_table_file << cur_reco_bin << " & ";
+      ++cur_reco_bin;
+      if ( b == 0u ) {
+        tex_bin_table_file << pmu_low << " & " << pmu_high << " & ";
+      }
+      else tex_bin_table_file << " & & ";
+
+      tex_bin_table_file << cosmu_low << " & " << cosmu_high << " &  &"
+        << " \\\\";
+      // Add extra space at the end of each momentum bin
+      if ( b == num_cosine_bins - 1 ) tex_bin_table_file << "[2mm]";
+      tex_bin_table_file << '\n';
+
       // We don't need an overflow cosine bin because the entire angular
       // range is covered. We'll use a single bin for the overflow in pmu.
 
@@ -133,6 +169,12 @@ void make_config_mcc9_2D_muon() {
   std::string reco_bin_def = reco_ss.str();
   reco_bins.emplace_back( reco_bin_def );
 
+  // Add the overflow bin to the LaTeX table file
+  tex_bin_table_file << cur_reco_bin << " & " << pmu_overflow_min
+    << " & {$\\infty$} & -1 & 1 &  & \\\\\n";
+  // Write the closing lines of the LaTeX table file
+  tex_bin_table_file << "\\bottomrule\n\\end{tabular}\n\\end{document}\n";
+
   // Add true bins for the background categories of interest
   for ( const auto& bdef : background_defs ) {
     true_bins.emplace_back( bdef, kBackgroundTrueBin );
@@ -155,9 +197,9 @@ void make_config_mcc9_2D_muon() {
   sb_file << "\"reco cos#theta_{#mu}\" \"\" \"reco $\\cos\\theta_{\\mu}$\""
     " \"\"\n";
   sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
-  // Includes a slice for the overflow bin and an extra slice for everything
-  // in terms of reco bin number
-  size_t num_slices = muon_2D_bin_edges.size() + 1;
+  // Includes a slice for the overflow bin and two extra slices. One
+  // for everything in terms of reco bin number and one integrated over angles.
+  size_t num_slices = muon_2D_bin_edges.size() + 2;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -168,7 +210,7 @@ void make_config_mcc9_2D_muon() {
   // The reco bins are numbered in the order that their edges appear in the
   // map, so just keep a running counter here to keep track of which reco
   // bin we are on.
-  size_t cur_reco_bin = 0u;
+  cur_reco_bin = 0u;
 
   for ( auto iter = muon_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
     // Each 1D slice uses the same y-axis units (reco events)
@@ -232,4 +274,47 @@ void make_config_mcc9_2D_muon() {
   for ( size_t b = 0u; b < num_reco_bins; ++b ) {
     sb_file << b << " 1 " << b + 1 << '\n';
   }
+
+  // Make a 1D slice in which the angles have been integrated out. This is a
+  // measurement of the leading proton momentum distribution. For this slice,
+  // we're still working in terms of reco event counts
+  sb_file << "\"events\"\n";
+  int num_pmu_edges = muon_2D_bin_edges.size();
+  int num_pmu_bins = num_pmu_edges - 1;
+  // The muon momentum is the sole "active variable" in each slice
+  sb_file << "1 0 " << num_pmu_edges;
+  for ( const auto& pmu_edge_pair : muon_2D_bin_edges ) {
+    const auto pmu_edge = pmu_edge_pair.first;
+    sb_file << ' ' << pmu_edge;
+  }
+  // There is no "other" variable for this slice since we've integrated out
+  // the angular information
+  sb_file << "\n0\n";
+  // Now we're ready to build the 1D muon momentum bins from the 2D ones.
+  // We need one entry in the list per reco bin, although multiple reco bins
+  // will contribute to each slice bin in this case.
+  sb_file << num_reco_bins;
+
+  // Iterate through the 2D reco bins, noting that they are numbered in the
+  // order that their edges appear in the map. In this case, all angular reco
+  // bins with the same reco muon momentum should contribute to a particular
+  // slice p_mu bin.
+  cur_reco_bin = 0u;
+
+  // Keep track of the ROOT slice bin index (one-based) with this counter
+  int cur_slice_bin_idx = 1;
+
+  for ( auto iter = muon_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
+    const auto& angle_bin_edges = iter->second;
+    int num_angle_bins = angle_bin_edges.size() - 1;
+    for ( int b = 0; b < num_angle_bins; ++b ) {
+      sb_file << '\n' << cur_reco_bin << " 1 " << cur_slice_bin_idx;
+      ++cur_reco_bin;
+    } // cosine bins
+
+    // Move to the next muon momentum bin in the slice
+    ++cur_slice_bin_idx;
+  } // pmu slices
+
+  sb_file << '\n';
 }
