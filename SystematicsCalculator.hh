@@ -80,12 +80,12 @@ struct CovMatrix {
     // Note that ROOT histogram bin indices are one-based to allow for
     // underflow. The TMatrixDSym element indices, on the other hand,
     // are zero-based.
-    int num_reco_bins = cov_matrix_->GetNbinsX();
-    auto result = std::make_unique< TMatrixD >( num_reco_bins, num_reco_bins );
+    int num_cm_bins = cov_matrix_->GetNbinsX();
+    auto result = std::make_unique< TMatrixD >( num_cm_bins, num_cm_bins );
     // TODO: consider doing something more efficient than setting each
     // element manually
-    for ( int a = 0; a < num_reco_bins; ++a ) {
-      for ( int b = 0; b < num_reco_bins; ++b ) {
+    for ( int a = 0; a < num_cm_bins; ++a ) {
+      for ( int b = 0; b < num_cm_bins; ++b ) {
         result->operator()( a, b ) = cov_matrix_->GetBinContent( a + 1, b + 1 );
       }
     }
@@ -118,6 +118,11 @@ class SystematicsCalculator {
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
   //protected:
+
+    // Overload for special cases in which the N*N covariance matrix does not
+    // have dimension parameter N equal to the number of reco bins
+    inline virtual size_t get_covariance_matrix_size() const
+      { return reco_bins_.size(); }
 
     CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
 
@@ -787,10 +792,10 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
 CovMatrix SystematicsCalculator::make_covariance_matrix(
   const std::string& hist_name ) const
 {
-  int num_reco_bins = reco_bins_.size();
+  int num_cm_bins = this->get_covariance_matrix_size();
   TH2D* hist = new TH2D( hist_name.c_str(),
-    "covariance; reco bin; reco bin; covariance", num_reco_bins, 0.,
-    num_reco_bins, num_reco_bins, 0., num_reco_bins );
+    "covariance; reco bin; reco bin; covariance", num_cm_bins, 0.,
+    num_cm_bins, num_cm_bins, 0., num_cm_bins );
   hist->SetDirectory( nullptr );
   hist->SetStats( false );
 
@@ -803,14 +808,15 @@ template < class UniversePointerContainer >
   const Universe& cv_univ, const UniversePointerContainer& universes,
   bool average_over_universes, bool is_flux_variation )
 {
-  // Get the total number of true and reco bins for later reference
+  // Get the total number of true bins and the covariance matrix dimension for
+  // later reference
   size_t num_true_bins = sc.true_bins_.size();
-  size_t num_reco_bins = sc.reco_bins_.size();
+  size_t num_cm_bins = sc.get_covariance_matrix_size();
 
   // Get the expected observable values in each reco bin in the CV universe
-  std::vector< double > cv_reco_obs( num_reco_bins, 0. );
+  std::vector< double > cv_reco_obs( num_cm_bins, 0. );
 
-  for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+  for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
     cv_reco_obs.at( rb ) = sc.evaluate_observable( cv_univ, rb );
   }
 
@@ -829,25 +835,25 @@ template < class UniversePointerContainer >
 
     // Get the expected observable values in each reco bin in the
     // current universe.
-    std::vector< double > univ_reco_obs( num_reco_bins, 0. );
+    std::vector< double > univ_reco_obs( num_cm_bins, 0. );
 
-    for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+    for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
       univ_reco_obs.at( rb ) = sc.evaluate_observable( *univ,
         rb, flux_u_idx );
     }
 
     // We have all the needed ingredients to get the contribution of this
-    // universe to the covariance matrix. Loop over each pair of reco bins and
-    // fill the corresponding covariance matrix elements.
+    // universe to the covariance matrix. Loop over each pair covariance matrix
+    // elements and fill them.
     // TODO: the covariance matrix are symmetric by definition. You can
     // therefore make this more efficient by calculating only the subset of
     // elements that you need.
-    for ( size_t a = 0u; a < num_reco_bins; ++a ) {
+    for ( size_t a = 0u; a < num_cm_bins; ++a ) {
 
       double cv_a = cv_reco_obs.at( a );
       double univ_a = univ_reco_obs.at( a );
 
-      for ( size_t b = 0u; b < num_reco_bins; ++b ) {
+      for ( size_t b = 0u; b < num_cm_bins; ++b ) {
 
         double cv_b = cv_reco_obs.at( b );
         double univ_b = univ_reco_obs.at( b );
@@ -920,10 +926,10 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
 
     else if ( type == "MCstat" ) {
 
-      size_t num_reco_bins = reco_bins_.size();
+      size_t num_cm_bins = this->get_covariance_matrix_size();
       const auto& cv_univ = this->cv_universe();
 
-      for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+      for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
         // Calculate the MC stat uncertainty in the current reco bin
         // for the observable of interest. Use the CV universe.
         double err = this->evaluate_mc_stat_unc( cv_univ, rb );
@@ -941,9 +947,9 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       bool use_ext = false;
       if ( type == "EXTstat" ) use_ext = true;
 
-      size_t num_reco_bins = reco_bins_.size();
+      size_t num_cm_bins = this->get_covariance_matrix_size();
 
-      for ( size_t rb = 0u; rb < num_reco_bins; ++rb ) {
+      for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
         double err = this->evaluate_data_stat_unc( rb, use_ext );
         double err2 = err * err;
 
@@ -959,14 +965,14 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       config_file >> frac_unc;
 
       const double frac2 = std::pow( frac_unc, 2 );
-      int num_reco_bins = reco_bins_.size();
+      int num_cm_bins = this->get_covariance_matrix_size();
 
       const auto& cv_univ = this->cv_universe();
-      for ( size_t a = 0u; a < num_reco_bins; ++a ) {
+      for ( size_t a = 0u; a < num_cm_bins; ++a ) {
 
         double cv_a = this->evaluate_observable( cv_univ, a );
 
-        for ( int b = 0u; b < num_reco_bins; ++b ) {
+        for ( int b = 0u; b < num_cm_bins; ++b ) {
 
           double cv_b = this->evaluate_observable( cv_univ, b );
 
