@@ -163,10 +163,10 @@ class SystematicsCalculator {
     // TODO: revisit this procedure if new detVar samples become available
     std::map< NFT, std::unique_ptr<Universe> > detvar_universes_;
 
-    // True bin configuration that was used to compute the reponse matrices
+    // True bin configuration that was used to compute the response matrices
     std::vector< TrueBin > true_bins_;
 
-    // Reco bin configuration that was used to compute the reponse matrices
+    // Reco bin configuration that was used to compute the response matrices
     std::vector< RecoBin > reco_bins_;
 
     // Total POT exposure for the analyzed BNB data
