@@ -1195,27 +1195,15 @@ void AnalysisEvent::apply_numu_CC_selection() {
     unsigned int generation = pfp_generation_->at( p );
     if ( generation != 2u ) continue;
 
-    // Get the track score for the current PFParticle
-    float tscore = pfp_track_score_->at( p );
-
-    // A PFParticle is considered a track if its score is above the track score
-    // cut. Get the track or shower start coordinates as appropriate.
-    float x, y, z;
-    // Use the reco track information for tracks. For showers, if we're working
-    // with an ntuple for which the shower information has been excluded (to
-    // preserve blindness for the LEE effort), then just fall back to using the
-    // starting position for the track-like reconstruction in order to apply
-    // the containment cut.
-    if ( tscore > TRACK_SCORE_CUT || !shower_startx_ ) {
-      x = track_startx_->at( p );
-      y = track_starty_->at( p );
-      z = track_startz_->at( p );
-    }
-    else {
-      x = shower_startx_->at( p );
-      y = shower_starty_->at( p );
-      z = shower_startz_->at( p );
-    }
+    // Use the track reconstruction results to get the start point for
+    // every PFParticle for the purpose of verifying containment. We could
+    // in principle differentiate between tracks and showers here, but
+    // (1) we cut out all showers later on in the selection anyway, and
+    // (2) the blinded PeLEE data ntuples do not include shower information.
+    // We therefore apply the track reconstruction here unconditionally.
+    float x = track_startx_->at( p );
+    float y = track_starty_->at( p );
+    float z = track_startz_->at( p );
 
     // Verify that the start of the PFParticle lies within the containment
     // volume.
@@ -1243,6 +1231,11 @@ void AnalysisEvent::find_muon_candidate() {
   std::vector<int> muon_pid_scores;
 
   for ( int p = 0; p < num_pf_particles_; ++p ) {
+    // Only direct neutrino daughters (generation == 2) will be considered as
+    // possible muon candidates
+    unsigned int generation = pfp_generation_->at( p );
+    if ( generation != 2u ) continue;
+
     float track_score = pfp_track_score_->at( p );
     float start_dist = track_start_distance_->at( p );
     float track_length = track_length_->at( p );
@@ -1325,7 +1318,7 @@ void AnalysisEvent::apply_selection() {
     // Only worry about direct neutrino daughters (PFParticles considered
     // daughters of the reconstructed neutrino)
     unsigned int generation = pfp_generation_->at( p );
-    if ( generation != 2 ) continue;
+    if ( generation != 2u ) continue;
 
     // Check that we can find a muon candidate in the event. If more than
     // one is found, also fail the cut.
