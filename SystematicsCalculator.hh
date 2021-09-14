@@ -119,6 +119,10 @@ class SystematicsCalculator {
 
   //protected:
 
+    // Returns true if a given Universe represents a detector variation or
+    // false otherwise
+    bool is_detvar_universe( const Universe& univ ) const;
+
     // Overload for special cases in which the N*N covariance matrix does not
     // have dimension parameter N equal to the number of reco bins
     inline virtual size_t get_covariance_matrix_size() const
@@ -1065,4 +1069,28 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
   } // Covariance matrix definitions
 
   return matrix_map_ptr;
+}
+
+// Helper function that searches through the owned map of detector variation
+// universes. If the input Universe shares the same memory address as one
+// of the Universe objects stored in the map, then this function returns
+// true. Otherwise, false is returned. This may be used to detect whether the
+// detVarCV is needed in SystematicsCalculator::evaluate_observable().
+//
+// TODO: This is a bit of a hack. Revisit the technique used, particularly
+// if it slows down calculations with this class significantly in the future.
+bool SystematicsCalculator::is_detvar_universe( const Universe& univ ) const {
+
+  using DetVarMapElement = std::pair< const NFT, std::unique_ptr<Universe> >;
+
+  const auto begin = detvar_universes_.cbegin();
+  const auto end = detvar_universes_.cend();
+
+  const auto iter = std::find_if( begin, end,
+    [ &univ ]( const DetVarMapElement& my_pair )
+      -> bool { return my_pair.second.get() == &univ; }
+  );
+
+  bool found_detvar_universe = ( iter != end );
+  return found_detvar_universe;
 }

@@ -28,10 +28,6 @@ class MCC9Unfolder : public SystematicsCalculator {
     virtual double evaluate_data_stat_unc( int reco_bin,
       bool use_ext ) const override;
 
-  protected:
-
-    // Helper function for evaluate_observable()
-    bool is_detvar_universe( const Universe& univ ) const;
 };
 
 MCC9Unfolder::MCC9Unfolder(
@@ -145,28 +141,4 @@ double MCC9Unfolder::evaluate_data_stat_unc( int reco_bin, bool use_ext ) const
   // ROOT histograms use one-based bin indices, so I correct for that here
   double err = d_hist->GetBinError( reco_bin + 1 );
   return err;
-}
-
-// Helper function that searches through the owned map of detector variation
-// universes. If the input Universe shares the same memory address as one
-// of the Universe objects stored in the map, then this function returns
-// true. Otherwise, false is returned. This is used to detect whether the
-// detVarCV is needed in MCC9Unfolder::evaluate_observable().
-//
-// TODO: This is a bit of a hack. Revisit the technique used, particularly
-// if it slows down calculations with this class significantly in the future.
-bool MCC9Unfolder::is_detvar_universe( const Universe& univ ) const {
-
-  using DetVarMapElement = std::pair< const NFT, std::unique_ptr<Universe> >;
-
-  const auto begin = detvar_universes_.cbegin();
-  const auto end = detvar_universes_.cend();
-
-  const auto iter = std::find_if( begin, end,
-    [ &univ ]( const DetVarMapElement& my_pair )
-      -> bool { return my_pair.second.get() == &univ; }
-  );
-
-  bool found_detvar_universe = ( iter != end );
-  return found_detvar_universe;
 }
