@@ -116,6 +116,20 @@ enum TrueBinType {
 
 };
 
+// Enum used to label bin types in reco space
+enum RecoBinType {
+
+  // Bin intended for use in the primary measurement of interest
+  kOrdinaryRecoBin = 0,
+
+  // Bin intended for use in a sideband constraint
+  kSidebandRecoBin = 1,
+
+  // Placeholder for undefined cases
+  kUnknownRecoBin = 2
+
+};
+
 // Defines a histogram bin in true space
 struct TrueBin {
 
@@ -162,25 +176,35 @@ struct RecoBin {
 
   public:
 
-    RecoBin( const std::string& cuts = "" ) : selection_cuts_( cuts ) {}
+    RecoBin( const std::string& cuts = "",
+      RecoBinType bin_type = kOrdinaryRecoBin )
+      : type_( bin_type ), selection_cuts_( cuts ) {}
 
     // Cuts to use in TTree::Draw for filling the bin. Any overall event weight
     // included here will be ignored. It is up to the user to ensure that only
     // reco quantities are used for reco bin cuts.
     std::string selection_cuts_;
 
+    // The kind of reco bin represented by this object
+    RecoBinType type_;
+
 };
 
 inline std::ostream& operator<<( std::ostream& out, const RecoBin& rb ) {
-  out << '\"' << rb.selection_cuts_ << '\"';
+  out << rb.type_ << " \"" << rb.selection_cuts_ << '\"';
   return out;
 }
 
 inline std::istream& operator>>( std::istream& in, RecoBin& rb ) {
-  std::string temp_line;
+
+  int temp_type;
+  in >> temp_type;
+
+  rb.type_ = static_cast< RecoBinType >( temp_type );
 
   // Use two calls to std::getline using a double quote delimiter
   // in order to get the contents of the next double-quoted string
+  std::string temp_line;
   std::getline( in, temp_line, '\"' );
   std::getline( in, temp_line, '\"' );
   rb.selection_cuts_ = temp_line;

@@ -124,7 +124,7 @@ void make_config_mcc9_2D_proton() {
 
       std::string reco_bin_def = reco_ss.str();
 
-      reco_bins.emplace_back( reco_bin_def );
+      reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin );
 
       tex_bin_table_file << cur_reco_bin << " & ";
       ++cur_reco_bin;
