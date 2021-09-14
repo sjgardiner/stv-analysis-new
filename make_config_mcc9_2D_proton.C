@@ -1,36 +1,7 @@
+#include "ConfigMakerUtils.hh"
 #include "ResponseMatrixMaker.hh"
 
 void make_config_mcc9_2D_proton() {
-
-  // Using floating-point numbers as std::map keys is admittedly evil, but it's
-  // safe in this case: all we'll do with this map is iterate over the
-  // elements. Keys are proton momentum bin edges, values are proton cosine bin
-  // edges.
-  std::map< double, std::vector<double> > proton_2D_bin_edges = {
-
-    // No need for an underflow bin: due to the signal definition, all leading
-    // protons with reco momentum below 0.25 GeV/c will be lost
-    { 0.250, { -1, -0.5, 0.1, 0.6, 1.0 } },
-    { 0.325, { -1, -0.7, -0.4, 0, 0.4, 0.6, 0.8, 1.0 } },
-    { 0.4,   { -1, -0.6, -0.2, 0.2, 0.5, 0.65, 0.85, 1.0 } },
-    { 0.45,  { -1, -0.4, 0, 0.2, 0.4, 0.55, 0.65, 0.8, 0.92, 1.0 } },
-    { 0.5,   { -1, -0.2, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 } },
-    { 0.550, { -1, 0, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 } },
-    { 0.6,   { -1, 0.1, 0.37, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 } },
-    { 0.65,  { -1, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0 } },
-    { 0.7,   { -1, 0.45, 0.65, 0.75, 0.82, 0.9, 1.0 } },
-    { 0.75,  { -1, 0.55, 0.7, 0.8, 0.87, 1.0 } },
-    { 0.8,   { -1, 0.65, 0.78, 0.89, 1.0 } },
-    { 0.85,  { -1, 0.73, 0.86, 1.0 } },
-    { 0.9,   { -1, 0.77, 0.88, 1.0 } },
-    { 0.975, { -1, 0.84, 1.0 } },
-
-    // Upper edge of the last bin. We don't need an overflow bin because the
-    // signal definition excludes any leading protons with momenta above 1.2
-    // GeV/c
-    { 1.2, {} }
-
-  };
 
   std::string selection = "sel_CCNp0pi";
   std::string signal_def = "mc_is_signal";
@@ -68,7 +39,7 @@ void make_config_mcc9_2D_proton() {
 
   // Get an iterator to the last map element. They are sorted numerically,
   // so this will be the upper edge of the last non-overflow bin.
-  auto last = proton_2D_bin_edges.cend();
+  auto last = PROTON_2D_BIN_EDGES.cend();
   --last;
 
   // The reco bins are numbered in the order that their edges appear in the
@@ -76,8 +47,8 @@ void make_config_mcc9_2D_proton() {
   // bin we are on.
   size_t cur_reco_bin = 0u;
 
-  auto iter = proton_2D_bin_edges.cbegin();
-  for ( auto iter = proton_2D_bin_edges.cbegin(); iter != last; ++iter ) {
+  auto iter = PROTON_2D_BIN_EDGES.cbegin();
+  for ( auto iter = PROTON_2D_BIN_EDGES.cbegin(); iter != last; ++iter ) {
 
     // Get an iterator to the map element after the current one. Due to
     // the automatic sorting, this is guaranteed to contain the upper edge
@@ -160,6 +131,75 @@ void make_config_mcc9_2D_proton() {
     true_bins.emplace_back( bdef, kBackgroundTrueBin );
   }
 
+  // We're done with all the "ordinary" bins. Add some extra reco bins to use
+  // in the sideband control samples.
+
+  // The control samples have significantly lower statistics, so bin in 1D
+  // proton candidate momentum slices only. This can be done universally
+  // for all of the sideband selections considered here, including the NC one.
+  //
+  // Keys are selections to use for sidebands, values are the branch names for
+  // the reconstructed momentum to use in each case. This is a pretty hacky way
+  // to organize the information, but it is simple.
+  std::map< std::string, std::string > sideband_selection_to_momentum_map = {
+    {  DIRT_SIDEBAND_SELECTION, "p3_lead_p" },
+    {    NC_SIDEBAND_SELECTION, "p3_lead_p" },
+    { CCNPI_SIDEBAND_SELECTION, "p3_lead_p" },
+  };
+
+  // Loop over the sideband selection definitions. Prepare new reco bin
+  // definitions for each in the appropriate 1D reconstructed momentum space.
+  for ( const auto& sel_mom_pair : sideband_selection_to_momentum_map ) {
+    const auto& side_sel = sel_mom_pair.first;
+    const auto& mom_branch = sel_mom_pair.second;
+    std::map< double, std::vector<double> >* bin_edge_map = nullptr;
+    if ( mom_branch == "p3_mu" ) bin_edge_map = &MUON_2D_BIN_EDGES;
+    else if ( mom_branch == "p3_lead_p" ) bin_edge_map = &PROTON_2D_BIN_EDGES;
+    else throw std::runtime_error( "Unimplemented sideband momentum!" );
+
+    // Get an iterator to the last map element. They are sorted numerically,
+    // so this will be the upper edge of the last non-overflow momentum bin.
+    auto last = bin_edge_map->cend();
+    --last;
+
+    for ( auto iter = bin_edge_map->cbegin(); iter != last; ++iter ) {
+
+      // Get an iterator to the map element after the current one. Due to the
+      // automatic sorting, this is guaranteed to contain the upper edge of the
+      // current momentum bin.
+      auto next = iter;
+      ++next;
+
+      // Get the current momentum bin limits
+      double p_low = iter->first;
+      double p_high = next->first;
+
+      std::stringstream reco_ss;
+      reco_ss << side_sel
+        << " && " << mom_branch << ".Mag() >= " << p_low
+        << " && " << mom_branch << ".Mag() < " << p_high;
+
+      std::string reco_bin_def = reco_ss.str();
+
+      reco_bins.emplace_back( reco_bin_def, kSidebandRecoBin );
+    } // 1D reco momentum bins
+
+    // For sidebands that use bins of muon candidate momentum, create the
+    // overflow bin. This isn't needed for the proton momentum due to the
+    // upper limit imposed in the signal definition.
+    if ( mom_branch != "p3_mu" ) continue;
+
+    double pmu_overflow_min = bin_edge_map->crbegin()->first;
+
+    std::stringstream reco_ss;
+    reco_ss << side_sel << " && " << mom_branch << ".Mag() >= "
+      << pmu_overflow_min;
+
+    std::string reco_bin_def = reco_ss.str();
+    reco_bins.emplace_back( reco_bin_def, kSidebandRecoBin );
+
+  } // sideband selection definitions
+
   // Dump this information to the output file
   std::ofstream out_file( "myconfig_mcc9_2D_proton.txt" );
   out_file << "Proton2D\n";
@@ -179,12 +219,12 @@ void make_config_mcc9_2D_proton() {
   // Include an extra slice which shows everything in terms of reco bin number.
   // Also include two integrated slices (one for the 1D p_p distribution, the
   // other for all events)
-  size_t num_slices = proton_2D_bin_edges.size() + 2;
+  size_t num_slices = PROTON_2D_BIN_EDGES.size() + 2;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
   // upper edge of the last bin)
-  auto last_edge = proton_2D_bin_edges.cend();
+  auto last_edge = PROTON_2D_BIN_EDGES.cend();
   --last_edge;
 
   // The reco bins are numbered in the order that their edges appear in the
@@ -192,7 +232,7 @@ void make_config_mcc9_2D_proton() {
   // bin we are on.
   cur_reco_bin = 0u;
 
-  for ( auto iter = proton_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
+  for ( auto iter = PROTON_2D_BIN_EDGES.cbegin(); iter != last_edge; ++iter ) {
     // Each 1D slice uses the same y-axis units (reco events)
     sb_file << "\"events\"\n";
     const auto& edges = iter->second;
@@ -245,11 +285,11 @@ void make_config_mcc9_2D_proton() {
   // measurement of the leading proton momentum distribution. For this slice,
   // we're still working in terms of reco event counts
   sb_file << "\"events\"\n";
-  int num_pp_edges = proton_2D_bin_edges.size();
+  int num_pp_edges = PROTON_2D_BIN_EDGES.size();
   int num_pp_bins = num_pp_edges - 1;
   // The proton momentum is the sole "active variable" in each slice
   sb_file << "1 0 " << num_pp_edges;
-  for ( const auto& pp_edge_pair : proton_2D_bin_edges ) {
+  for ( const auto& pp_edge_pair : PROTON_2D_BIN_EDGES ) {
     const auto pp_edge = pp_edge_pair.first;
     sb_file << ' ' << pp_edge;
   }
@@ -270,7 +310,7 @@ void make_config_mcc9_2D_proton() {
   // Keep track of the ROOT slice bin index (one-based) with this counter
   int cur_slice_bin_idx = 1;
 
-  for ( auto iter = proton_2D_bin_edges.cbegin(); iter != last_edge; ++iter ) {
+  for ( auto iter = PROTON_2D_BIN_EDGES.cbegin(); iter != last_edge; ++iter ) {
     const auto& angle_bin_edges = iter->second;
     int num_angle_bins = angle_bin_edges.size() - 1;
     for ( int b = 0; b < num_angle_bins; ++b ) {
@@ -291,8 +331,8 @@ void make_config_mcc9_2D_proton() {
   sb_file << "1 1 2 -1.0 1.0";
   // Treat the proton as the "other" variable, but use the full range
   // the angular information
-  double pp_low = proton_2D_bin_edges.cbegin()->first;
-  double pp_high = proton_2D_bin_edges.crbegin()->first;
+  double pp_low = PROTON_2D_BIN_EDGES.cbegin()->first;
+  double pp_high = PROTON_2D_BIN_EDGES.crbegin()->first;
   sb_file << "\n1 0 " << pp_low << ' ' << pp_high << '\n';
   // We once again need an entry below for every reco bin that contributes
   // (and all of them contribute in this case)
