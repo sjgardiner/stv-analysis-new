@@ -302,10 +302,28 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 void slice_dump() {
 
   auto* syst_ptr = new MCC9Unfolder( "/uboone/data/users/gardiner/"
-    "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
-    "RespMat-HighStatsDetVar-myconfig_mcc9_2D_muon.root",
+    "ntuples-stv/respmat-files/respmat-muon2D.root", //-NuWro-fake-data.root",
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
+
+  // Get access to the relevant histograms owned by the SystematicsCalculator
+  // object. These contain the reco bin counts that we need to populate the
+  // slices below.
+  TH1D* reco_bnb_hist = syst.data_hists_.at( NFT::kOnBNB ).get();
+  TH1D* reco_ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
+
+  // Add the EXT to the "data" when working with fake data
+  //reco_bnb_hist->Add( reco_ext_hist );
+
+  TH2D* category_hist = syst.cv_universe().hist_categ_.get();
+
+  // Total MC+EXT prediction in reco bin space. Start by getting EXT.
+  TH1D* reco_mc_plus_ext_hist = dynamic_cast< TH1D* >(
+    reco_ext_hist->Clone("reco_mc_plus_ext_hist") );
+  reco_mc_plus_ext_hist->SetDirectory( nullptr );
+
+  // Add in the CV MC prediction
+  reco_mc_plus_ext_hist->Add( syst.cv_universe().hist_reco_.get() );
 
   //// Keys are covariance matrix types, values are CovMatrix objects that
   //// represent the corresponding matrices
@@ -318,21 +336,6 @@ void slice_dump() {
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
 
     const auto& slice = sb.slices_.at( sl_idx );
-
-    // Get access to the relevant histograms owned by the SystematicsCalculator
-    // object. These contain the reco bin counts we need to populate the
-    // current slice
-    TH1D* reco_bnb_hist = syst.data_hists_.at( NFT::kOnBNB ).get();
-    TH1D* reco_ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
-    TH2D* category_hist = syst.cv_universe().hist_categ_.get();
-
-    // Total MC+EXT prediction in reco bin space. Start by getting EXT.
-    TH1D* reco_mc_plus_ext_hist = dynamic_cast< TH1D* >(
-      reco_ext_hist->Clone("reco_mc_plus_ext_hist") );
-    reco_mc_plus_ext_hist->SetDirectory( nullptr );
-
-    // Add in the CV MC prediction
-    reco_mc_plus_ext_hist->Add( syst.cv_universe().hist_reco_.get() );
 
     // We now have all of the reco bin space histograms that we need as input.
     // Use them to make new histograms in slice space.
@@ -552,28 +555,28 @@ void slice_dump() {
     std::cout << "Total frac error in bin #1 = "
       << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";
 
-//// NEW CODE
-    const TH1D* hist_true = syst.cv_universe().hist_true_.get();
-    const TH2D* hist_2d = syst.cv_universe().hist_2d_.get();
-    auto* slice_eff = SliceHistogram::make_slice_efficiency_histogram(
-      *hist_true, *hist_2d, slice );
-
-    TCanvas* c3 = new TCanvas;
-    slice_eff->hist_->SetLineWidth( 3 );
-    slice_eff->hist_->Draw( "hist e" );
-
-    dump_slice_histogram( "efficiency", *slice_eff, slice,
-      pgfplots_hist_table, true, false );
-
-    std::ofstream out_eff_table_file( "eff_slice_table_"
-      + std::to_string(sl_idx) + ".txt" );
-    for ( int b = 1; b <= slice_eff->hist_->GetNbinsX(); ++b ) {
-      out_eff_table_file << b - 1 << " & "
-        << slice_eff->hist_->GetBinContent( b ) << '\n';
-    }
-
-    c3->SaveAs( ("eff_slice_" + std::to_string(sl_idx) + ".pdf").c_str() );
-//// END NEW CODE
+////// NEW CODE
+//    const TH1D* hist_true = syst.cv_universe().hist_true_.get();
+//    const TH2D* hist_2d = syst.cv_universe().hist_2d_.get();
+//    auto* slice_eff = SliceHistogram::make_slice_efficiency_histogram(
+//      *hist_true, *hist_2d, slice );
+//
+//    TCanvas* c3 = new TCanvas;
+//    slice_eff->hist_->SetLineWidth( 3 );
+//    slice_eff->hist_->Draw( "hist e" );
+//
+//    dump_slice_histogram( "efficiency", *slice_eff, slice,
+//      pgfplots_hist_table, true, false );
+//
+//    std::ofstream out_eff_table_file( "eff_slice_table_"
+//      + std::to_string(sl_idx) + ".txt" );
+//    for ( int b = 1; b <= slice_eff->hist_->GetNbinsX(); ++b ) {
+//      out_eff_table_file << b - 1 << " & "
+//        << slice_eff->hist_->GetBinContent( b ) << '\n';
+//    }
+//
+//    c3->SaveAs( ("eff_slice_" + std::to_string(sl_idx) + ".pdf").c_str() );
+////// END NEW CODE
 
     // Before moving on to the next slice, dump information about the
     // current one to new pgfplots files that can be used for offline plotting

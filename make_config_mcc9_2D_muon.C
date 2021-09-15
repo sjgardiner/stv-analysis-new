@@ -234,9 +234,11 @@ void make_config_mcc9_2D_muon() {
   sb_file << "\"reco cos#theta_{#mu}\" \"\" \"reco $\\cos\\theta_{\\mu}$\""
     " \"\"\n";
   sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
-  // Includes a slice for the overflow bin and two extra slices. One
-  // for everything in terms of reco bin number and one integrated over angles.
-  size_t num_slices = MUON_2D_BIN_EDGES.size() + 2;
+  // Includes a slice for the overflow bin and three extra slices. One
+  // for everything in terms of reco bin number, one integrated over angles,
+  // and one showing the sideband control sample results (in terms of reco
+  // bin number).
+  size_t num_slices = MUON_2D_BIN_EDGES.size() + 3;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -313,7 +315,7 @@ void make_config_mcc9_2D_muon() {
   }
 
   // Make a 1D slice in which the angles have been integrated out. This is a
-  // measurement of the leading proton momentum distribution. For this slice,
+  // measurement of the leading muon momentum distribution. For this slice,
   // we're still working in terms of reco event counts
   sb_file << "\"events\"\n";
   int num_pmu_edges = MUON_2D_BIN_EDGES.size();
@@ -327,10 +329,11 @@ void make_config_mcc9_2D_muon() {
   // There is no "other" variable for this slice since we've integrated out
   // the angular information
   sb_file << "\n0\n";
-  // Now we're ready to build the 1D muon momentum bins from the 2D ones.
-  // We need one entry in the list per reco bin, although multiple reco bins
-  // will contribute to each slice bin in this case.
-  sb_file << num_reco_bins;
+  // Now we're ready to build the 1D muon momentum bins from the 2D ones. We
+  // need one entry in the list per reco bin (apart from the overflow bin),
+  // although multiple reco bins will contribute to each slice bin in this
+  // case.
+  sb_file << num_reco_bins - 1;
 
   // Iterate through the 2D reco bins, noting that they are numbered in the
   // order that their edges appear in the map. In this case, all angular reco
@@ -354,4 +357,39 @@ void make_config_mcc9_2D_muon() {
   } // pmu slices
 
   sb_file << '\n';
+
+  // Make a slice containing the sideband results organized by reco bin number
+  sb_file << "\"events\"\n"; // y-axis label
+  sb_file << "1 2 ";
+  // Count the number of sideband reco bins. Also find the index of the
+  // first one.
+  size_t num_sideband_reco_bins = 0u;
+  size_t first_sideband_bin_idx = 0u;
+  bool found_first_sideband_bin = false;
+  for ( size_t b = 0u; b < reco_bins.size(); ++b ) {
+    const auto& rbin = reco_bins.at( b );
+    if ( rbin.type_ == kSidebandRecoBin ) {
+      ++num_sideband_reco_bins;
+      if ( !found_first_sideband_bin ) {
+        found_first_sideband_bin = true;
+        first_sideband_bin_idx = b;
+      }
+    }
+  }
+  // There is one more edge than the number of sideband bins
+  sb_file << num_sideband_reco_bins + 1;
+  for ( size_t e = 0u; e <= num_sideband_reco_bins; ++e ) {
+    sb_file << ' ' << e + first_sideband_bin_idx;
+  }
+  sb_file << '\n';
+  // For the "sideband slice," there is no other variable apart from reco bin
+  // number
+  sb_file << "0\n";
+  // Loop over each ResponseMatrixMaker sideband bin and assign it to the
+  // matching ROOT histogram bin
+  sb_file << num_sideband_reco_bins << '\n';
+  for ( size_t b = 0u; b < num_sideband_reco_bins; ++b ) {
+    sb_file << b + first_sideband_bin_idx << " 1 " << b + 1 << '\n';
+  }
+
 }

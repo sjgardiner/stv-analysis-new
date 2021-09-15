@@ -218,8 +218,9 @@ void make_config_mcc9_2D_proton() {
   sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
   // Include an extra slice which shows everything in terms of reco bin number.
   // Also include two integrated slices (one for the 1D p_p distribution, the
-  // other for all events)
-  size_t num_slices = PROTON_2D_BIN_EDGES.size() + 2;
+  // other for all events). Finally, include one extra slice showing the
+  // sideband control sample results (in terms of reco bin number).
+  size_t num_slices = PROTON_2D_BIN_EDGES.size() + 3;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -341,4 +342,38 @@ void make_config_mcc9_2D_proton() {
     sb_file << '\n' << rb << " 1 1";
   }
   sb_file << '\n';
+
+  // Make a slice containing the sideband results organized by reco bin number
+  sb_file << "\"events\"\n"; // y-axis label
+  sb_file << "1 2 ";
+  // Count the number of sideband reco bins. Also find the index of the
+  // first one.
+  size_t num_sideband_reco_bins = 0u;
+  size_t first_sideband_bin_idx = 0u;
+  bool found_first_sideband_bin = false;
+  for ( size_t b = 0u; b < reco_bins.size(); ++b ) {
+    const auto& rbin = reco_bins.at( b );
+    if ( rbin.type_ == kSidebandRecoBin ) {
+      ++num_sideband_reco_bins;
+      if ( !found_first_sideband_bin ) {
+        found_first_sideband_bin = true;
+        first_sideband_bin_idx = b;
+      }
+    }
+  }
+  // There is one more edge than the number of sideband bins
+  sb_file << num_sideband_reco_bins + 1;
+  for ( size_t e = 0u; e <= num_sideband_reco_bins; ++e ) {
+    sb_file << ' ' << e + first_sideband_bin_idx;
+  }
+  sb_file << '\n';
+  // For the "sideband slice," there is no other variable apart from reco bin
+  // number
+  sb_file << "0\n";
+  // Loop over each ResponseMatrixMaker sideband bin and assign it to the
+  // matching ROOT histogram bin
+  sb_file << num_sideband_reco_bins << '\n';
+  for ( size_t b = 0u; b < num_sideband_reco_bins; ++b ) {
+    sb_file << b + first_sideband_bin_idx << " 1 " << b + 1 << '\n';
+  }
 }
