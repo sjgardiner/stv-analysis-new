@@ -69,7 +69,7 @@ int main( int argc, char* argv[] ) {
 
     resp_mat.add_input_file( input_file_name.c_str() );
 
-    if ( ntuple_type_is_detVar(type) ) {
+    if ( ntuple_type_is_detVar(type) || !ntuple_type_is_mc(type) ) {
       // Ignore all event weights in the detVar post-processed ntuples
       // TODO: revisit this if you get new samples in which the CV correction
       // weights are calculated correctly
