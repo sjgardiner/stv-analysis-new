@@ -22,17 +22,22 @@ std::map< std::string, VarConfig > mcc9_1D_configs {
     { -1, -0.925, -0.85, -0.775, -0.7, -0.625, -0.55, -0.475, -0.4, -0.325,
      -0.25, -0.175, -0.1, -0.025, 0.05, 0.125, 0.2, 0.275, 0.35, 0.425, 0.5,
       0.575, 0.65, 0.725, 0.8, 0.85, 0.875, 0.9, 0.925, 0.950, 0.975, 1.00 },
-    false, false } },
+    false, false } },//unmodified
 
   { "p3_lead_p.Mag()", { "p_p",
-    { 0.250, 0.325, 0.4, 0.45, 0.5, 0.550, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9,
-      0.975, 1.20 },
-    false, false } },
+    { 0.20, 0.305, 0.365, 0.415, 0.47, 0.525, 0.59, 0.68, 0.79, 0.93, 1.20 },
+    false, false } },//modified, down to 10 bins from 14
 
   { "pn", { "pn", { 0., 0.125, 0.225, 0.325, 0.425, 0.525, 0.65, 0.85 }, false, true } },
+  //what's pn?
 
   { "delta_alphaT", { "delta_alphaT",
-    { 0, 0.35, 0.85, 1.35, 1.85, 2.3, 2.7, 2.95, M_PI }, false, false } },
+    { 0, 0.6, 1.3, 2.0, 2.7, M_PI }, false, false } },
+    //modified, down to 5 from 8 bins
+
+    //I haven't seen these broken down in x, y, z components before - how to address?
+    //unmodified for now
+    //also, what's delta_pL?
 
   { "delta_pTx", { "delta_pTx",
     { -0.6, -0.45, -0.35, -0.25, -0.15, -0.075, 0, 0.075, 0.15, 0.25, 0.35, 0.45, 0.6 },
@@ -48,11 +53,11 @@ std::map< std::string, VarConfig > mcc9_1D_configs {
     true, true } },
 
   { "delta_phiT", { "delta_phiT",
-    { 0., 0.075, 0.2, 0.35, 0.5, 0.7, 0.9, 1.15, 1.4, 1.65, 1.9, 2.35, 2.8, M_PI },
-    false, false } },
+    { 0., 0.1, 0.3, 0.6, 0.9, 1.3, 1.6, 2.0, 2.7, M_PI },
+    false, false } },//updated, 9 bins from 13
 
   { "delta_pT", { "delta_pT", { 0., 0.1, 0.2, 0.3, 0.4, 0.525, 0.675, 0.9 },
-    false, true } },
+    false, true } },//in progress
 
   { "p3_lead_p.CosTheta()", { "cth_p",
     { -1, -0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8,
