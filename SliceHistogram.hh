@@ -7,11 +7,10 @@
 
 // ROOT includes
 #include "TH1.h"
-#include "TDecompQRH.h"
-#include "TMatrixD.h"
 #include "Math/SpecFuncMathCore.h" // Needed for ROOT::Math::inc_gamma_c()
 
 // STV analysis includes
+#include "MatrixUtils.hh"
 #include "SliceBinning.hh"
 #include "SystematicsCalculator.hh"
 
@@ -236,63 +235,11 @@ SliceHistogram::Chi2Result SliceHistogram::get_chi2(
   cov_mat += cmat_;
   cov_mat += other.cmat_;
 
-  // Get access to a TMatrixDSym object representing the covariance matrix.
-  // This supplies a convenient function for handling the inversion.
+  // Get access to a TMatrixD object representing the covariance matrix.
   auto cov_matrix = cov_mat.get_matrix();
 
-  // Pre-scale before inversion to avoid numerical problems. Here we choose
-  // a scaling factor such that the smallest nonzero entry in the original
-  // covariance matrix has an absolute value of unity. Note the use of the
-  // zero-based element indices for TMatrixDSym.
-  constexpr double BIG_DOUBLE = std::numeric_limits<double>::max();
-  double min_abs = BIG_DOUBLE;
-  for ( int a = 0; a < num_bins; ++a ) {
-    for ( int b = 0; b < num_bins; ++b ) {
-      double element = cov_matrix->operator()( a, b );
-      double abs_el = std::abs( element );
-      if ( abs_el > 0. && abs_el < min_abs ) min_abs = abs_el;
-    }
-  }
-
-  // If all covariance matrix elements are zero, then this scaling won't work
-  // and something is wrong. Complain if this is the case.
-  if ( min_abs == BIG_DOUBLE ) {
-    throw std::runtime_error( "Null covariance matrix encountered in chi^2"
-      " calculation" );
-  }
-
-  // We're ready. Do the actual pre-scaling here. Keep the first TMatrixDSym
-  // and invert a copy. This allows us to check that the inversion was
-  // successful below.
-  auto inverse_cov_matrix = cov_mat.get_matrix();
-  double scaling_factor = 1. / min_abs;
-  inverse_cov_matrix->operator*=( scaling_factor );
-
-  // Do the inversion. Here we try the QR method. Other options involve using
-  // TDecompLU, TDecompBK, TDecompChol, TDecompQRH and TDecompSVD. The
-  // Invert() member function of TMatrixDSym uses a TDecompBK object to do
-  // the same thing internally.
-  //inverse_cov_matrix->Invert();
-  TDecompQRH qr_decomp( *inverse_cov_matrix, DBL_EPSILON );
-  qr_decomp.Invert( *inverse_cov_matrix );
-
-  // Undo the scaling by re-applying it to the inverse matrix
-  inverse_cov_matrix->operator*=( scaling_factor );
-
-  // Double-check that we get a unit matrix by multiplying the
-  // original by its inverse
-  TMatrixD unit_mat( *cov_matrix, TMatrixD::kMult, *inverse_cov_matrix );
-  constexpr double INVERSION_TOLERANCE = 1e-4;
-  for ( int a = 0; a < num_bins; ++a ) {
-    for ( int b = 0; b < num_bins; ++b ) {
-      double element = unit_mat( a, b );
-      double expected_element = 0.;
-      if ( a == b ) expected_element = 1.;
-      double abs_diff = std::abs( element - expected_element );
-      if ( abs_diff > INVERSION_TOLERANCE ) throw std::runtime_error(
-        "Matrix inversion failed in chi^2 calculation\n" );
-    }
-  }
+  // Invert the covariance matrix
+  auto inverse_cov_matrix = invert_matrix( *cov_matrix );
 
   // Create a 1D vector containing the difference between the two slice
   // histograms in each bin

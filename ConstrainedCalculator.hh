@@ -4,7 +4,31 @@
 #include <algorithm>
 
 // STV analysis includes
+#include "MatrixUtils.hh"
 #include "SystematicsCalculator.hh"
+
+// Container that holds the results of applying the sideband constraint
+struct ConstrainedPrediction {
+
+  ConstrainedPrediction() {}
+
+  ConstrainedPrediction( TH1D* sig_hist, TH1D* bkgd_hist, CovMatrix& cov_mat )
+    : reco_signal_hist_( sig_hist ), reco_bkgd_hist_( bkgd_hist )
+  {
+    cov_matrix_ += cov_mat;
+  }
+
+  // CV signal prediction in the ordinary reco bins
+  std::unique_ptr< TH1D > reco_signal_hist_;
+
+  // Background that was subtracted from each reco bin to form the signal
+  // prediction
+  std::unique_ptr< TH1D > reco_bkgd_hist_;
+
+  // Covariance matrix for the prediction
+  CovMatrix cov_matrix_;
+
+};
 
 // Calculates covariance matrices describing the uncertainty on the reco-space
 // event counts. Distinguishes between "signal region" reco bins and "sideband"
@@ -37,6 +61,9 @@ class ConstrainedCalculator : public SystematicsCalculator {
     // than just the number of reco bins, so we need to override this virtual
     // function.
     virtual size_t get_covariance_matrix_size() const override;
+
+    // New method that applies the constraint
+    std::unique_ptr< ConstrainedPrediction > get_constrained_prediction();
 
   protected:
 
@@ -276,4 +303,148 @@ int ConstrainedCalculator::get_reco_bin_and_type( int cm_bin,
   }
 
   return bin;
+}
+
+std::unique_ptr< ConstrainedPrediction >
+  ConstrainedCalculator::get_constrained_prediction()
+{
+  const int two_times_ord_bins = 2*num_ordinary_reco_bins_;
+  const auto& cv_univ = this->cv_universe();
+
+  // First create vectors of the measured event counts and central-value
+  // prediction in each of the sideband bins. Note here and elsewhere in this
+  // function that ROOT histogram bin indices are one-based to allow for
+  // underflow. The TMatrixD element indices, on the other hand, are zero-based.
+  TMatrixD sideband_data( num_sideband_reco_bins_, 1 );
+  TMatrixD sideband_mc_plus_ext( num_sideband_reco_bins_, 1 );
+
+  TH1D* d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
+  TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
+  for ( int s = 0; s < num_sideband_reco_bins_; ++s ) {
+    // Zero-based reco bin index
+    int r = s + num_ordinary_reco_bins_;
+
+    // Switch to using the one-based TH1D index when retrieving these values
+    double bnb_events = d_hist->GetBinContent( r + 1 );
+    double ext_events = ext_hist->GetBinContent( r + 1 );
+    double cv_mc_events = cv_univ.hist_reco_->GetBinContent( r + 1 );
+
+    sideband_data( s, 0 ) = bnb_events;
+    sideband_mc_plus_ext( s, 0 ) = cv_mc_events + ext_events;
+  }
+
+  // Now create the vector which stores the unconstrained prediction for both
+  // signal+background and background-only bins
+  TMatrixD cv_pred_vec( two_times_ord_bins, 1 );
+  for ( int r = 0; r < two_times_ord_bins; ++r ) {
+    // This will automatically handle the signal+background versus
+    // background-only bin definitions correctly. Recall that this
+    // function takes a zero-based index.
+    double cv_mc_events = this->evaluate_observable( cv_univ, r );
+
+    // Also get the EXT event count for the reco bin of interest
+    ConstrainedCalculatorBinType dummy_bin_type;
+    int reco_bin_index = this->get_reco_bin_and_type( r, dummy_bin_type );
+
+    // We need to use a one-based bin index to retrieve this value from the TH1D
+    double ext_events = ext_hist->GetBinContent( reco_bin_index + 1 );
+
+    cv_pred_vec( r, 0 ) = cv_mc_events + ext_events;
+  }
+
+  // All we need now to apply the sideband constraint are submatrices of
+  // the total covariance matrix. Build it and pull out the blocks that
+  // we need.
+  auto cov_map_ptr = this->get_covariances();
+  auto tot_cov_mat = cov_map_ptr->at( "total" ).get_matrix();
+
+  // Zero-based indices for the covariance matrix elements describing the
+  // ordinary reco bins (ob) and sideband reco bins (sb)
+  int first_ob_cm_idx = 0;
+  int last_ob_cm_idx = two_times_ord_bins - 1;
+  int first_sb_cm_idx = two_times_ord_bins;
+  int last_sb_cm_idx = two_times_ord_bins + num_sideband_reco_bins_ - 1;
+
+  // Covariance matrix block that describes the ordinary reco bins
+  TMatrixD ordinary_cov_mat = tot_cov_mat->GetSub( first_ob_cm_idx,
+    last_ob_cm_idx, first_ob_cm_idx, last_ob_cm_idx );
+
+  // Block that describes the sideband reco bins
+  TMatrixD sideband_cov_mat = tot_cov_mat->GetSub( first_sb_cm_idx,
+    last_sb_cm_idx, first_sb_cm_idx, last_sb_cm_idx );
+
+  // Block that describes correlations between the sideband and ordinary bins.
+  // This version uses rows for sideband bins and columns for ordinary bins.
+  TMatrixD s_o_cov_mat = tot_cov_mat->GetSub( first_sb_cm_idx, last_sb_cm_idx,
+    first_ob_cm_idx, last_ob_cm_idx );
+
+  // Invert the sideband covariance matrix in preparation for applying
+  // the sideband constraint
+  auto inverse_sideband_cov_mat = invert_matrix( sideband_cov_mat );
+
+  // We're ready. Apply the sideband constraint to the prediction vector first.
+  TMatrixD sideband_data_mc_diff( sideband_data,
+    TMatrixD::EMatrixCreatorsOp2::kMinus, sideband_mc_plus_ext );
+  TMatrixD temp1( *inverse_sideband_cov_mat,
+    TMatrixD::EMatrixCreatorsOp2::kMult, sideband_data_mc_diff );
+  TMatrixD add_to( s_o_cov_mat,
+    TMatrixD::EMatrixCreatorsOp2::kTransposeMult, temp1 );
+
+  TMatrixD constr_cv_pred_vec( cv_pred_vec,
+    TMatrixD::EMatrixCreatorsOp2::kPlus, add_to );
+
+  // Now get the corresponding updated covariance matrix
+  TMatrixD temp2( *inverse_sideband_cov_mat,
+    TMatrixD::EMatrixCreatorsOp2::kMult, s_o_cov_mat );
+  TMatrixD subtract_from( s_o_cov_mat,
+    TMatrixD::EMatrixCreatorsOp2::kTransposeMult, temp2 );
+
+  TMatrixD constr_ordinary_cov_mat( ordinary_cov_mat,
+    TMatrixD::EMatrixCreatorsOp2::kMinus, subtract_from );
+
+  // Pull out the block of the constrained covariance matrix that describes
+  // the uncertainty on signal+background only
+  TMatrixD sig_plus_bkgd_cov_mat( constr_ordinary_cov_mat );
+  sig_plus_bkgd_cov_mat.ResizeTo( 0, num_ordinary_reco_bins_ - 1, 0,
+    num_ordinary_reco_bins_ - 1 );
+
+  // Build the inputs needed to form the output ConstrainedPrediction object
+  TH1D* reco_signal_hist = new TH1D( "reco_signal_hist",
+    "; reco bin; constrained signal events", num_ordinary_reco_bins_,
+    0., num_ordinary_reco_bins_ );
+  reco_signal_hist->SetDirectory( nullptr );
+  reco_signal_hist->SetStats( false );
+
+  TH1D* reco_bkgd_hist = new TH1D( "reco_bkgd_hist",
+    "; reco bin; constrained background events", num_ordinary_reco_bins_,
+    0., num_ordinary_reco_bins_ );
+  reco_bkgd_hist->SetDirectory( nullptr );
+  reco_bkgd_hist->SetStats( false );
+
+  CovMatrix reco_cov_mat = this->make_covariance_matrix( "reco_cov_mat" );
+
+  for ( int r = 0; r < num_ordinary_reco_bins_; ++r ) {
+    // Get the background and signal event counts in each ordinary reco
+    // bin from the constrained results
+    double mc_plus_ext = constr_cv_pred_vec( r, 0 );
+    double bkgd = constr_cv_pred_vec( r + num_ordinary_reco_bins_, 0 );
+    double signal = mc_plus_ext - bkgd;
+
+    // Switch to one-based indices here to store the results in TH1D objects
+    reco_signal_hist->SetBinContent( r + 1, signal );
+    reco_bkgd_hist->SetBinContent( r + 1, bkgd );
+
+    // Loop over the covariance matrix elements and store them as well
+    for ( int s = 0; s < num_ordinary_reco_bins_; ++s ) {
+      double covariance = sig_plus_bkgd_cov_mat( r, s );
+      // Switch to one-based indices here to store the covariance in a TH2D
+      // object
+      reco_cov_mat.cov_matrix_->SetBinContent( r + 1, s + 1, covariance );
+    }
+  }
+
+  auto result = std::make_unique< ConstrainedPrediction >( reco_signal_hist,
+    reco_bkgd_hist, reco_cov_mat );
+
+  return result;
 }
