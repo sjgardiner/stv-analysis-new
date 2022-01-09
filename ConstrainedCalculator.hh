@@ -2,6 +2,7 @@
 
 // Standard library includes
 #include <algorithm>
+#include <stdexcept>
 
 // STV analysis includes
 #include "MatrixUtils.hh"
@@ -12,10 +13,24 @@ struct ConstrainedPrediction {
 
   ConstrainedPrediction() {}
 
-  // TODO: add a check that the signal and background matrices are row vectors
   ConstrainedPrediction( TMatrixD* sig_hist, TMatrixD* bkgd_hist,
     TMatrixD* cov_mat ) : reco_signal_hist_( sig_hist ),
-    reco_bkgd_hist_( bkgd_hist ), cov_matrix_( cov_mat ) {}
+    reco_bkgd_hist_( bkgd_hist ), cov_matrix_( cov_mat )
+  {
+    if ( sig_hist->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
+      " background-subtracted signal passed to ConstrainedPrediction" );
+
+    if ( bkgd_hist->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
+      " background prediction passed to ConstrainedPrediction" );
+
+    int num_ordinary_reco_bins = sig_hist->GetNrows();
+    if ( cov_mat->GetNcols() != num_ordinary_reco_bins
+      || cov_mat->GetNrows() != num_ordinary_reco_bins )
+    {
+      throw std::runtime_error( "Bad covariance matrix dimensions passed to"
+        " ConstrainedPrediction" );
+    }
+  }
 
   // CV signal prediction in the ordinary reco bins
   std::unique_ptr< TMatrixD > reco_signal_hist_;
