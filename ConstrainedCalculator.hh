@@ -391,17 +391,17 @@ MeasuredEvents ConstrainedCalculator::get_measured_events() const
       0, num_ordinary_reco_bins_ - 1 )
   );
 
-  // Get the constrained background prediction row vector
+  // Get the constrained background prediction column vector
   auto* reco_bkgd_vec = new TMatrixD(
     constr_cv_pred_vec.GetSub( num_ordinary_reco_bins_,
       two_times_ord_bins - 1, 0, 0 )
   );
 
-  //// Get the constrained signal+background prediction row vector
+  //// Get the constrained signal+background prediction column vector
   //TMatrixD mc_plus_ext_vec = constr_cv_pred_vec.GetSub( 0,
   //  num_ordinary_reco_bins_ - 1, 0, 0 );
 
-  // Get the ordinary reco bin data row vector after subtracting the
+  // Get the ordinary reco bin data column vector after subtracting the
   // constrained background prediction
   auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
     TMatrixD::EMatrixCreatorsOp2::kMinus, *reco_bkgd_vec );

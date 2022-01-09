@@ -1169,10 +1169,10 @@ std::unique_ptr< TMatrixD >
 {
   const auto& cv_univ = this->cv_universe();
 
-  // The smearceptance matrix definition used here uses the reco bin as the
-  // row index and the true bin as the column index. This ensures that
-  // multiplying a row vector of true event counts by the matrix will yield
-  // a row vector of reco event counts.
+  // The smearceptance matrix definition used here uses the reco bin as the row
+  // index and the true bin as the column index. This ensures that multiplying
+  // a column vector of true event counts by the matrix will yield a column
+  // vector of reco event counts.
   auto smearcept = std::make_unique< TMatrixD >( num_ordinary_reco_bins_,
     num_signal_true_bins_ );
 
@@ -1202,7 +1202,7 @@ std::unique_ptr< TMatrixD > SystematicsCalculator::get_cv_true_signal() const
 {
   const auto& cv_univ = this->cv_universe();
 
-  // The output TMatrixD is a row vector containing the event counts in each
+  // The output TMatrixD is a column vector containing the event counts in each
   // signal true bin.
   auto result = std::make_unique< TMatrixD >( num_signal_true_bins_, 1 );
 
@@ -1279,7 +1279,7 @@ MeasuredEvents SystematicsCalculator::get_measured_events() const
     ordinary_data( r, 0 ) = bnb_events;
   }
 
-  // Get the ordinary reco bin data row vector after subtracting the
+  // Get the ordinary reco bin data column vector after subtracting the
   // central-value EXT+MC background prediction
   auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
     TMatrixD::EMatrixCreatorsOp2::kMinus, *ext_plus_mc_bkgd );
