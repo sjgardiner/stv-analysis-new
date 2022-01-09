@@ -32,7 +32,10 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   const TMatrixD& data_covmat, const TMatrixD& smearcept,
   const TMatrixD& prior_true_signal ) const
 {
-  // TODO: check matrix dimensions for sanity
+  // Check input matrix dimensions for sanity
+  this->check_matrices( data_signal, data_covmat,
+    smearcept, prior_true_signal );
+
   int num_ordinary_reco_bins = smearcept.GetNrows();
   int num_true_signal_bins = smearcept.GetNcols();
 

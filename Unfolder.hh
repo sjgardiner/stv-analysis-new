@@ -30,6 +30,14 @@ class Unfolder {
 
     virtual UnfoldedMeasurement unfold(
       const SystematicsCalculator& syst_calc ) const final;
+
+  protected:
+
+    // Helper function that does some sanity checks on the dimensions of the
+    // input matrices passed to unfold()
+    static void check_matrices( const TMatrixD& data_signal,
+      const TMatrixD& data_covmat, const TMatrixD& smearcept,
+      const TMatrixD& prior_true_signal );
 };
 
 UnfoldedMeasurement Unfolder::unfold(
@@ -43,4 +51,41 @@ UnfoldedMeasurement Unfolder::unfold(
 
   return this->unfold( *meas.reco_signal_, *meas.cov_matrix_,
     *smearcept, *true_signal );
+}
+
+void Unfolder::check_matrices( const TMatrixD& data_signal,
+  const TMatrixD& data_covmat, const TMatrixD& smearcept,
+  const TMatrixD& prior_true_signal )
+{
+  // Check the matrix dimensions for sanity
+  int num_ordinary_reco_bins = smearcept.GetNrows();
+  int num_true_signal_bins = smearcept.GetNcols();
+
+  if ( data_signal.GetNcols() != 1 ) {
+    throw std::runtime_error( "The background-subtracted data event counts"
+      " must be expressed as a column vector" );
+  }
+
+  if ( prior_true_signal.GetNcols() != 1 ) {
+    throw std::runtime_error( "The prior true signal event counts must be"
+      " expressed as a column vector" );
+  }
+
+  if ( data_signal.GetNrows() != num_ordinary_reco_bins ) {
+    throw std::runtime_error( "Reco bin mismatch between background-"
+      "subtracted data and the smearceptance matrix" );
+  }
+
+  if ( data_covmat.GetNrows() != num_ordinary_reco_bins
+    || data_covmat.GetNcols() != num_ordinary_reco_bins )
+  {
+    throw std::runtime_error( "Dimension mismatch between data covariance"
+      " matrix and the smearceptance matrix" );
+  }
+
+  if ( prior_true_signal.GetNrows() != num_true_signal_bins ) {
+    throw std::runtime_error( "Dimension mismatch between prior true signal"
+      " event counts and the smearceptance matrix" );
+  }
+
 }
