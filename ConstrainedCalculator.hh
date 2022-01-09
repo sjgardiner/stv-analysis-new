@@ -12,21 +12,20 @@ struct ConstrainedPrediction {
 
   ConstrainedPrediction() {}
 
-  ConstrainedPrediction( TH1D* sig_hist, TH1D* bkgd_hist, CovMatrix& cov_mat )
-    : reco_signal_hist_( sig_hist ), reco_bkgd_hist_( bkgd_hist )
-  {
-    cov_matrix_ += cov_mat;
-  }
+  // TODO: add a check that the signal and background matrices are row vectors
+  ConstrainedPrediction( TMatrixD* sig_hist, TMatrixD* bkgd_hist,
+    TMatrixD* cov_mat ) : reco_signal_hist_( sig_hist ),
+    reco_bkgd_hist_( bkgd_hist ), cov_matrix_( cov_mat ) {}
 
   // CV signal prediction in the ordinary reco bins
-  std::unique_ptr< TH1D > reco_signal_hist_;
+  std::unique_ptr< TMatrixD > reco_signal_hist_;
 
   // Background that was subtracted from each reco bin to form the signal
   // prediction
-  std::unique_ptr< TH1D > reco_bkgd_hist_;
+  std::unique_ptr< TMatrixD > reco_bkgd_hist_;
 
   // Covariance matrix for the prediction
-  CovMatrix cov_matrix_;
+  std::unique_ptr< TMatrixD > cov_matrix_;
 
 };
 
@@ -87,10 +86,6 @@ class ConstrainedCalculator : public SystematicsCalculator {
     int get_reco_bin_and_type( int cm_bin,
       ConstrainedCalculatorBinType& bin_type ) const;
 
-    // Number of "ordinary" reco bins (assumed to come first in the
-    // ResponseMatrixMaker configuration file)
-    size_t num_ordinary_reco_bins_ = 0u;
-
     // Number of "sideband" reco bins
     size_t num_sideband_reco_bins_ = 0u;
 };
@@ -102,17 +97,15 @@ ConstrainedCalculator::ConstrainedCalculator(
   : SystematicsCalculator( input_respmat_file_name,
   syst_cfg_file_name, respmat_tdirectoryfile_name )
 {
-  num_ordinary_reco_bins_ = 0u;
   num_sideband_reco_bins_ = 0u;
   bool found_first_sideband_bin = false;
   for ( const auto& rbin : reco_bins_ ) {
     if ( rbin.type_ == kOrdinaryRecoBin ) {
-      ++num_ordinary_reco_bins_;
       if ( found_first_sideband_bin ) throw std::runtime_error( "Ordinary"
         " reco bins must precede sideband ones in the ResponseMatrixMaker"
         " configuration file." );
     }
-    if ( rbin.type_ == kSidebandRecoBin ) {
+    else if ( rbin.type_ == kSidebandRecoBin ) {
       found_first_sideband_bin = true;
       ++num_sideband_reco_bins_;
     }
@@ -333,6 +326,15 @@ std::unique_ptr< ConstrainedPrediction >
     sideband_mc_plus_ext( s, 0 ) = cv_mc_events + ext_events;
   }
 
+  // Create the vector of measured event counts in the ordinary reco bins
+  TMatrixD ordinary_data( num_ordinary_reco_bins_, 1 );
+  for ( int r = 0; r < num_ordinary_reco_bins_; ++r ) {
+    // Switch to using the one-based TH1D index when retrieving these values
+    double bnb_events = d_hist->GetBinContent( r + 1 );
+
+    ordinary_data( r, 0 ) = bnb_events;
+  }
+
   // Now create the vector which stores the unconstrained prediction for both
   // signal+background and background-only bins
   TMatrixD cv_pred_vec( two_times_ord_bins, 1 );
@@ -404,47 +406,28 @@ std::unique_ptr< ConstrainedPrediction >
 
   // Pull out the block of the constrained covariance matrix that describes
   // the uncertainty on signal+background only
-  TMatrixD sig_plus_bkgd_cov_mat( constr_ordinary_cov_mat );
-  sig_plus_bkgd_cov_mat.ResizeTo( 0, num_ordinary_reco_bins_ - 1, 0,
-    num_ordinary_reco_bins_ - 1 );
+  auto* sig_plus_bkgd_cov_mat = new TMatrixD(
+    constr_ordinary_cov_mat.GetSub( 0, num_ordinary_reco_bins_ - 1,
+      0, num_ordinary_reco_bins_ - 1 )
+  );
 
-  // Build the inputs needed to form the output ConstrainedPrediction object
-  TH1D* reco_signal_hist = new TH1D( "reco_signal_hist",
-    "; reco bin; constrained signal events", num_ordinary_reco_bins_,
-    0., num_ordinary_reco_bins_ );
-  reco_signal_hist->SetDirectory( nullptr );
-  reco_signal_hist->SetStats( false );
+  // Get the constrained background prediction row vector
+  auto* reco_bkgd_vec = new TMatrixD(
+    constr_cv_pred_vec.GetSub( num_ordinary_reco_bins_,
+      two_times_ord_bins - 1, 0, 0 )
+  );
 
-  TH1D* reco_bkgd_hist = new TH1D( "reco_bkgd_hist",
-    "; reco bin; constrained background events", num_ordinary_reco_bins_,
-    0., num_ordinary_reco_bins_ );
-  reco_bkgd_hist->SetDirectory( nullptr );
-  reco_bkgd_hist->SetStats( false );
+  //// Get the constrained signal+background prediction row vector
+  //TMatrixD mc_plus_ext_vec = constr_cv_pred_vec.GetSub( 0,
+  //  num_ordinary_reco_bins_ - 1, 0, 0 );
 
-  CovMatrix reco_cov_mat = this->make_covariance_matrix( "reco_cov_mat" );
+  // Get the ordinary reco bin data row vector after subtracting the
+  // constrained background prediction
+  auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
+    TMatrixD::EMatrixCreatorsOp2::kMinus, *reco_bkgd_vec );
 
-  for ( int r = 0; r < num_ordinary_reco_bins_; ++r ) {
-    // Get the background and signal event counts in each ordinary reco
-    // bin from the constrained results
-    double mc_plus_ext = constr_cv_pred_vec( r, 0 );
-    double bkgd = constr_cv_pred_vec( r + num_ordinary_reco_bins_, 0 );
-    double signal = mc_plus_ext - bkgd;
-
-    // Switch to one-based indices here to store the results in TH1D objects
-    reco_signal_hist->SetBinContent( r + 1, signal );
-    reco_bkgd_hist->SetBinContent( r + 1, bkgd );
-
-    // Loop over the covariance matrix elements and store them as well
-    for ( int s = 0; s < num_ordinary_reco_bins_; ++s ) {
-      double covariance = sig_plus_bkgd_cov_mat( r, s );
-      // Switch to one-based indices here to store the covariance in a TH2D
-      // object
-      reco_cov_mat.cov_matrix_->SetBinContent( r + 1, s + 1, covariance );
-    }
-  }
-
-  auto result = std::make_unique< ConstrainedPrediction >( reco_signal_hist,
-    reco_bkgd_hist, reco_cov_mat );
+  auto result = std::make_unique< ConstrainedPrediction >(
+    reco_data_minus_bkgd, reco_bkgd_vec, sig_plus_bkgd_cov_mat );
 
   return result;
 }

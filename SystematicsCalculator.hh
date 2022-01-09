@@ -117,6 +117,10 @@ class SystematicsCalculator {
 
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
+    std::unique_ptr< TMatrixD > get_cv_smearceptance_matrix() const;
+
+    std::unique_ptr< TMatrixD > get_cv_true_signal() const;
+
   //protected:
 
     // Returns true if a given Universe represents a detector variation or
@@ -184,6 +188,12 @@ class SystematicsCalculator {
     // Name of the systematics configuration file that should be used
     // when computing covariance matrices
     std::string syst_config_file_name_;
+
+    // Number of entries in the reco_bins_ vector that are "ordinary" bins
+    size_t num_ordinary_reco_bins_ = 0u;
+
+    // Number of entries in the true_bins_ vector that are "signal" bins
+    size_t num_signal_true_bins_ = 0u;
 };
 
 SystematicsCalculator::SystematicsCalculator(
@@ -262,15 +272,23 @@ SystematicsCalculator::SystematicsCalculator(
     throw std::runtime_error( "Failed to load bin specifications" );
   }
 
+  num_signal_true_bins_ = 0u;
   std::istringstream iss_true( *true_bin_spec );
   TrueBin temp_true_bin;
   while ( iss_true >> temp_true_bin ) {
+    if ( temp_true_bin.type_ == TrueBinType::kSignalTrueBin ) {
+      ++num_signal_true_bins_;
+    }
     true_bins_.push_back( temp_true_bin );
   }
 
+  num_ordinary_reco_bins_ = 0u;
   std::istringstream iss_reco( *reco_bin_spec );
   RecoBin temp_reco_bin;
   while ( iss_reco >> temp_reco_bin ) {
+    if ( temp_reco_bin.type_ == RecoBinType::kOrdinaryRecoBin ) {
+      ++num_ordinary_reco_bins_;
+    }
     reco_bins_.push_back( temp_reco_bin );
   }
 
@@ -1093,4 +1111,60 @@ bool SystematicsCalculator::is_detvar_universe( const Universe& univ ) const {
 
   bool found_detvar_universe = ( iter != end );
   return found_detvar_universe;
+}
+
+// Returns the smearceptance matrix in the central-value Universe.
+// NOTE: This function assumes that all "ordinary" reco bins are listed before
+// the sideband ones and that all signal true bins are listed before the
+// background ones.
+std::unique_ptr< TMatrixD >
+  SystematicsCalculator::get_cv_smearceptance_matrix() const
+{
+  const auto& cv_univ = this->cv_universe();
+
+  // The smearceptance matrix definition used here uses the reco bin as the
+  // row index and the true bin as the column index. This ensures that
+  // multiplying a row vector of true event counts by the matrix will yield
+  // a row vector of reco event counts.
+  auto smearcept = std::make_unique< TMatrixD >( num_ordinary_reco_bins_,
+    num_signal_true_bins_ );
+
+  for ( size_t r = 0u; r < num_ordinary_reco_bins_; ++r ) {
+    for ( size_t t = 0u; t < num_signal_true_bins_; ++t ) {
+      // Get the numerator and denominator of the smearceptance matrix element.
+      // Note that we need to switch to one-based bin indices here to retrieve
+      // the information from the ROOT histograms stored in the Universe object.
+      double numer = cv_univ.hist_2d_->GetBinContent( t + 1, r + 1 );
+      double denom = cv_univ.hist_true_->GetBinContent( t + 1 );
+      // Store the result in the smearceptance matrix. Avoid dividing by zero
+      // by setting any element with zero denominator to zero.
+      double temp_element = 0.;
+      if ( denom != 0. ) temp_element = numer / denom;
+      smearcept->operator()( r, t ) = temp_element;
+    }
+  }
+
+  return smearcept;
+}
+
+// Returns the event counts in each signal true bin in the central-value
+// Universe.
+// NOTE: This function assumes that all signal true bins are listed before
+// the background ones.
+std::unique_ptr< TMatrixD > SystematicsCalculator::get_cv_true_signal() const
+{
+  const auto& cv_univ = this->cv_universe();
+
+  // The output TMatrixD is a row vector containing the event counts in each
+  // signal true bin.
+  auto result = std::make_unique< TMatrixD >( num_signal_true_bins_, 1 );
+
+  for ( size_t t = 0u; t < num_signal_true_bins_; ++t ) {
+    // Note that we need to switch to one-based bin indices here to retrieve
+    // the event counts from the ROOT histogram stored in the Universe object.
+    double temp_element = cv_univ.hist_true_->GetBinContent( t + 1 );
+    result->operator()( t, 0 ) = temp_element;
+  }
+
+  return result;
 }
