@@ -94,6 +94,43 @@ struct CovMatrix {
 
 };
 
+// Container that holds the results of subtracting the EXT+MC background from
+// the measured data event counts in ordinary reco bins
+struct MeasuredEvents {
+
+  MeasuredEvents() {}
+
+  MeasuredEvents( TMatrixD* bkgd_subtracted_data, TMatrixD* bkgd,
+    TMatrixD* cov_mat ) : reco_signal_( bkgd_subtracted_data ),
+    reco_bkgd_( bkgd ), cov_matrix_( cov_mat )
+  {
+    if ( bkgd_subtracted_data->GetNcols() != 1 ) throw std::runtime_error(
+      "Non-row-vector background-subtracted signal passed to MeasuredEvents" );
+
+    if ( bkgd->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
+      " background prediction passed to MeasuredEvents" );
+
+    int num_ordinary_reco_bins = bkgd_subtracted_data->GetNrows();
+    if ( cov_mat->GetNcols() != num_ordinary_reco_bins
+      || cov_mat->GetNrows() != num_ordinary_reco_bins )
+    {
+      throw std::runtime_error( "Bad covariance matrix dimensions passed to"
+        " MeasuredEvents" );
+    }
+  }
+
+  // Background-subtracted data event counts in the ordinary reco bins
+  std::unique_ptr< TMatrixD > reco_signal_;
+
+  // Background that was subtracted from each reco bin to form the signal
+  // measurement
+  std::unique_ptr< TMatrixD > reco_bkgd_;
+
+  // Covariance matrix for the background-subtracted data
+  std::unique_ptr< TMatrixD > cov_matrix_;
+
+};
+
 using CovMatrixMap = std::map< std::string, CovMatrix >;
 using NFT = NtupleFileType;
 
@@ -116,6 +153,13 @@ class SystematicsCalculator {
     }
 
     std::unique_ptr< CovMatrixMap > get_covariances() const;
+
+    // Returns a background-subtracted measurement in all ordinary reco bins
+    // with the total covariance matrix and the background event counts that
+    // were subtracted.
+    // NOTE: this function assumes that the ordinary reco bins are all listed
+    // before any sideband reco bins
+    virtual MeasuredEvents get_measured_events() const;
 
     // Utility functions to help with unfolding
     std::unique_ptr< TMatrixD > get_cv_smearceptance_matrix() const;
@@ -1204,5 +1248,42 @@ std::unique_ptr< TMatrixD >
     result->operator()( r, 0 ) = bkgd_events;
   }
 
+  return result;
+}
+
+MeasuredEvents SystematicsCalculator::get_measured_events() const
+{
+  // First retrieve the central-value background prediction
+  // (EXT + beam-correlated MC background) for all ordinary reco bins
+  TMatrixD* ext_plus_mc_bkgd = this->get_cv_ordinary_reco_bkgd().release();
+
+  // Get the total covariance matrix on the reco-space EXT+MC prediction
+  // (this will not change after subtraction of the central-value background)
+  auto cov_map_ptr = this->get_covariances();
+  auto temp_cov = cov_map_ptr->at( "total" ).get_matrix();
+
+  // Extract just the covariance matrix block that describes the ordinary reco
+  // bins
+  TMatrixD* cov_mat = new TMatrixD(
+    temp_cov->GetSub( 0, num_ordinary_reco_bins_ - 1,
+      0, num_ordinary_reco_bins_ - 1 )
+  );
+
+  // Create the vector of measured event counts in the ordinary reco bins
+  TH1D* d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
+  TMatrixD ordinary_data( num_ordinary_reco_bins_, 1 );
+  for ( int r = 0; r < num_ordinary_reco_bins_; ++r ) {
+    // Switch to using the one-based TH1D index when retrieving these values
+    double bnb_events = d_hist->GetBinContent( r + 1 );
+
+    ordinary_data( r, 0 ) = bnb_events;
+  }
+
+  // Get the ordinary reco bin data row vector after subtracting the
+  // central-value EXT+MC background prediction
+  auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
+    TMatrixD::EMatrixCreatorsOp2::kMinus, *ext_plus_mc_bkgd );
+
+  MeasuredEvents result( reco_data_minus_bkgd, ext_plus_mc_bkgd, cov_mat );
   return result;
 }

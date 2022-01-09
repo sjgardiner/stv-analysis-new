@@ -8,42 +8,6 @@
 #include "MatrixUtils.hh"
 #include "SystematicsCalculator.hh"
 
-// Container that holds the results of applying the sideband constraint
-struct ConstrainedPrediction {
-
-  ConstrainedPrediction() {}
-
-  ConstrainedPrediction( TMatrixD* sig_hist, TMatrixD* bkgd_hist,
-    TMatrixD* cov_mat ) : reco_signal_hist_( sig_hist ),
-    reco_bkgd_hist_( bkgd_hist ), cov_matrix_( cov_mat )
-  {
-    if ( sig_hist->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
-      " background-subtracted signal passed to ConstrainedPrediction" );
-
-    if ( bkgd_hist->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
-      " background prediction passed to ConstrainedPrediction" );
-
-    int num_ordinary_reco_bins = sig_hist->GetNrows();
-    if ( cov_mat->GetNcols() != num_ordinary_reco_bins
-      || cov_mat->GetNrows() != num_ordinary_reco_bins )
-    {
-      throw std::runtime_error( "Bad covariance matrix dimensions passed to"
-        " ConstrainedPrediction" );
-    }
-  }
-
-  // CV signal prediction in the ordinary reco bins
-  std::unique_ptr< TMatrixD > reco_signal_hist_;
-
-  // Background that was subtracted from each reco bin to form the signal
-  // prediction
-  std::unique_ptr< TMatrixD > reco_bkgd_hist_;
-
-  // Covariance matrix for the prediction
-  std::unique_ptr< TMatrixD > cov_matrix_;
-
-};
-
 // Calculates covariance matrices describing the uncertainty on the reco-space
 // event counts. Distinguishes between "signal region" reco bins and "sideband"
 // reco bins. For the former, covariances are calculated for both the total
@@ -76,8 +40,10 @@ class ConstrainedCalculator : public SystematicsCalculator {
     // function.
     virtual size_t get_covariance_matrix_size() const override;
 
-    // New method that applies the constraint
-    std::unique_ptr< ConstrainedPrediction > get_constrained_prediction();
+    // Apply a sideband constraint before subtracting the EXT+MC background.
+    // NOTE: this function assumes that the ordinary reco bins are all listed
+    // before any sideband reco bins
+    virtual MeasuredEvents get_measured_events() const override;
 
   protected:
 
@@ -313,8 +279,7 @@ int ConstrainedCalculator::get_reco_bin_and_type( int cm_bin,
   return bin;
 }
 
-std::unique_ptr< ConstrainedPrediction >
-  ConstrainedCalculator::get_constrained_prediction()
+MeasuredEvents ConstrainedCalculator::get_measured_events() const
 {
   const int two_times_ord_bins = 2*num_ordinary_reco_bins_;
   const auto& cv_univ = this->cv_universe();
@@ -441,8 +406,7 @@ std::unique_ptr< ConstrainedPrediction >
   auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
     TMatrixD::EMatrixCreatorsOp2::kMinus, *reco_bkgd_vec );
 
-  auto result = std::make_unique< ConstrainedPrediction >(
-    reco_data_minus_bkgd, reco_bkgd_vec, sig_plus_bkgd_cov_mat );
-
+  MeasuredEvents result( reco_data_minus_bkgd, reco_bkgd_vec,
+    sig_plus_bkgd_cov_mat );
   return result;
 }
