@@ -4,7 +4,8 @@
 #include "Unfolder.hh"
 
 // Implementation of the iterative D'Agostini unfolding method
-// TODO: add citation
+// G. D'Agostini, Nucl. Instrum. Methods Phys. Res. A 362, 487-498 (1995)
+// https://hep.physics.utoronto.ca/~orr/wwwroot/Unfolding/d-agostini.pdf
 class DAgostiniUnfolder : public Unfolder {
 
   public:
