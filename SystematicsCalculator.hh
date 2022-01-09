@@ -117,9 +117,12 @@ class SystematicsCalculator {
 
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
+    // Utility functions to help with unfolding
     std::unique_ptr< TMatrixD > get_cv_smearceptance_matrix() const;
 
     std::unique_ptr< TMatrixD > get_cv_true_signal() const;
+
+    std::unique_ptr< TMatrixD > get_cv_ordinary_reco_bkgd() const;
 
   //protected:
 
@@ -1164,6 +1167,41 @@ std::unique_ptr< TMatrixD > SystematicsCalculator::get_cv_true_signal() const
     // the event counts from the ROOT histogram stored in the Universe object.
     double temp_element = cv_univ.hist_true_->GetBinContent( t + 1 );
     result->operator()( t, 0 ) = temp_element;
+  }
+
+  return result;
+}
+
+// Returns the expected background in each ordinary reco bin (including both
+// EXT and the central-value MC prediction for beam-correlated backgrounds)
+// NOTE: This function assumes that all "ordinary" reco bins are listed before
+// the sideband ones.
+std::unique_ptr< TMatrixD >
+  SystematicsCalculator::get_cv_ordinary_reco_bkgd() const
+{
+  int num_true_bins = true_bins_.size();
+  const auto& cv_univ = this->cv_universe();
+  const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
+
+  auto result = std::make_unique< TMatrixD >( num_ordinary_reco_bins_, 1 );
+
+  for ( int r = 0; r < num_ordinary_reco_bins_; ++r ) {
+
+    // Start by tallying the EXT contribution in the current reco bin. Note
+    // that the EXT data histogram bins have a one-based index.
+    double bkgd_events = ext_hist->GetBinContent( r + 1 );
+
+    for ( int t = 0; t < num_true_bins; ++t ) {
+      auto& tbin = true_bins_.at( t );
+      // If this isn't a background true bin, just skip it
+      if ( tbin.type_ != kBackgroundTrueBin ) continue;
+
+      // Tally the beam-correlated background contribution from this true bin
+      // to the current reco bin. Note that we need one-based bin indices to
+      // retrieve this information from the TH2D owned by the Universe object
+      bkgd_events += cv_univ.hist_2d_->GetBinContent( t + 1, r + 1 );
+    }
+    result->operator()( r, 0 ) = bkgd_events;
   }
 
   return result;
