@@ -101,12 +101,27 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
     " failed during Wiener-SVD unfolding" );
 
   // Retrieve the SVD results for use in the unfolding calculation
-  //const TMatrixD& U_C = svd.GetU(); // unneeded
+  const TMatrixD& U_C = svd.GetU();
   const TVectorD& D_C_diag = svd.GetSig(); // diagonal elements of D_C only
   const TMatrixD& V_C = svd.GetV();
 
-  // Precompute the transpose of V_C as well for later convenience
+  // Precompute the transposes of U_C and V_C as well for later convenience
+  TMatrixD U_C_tr( TMatrixD::EMatrixCreatorsOp1::kTransposed, U_C );
   TMatrixD V_C_tr( TMatrixD::EMatrixCreatorsOp1::kTransposed, V_C );
+
+  // We can avoid one numerical matrix inversion by using the trick shown in
+  // the Wiener-SVD source code, i.e.,
+  // https://github.com/BNLIF/Wiener-SVD-Unfolding/blob/master/src/WienerSVD.C,
+  // but not in the paper. To do that, we need to create the transpose of
+  // the diagonal matrix D_C from the SVD results
+  TMatrixD D_C_tr( num_true_signal_bins, num_ordinary_reco_bins );
+
+  // Initialize all elements to zero, then set just the non-vanishing diagonal
+  // elements
+  D_C_tr.Zero();
+  for ( int t = 0; t < num_true_signal_bins; ++t ) {
+    D_C_tr( t, t ) = D_C_diag( t );
+  }
 
   // Build the Wiener filter according to the expression in Eq. (3.24). Note
   // that it is a diagonal matrix.
@@ -127,7 +142,7 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // number of true bins. The needed diagonal element of D_C will thus always
   // exist since the number of elements in numer_vec is equal to the number of
   // true bins.
-  for ( int e = 0; e < numer_vec.GetNrows(); ++e ) {
+  for ( int e = 0; e < num_true_signal_bins; ++e ) {
     double elem = numer_vec( e, 0 );
     double dC = D_C_diag( e );
     numer_vec( e, 0 ) = dC * dC * elem * elem;
@@ -143,19 +158,24 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
     W_C( t, t ) = numer / denom;
   }
 
+  // Make a copy where we divide each diagonal element of W_C by the
+  // corresponding diagonal element of (D_C^T * D_C)^(-1)
+  TMatrixD W_C_tilde( W_C );
+  for ( int t = 0; t < num_true_signal_bins; ++t ) {
+    double dC = D_C_diag( t );
+    W_C_tilde( t, t ) /= dC * dC;
+  }
+
   // Calculate the additional smearing matrix A_C from Eq. (3.23) in the paper.
   // Matrix multiplication is associative, which is nice because we can chain
   // together a bunch of calls to operator*( const TMatrixD&, const TMatrixD& )
   // below safely.
   TMatrixD A_C = ( *Cinv ) * V_C * W_C * V_C_tr * C;
 
-  // Compute (R^T * R)^(-1) needed to finish calculating R_tot
-  TMatrixD temp_RTR( R_tr, TMatrixD::EMatrixCreatorsOp2::kMult, R );
-  auto temp_RTR_inv = invert_matrix( temp_RTR );
-
   // Create the final unfolding matrix R_tot defined in Eq. (3.26) from the
-  // paper
-  TMatrixD R_tot = A_C * ( *temp_RTR_inv ) * R_tr * Q;
+  // paper. Avoid inverting (R^T * R) by using the trick from the Wiener-SVD
+  // source code.
+  TMatrixD R_tot = ( *Cinv ) * V_C * W_C_tilde * D_C_tr * U_C_tr * Q;
 
   // Get the unfolded signal event counts as a column vector
   auto* unfolded_signal = new TMatrixD( R_tot,
