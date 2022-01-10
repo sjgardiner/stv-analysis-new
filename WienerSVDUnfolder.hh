@@ -64,7 +64,6 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // TDecompChol class). Retrieve it from the Cholesky decomposition object and
   // transpose in place to get the correct definition.
   TMatrixD Q( chol.GetU() );
-  Q.T();
 
   // Apply the pre-scaling described in the paper below Eq. (3.3) using Q and
   // the smearceptance matrix. I use the same notation here as in the paper.
