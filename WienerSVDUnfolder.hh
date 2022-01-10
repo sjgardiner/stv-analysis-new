@@ -15,7 +15,8 @@ class WienerSVDUnfolder : public Unfolder {
 
   public:
 
-    WienerSVDUnfolder() : Unfolder() {}
+    WienerSVDUnfolder( bool use_wiener_filter = true ) : Unfolder(),
+      use_filter_( use_wiener_filter ) {}
 
     // Trick taken from https://stackoverflow.com/a/18100999
     using Unfolder::unfold;
@@ -23,6 +24,16 @@ class WienerSVDUnfolder : public Unfolder {
     virtual UnfoldedMeasurement unfold( const TMatrixD& data_signal,
       const TMatrixD& data_covmat, const TMatrixD& smearcept,
       const TMatrixD& prior_true_signal ) const override;
+
+    inline bool use_filter() const { return use_filter_; }
+    inline void set_use_filter( bool use_filter ) { use_filter_ = use_filter; }
+
+  protected:
+
+    // Flag indicating whether the Wiener filter should be used. If it
+    // is false, the usual expression will be replaced with an identity
+    // matrix
+    bool use_filter_ = true;
 
 };
 
@@ -155,6 +166,12 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
     // Prevent division by zero by setting the numerator to zero
     if ( denom == 0 ) numer = 0.;
     W_C( t, t ) = numer / denom;
+  }
+
+  // If the Wiener filter has been disabled, then just replace W_C with
+  // an identity matrix
+  if ( !use_filter_ ) {
+    W_C.UnitMatrix();
   }
 
   // Make a copy where we divide each diagonal element of W_C by the
