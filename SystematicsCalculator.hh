@@ -166,9 +166,28 @@ class SystematicsCalculator {
 
     std::unique_ptr< TMatrixD > get_cv_true_signal() const;
 
-    std::unique_ptr< TMatrixD > get_cv_ordinary_reco_bkgd() const;
+    // Returns the expected background in each ordinary reco bin (including
+    // both EXT and the central-value MC prediction for beam-correlated
+    // backgrounds)
+    // NOTE: This function assumes that all "ordinary" reco bins are listed
+    // before the sideband ones.
+    inline std::unique_ptr< TMatrixD > get_cv_ordinary_reco_bkgd() const
+      { return this->get_cv_ordinary_reco_helper( true ); }
+
+    // Returns the expected signal event counts in each ordinary reco bin
+    // NOTE: This function assumes that all "ordinary" reco bins are listed
+    // before the sideband ones.
+    inline std::unique_ptr< TMatrixD > get_cv_ordinary_reco_signal() const
+      { return this->get_cv_ordinary_reco_helper( false ); }
 
   //protected:
+
+    // Implements both get_cv_ordinary_reco_bkgd() and
+    // get_cv_ordinary_reco_signal() in order to reduce code duplication. If
+    // return_bkgd is false (true), then the background (signal) event counts
+    // in each ordinary reco bin will be returned as a column vector.
+    std::unique_ptr< TMatrixD > get_cv_ordinary_reco_helper(
+      bool return_bkgd ) const;
 
     // Returns true if a given Universe represents a detector variation or
     // false otherwise
@@ -1221,7 +1240,7 @@ std::unique_ptr< TMatrixD > SystematicsCalculator::get_cv_true_signal() const
 // NOTE: This function assumes that all "ordinary" reco bins are listed before
 // the sideband ones.
 std::unique_ptr< TMatrixD >
-  SystematicsCalculator::get_cv_ordinary_reco_bkgd() const
+  SystematicsCalculator::get_cv_ordinary_reco_helper( bool return_bkgd ) const
 {
   int num_true_bins = true_bins_.size();
   const auto& cv_univ = this->cv_universe();
@@ -1235,17 +1254,39 @@ std::unique_ptr< TMatrixD >
     // that the EXT data histogram bins have a one-based index.
     double bkgd_events = ext_hist->GetBinContent( r + 1 );
 
+    // Also start out with zero signal events (the signal prediction comes
+    // purely from MC)
+    double signal_events = 0.;
+
     for ( int t = 0; t < num_true_bins; ++t ) {
       auto& tbin = true_bins_.at( t );
-      // If this isn't a background true bin, just skip it
-      if ( tbin.type_ != kBackgroundTrueBin ) continue;
 
-      // Tally the beam-correlated background contribution from this true bin
-      // to the current reco bin. Note that we need one-based bin indices to
-      // retrieve this information from the TH2D owned by the Universe object
-      bkgd_events += cv_univ.hist_2d_->GetBinContent( t + 1, r + 1 );
+      // Make a temporary pointer that will be used to increment
+      // either the signal or background event tally based on the
+      // interpretation of the bin contents below
+      double* temp_events_ptr = nullptr;
+
+      // Set the pointer to the appropriate counter
+      if ( tbin.type_ == kBackgroundTrueBin ) {
+        temp_events_ptr = &bkgd_events;
+      }
+      else if ( tbin.type_ == kSignalTrueBin ) {
+        temp_events_ptr = &signal_events;
+      }
+      else {
+         throw std::runtime_error( "Bad true bin type in"
+           " SystematicsCalculator::get_cv_ordinary_reco_helper()" );
+      }
+
+      // Tally the contribution from this true bin. Note that we need one-based
+      // bin indices to retrieve this information from the TH2D owned by the
+      // Universe object
+      ( *temp_events_ptr ) += cv_univ.hist_2d_->GetBinContent( t + 1, r + 1 );
     }
-    result->operator()( r, 0 ) = bkgd_events;
+
+    // We've looped through all of the true bins. Now assign the appropriate
+    // event count to the vector of results
+    result->operator()( r, 0 ) = return_bkgd ? bkgd_events : signal_events;
   }
 
   return result;

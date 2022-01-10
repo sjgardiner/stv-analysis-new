@@ -1,6 +1,7 @@
 #pragma once
 
 // Standard library includes
+#include <cfloat>
 #include <cmath>
 #include <limits>
 #include <memory>

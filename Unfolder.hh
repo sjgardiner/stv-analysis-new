@@ -49,8 +49,7 @@ UnfoldedMeasurement Unfolder::unfold(
   const auto& data_signal = meas.reco_signal_;
   const auto& data_covmat = meas.cov_matrix_;
 
-  return this->unfold( *meas.reco_signal_, *meas.cov_matrix_,
-    *smearcept, *true_signal );
+  return this->unfold( *data_signal, *data_covmat, *smearcept, *true_signal );
 }
 
 void Unfolder::check_matrices( const TMatrixD& data_signal,
