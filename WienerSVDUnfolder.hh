@@ -15,8 +15,11 @@ class WienerSVDUnfolder : public Unfolder {
 
   public:
 
-    WienerSVDUnfolder( bool use_wiener_filter = true ) : Unfolder(),
-      use_filter_( use_wiener_filter ) {}
+    enum RegularizationMatrixType { kIdentity, kFirstDeriv, kSecondDeriv };
+
+    WienerSVDUnfolder( bool use_wiener_filter = true,
+      RegularizationMatrixType type = kIdentity ) : Unfolder(),
+      use_filter_( use_wiener_filter ), reg_type_( type ) {}
 
     // Trick taken from https://stackoverflow.com/a/18100999
     using Unfolder::unfold;
@@ -28,12 +31,25 @@ class WienerSVDUnfolder : public Unfolder {
     inline bool use_filter() const { return use_filter_; }
     inline void set_use_filter( bool use_filter ) { use_filter_ = use_filter; }
 
+    inline RegularizationMatrixType get_regularization_type() const
+      { return reg_type_; }
+
+    inline void set_regularization_type( const RegularizationMatrixType& type )
+      { reg_type_ = type; }
+
   protected:
 
-    // Flag indicating whether the Wiener filter should be used. If it
-    // is false, the usual expression will be replaced with an identity
+    // Helper function that sets the contents of the regularization matrix
+    // based on the current value of reg_type_
+    void set_reg_matrix( TMatrixD& C ) const;
+
+    // Flag indicating whether the Wiener filter should be used. If it is
+    // false, then the usual expression will be replaced with an identity
     // matrix
     bool use_filter_ = true;
+
+    // Enum that determines the form to use for the regularization matrix C
+    RegularizationMatrixType reg_type_ = kIdentity;
 
 };
 
@@ -88,12 +104,11 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // Also precompute the transpose of R for later convenience
   TMatrixD R_tr( TMatrixD::EMatrixCreatorsOp1::kTransposed, R );
 
-  // For now, use an identity matrix as the regularization matrix C
-  // mentioned in Eq. (3.19). Note that it must always be a square matrix
-  // with dimension equal to the number of true signal bins.
-  // TODO: Revisit this
+  // Create the regularization matrix C mentioned in Eq. (3.19). Note that it
+  // must always be a square matrix with dimension equal to the number of true
+  // signal bins.
   TMatrixD C( num_true_signal_bins, num_true_signal_bins );
-  C.UnitMatrix();
+  this->set_reg_matrix( C );
 
   // Invert the regularization matrix to obtain C^(-1)
   auto Cinv = invert_matrix( C );
@@ -206,4 +221,40 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
 
   UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat );
   return result;
+}
+
+void WienerSVDUnfolder::set_reg_matrix( TMatrixD& C ) const {
+  // Zero out any existing matrix contents
+  C.Zero();
+
+  int num_rows = C.GetNrows();
+  int num_cols = C.GetNcols();
+  if ( num_rows != num_cols ) throw std::runtime_error( "Non-square"
+    " regularization matrix passed to WienerSVDUnfolder::set_reg_matrix()" );
+
+  // Fill in new contents based on the form requested by the user
+  if ( reg_type_ == kIdentity ) {
+    C.UnitMatrix();
+  }
+  else if ( reg_type_ == kFirstDeriv ) {
+    for ( int r = 0; r < num_rows; ++r ) {
+      C( r, r ) = -1.;
+      if ( r < num_rows - 1 ) C( r, r + 1 ) = 1.;
+    }
+  }
+  else if ( reg_type_ == kSecondDeriv ) {
+    // Small number added to diagonal to avoid numerical inversion problems
+    constexpr double inv_epsilon = 1e-6;
+    for ( int r = 0; r < num_rows; ++r ) {
+      if ( r < num_rows - 1 ) {
+        C( r + 1, r ) = 1.;
+        C( r, r + 1 ) = 1.;
+      }
+      double diag = inv_epsilon - 2.;
+      if ( r == 0 || r == num_rows - 1 ) diag += 1.;
+      C( r, r ) = diag;
+    }
+  }
+  else throw std::runtime_error( "Unrecognized regularization matrix type"
+    " encountered in WienerSVDUnfolder::set_reg_matrix()" );
 }
