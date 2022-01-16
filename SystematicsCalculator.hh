@@ -225,9 +225,11 @@ class SystematicsCalculator {
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
 
-    // Subdirectory name for the TDirectoryFile containing the POT-summed
-    // histograms for the various universes across all analysis ntuples
-    const std::string TOTAL_SUBFOLDER_NAME = "total";
+    // Beginning of the subdirectory name for the TDirectoryFile containing the
+    // POT-summed histograms for the various universes across all analysis
+    // ntuples. The full name is formed from this prefix and the name of the
+    // FilePropertiesManager configuration file that is currently active.
+    const std::string TOTAL_SUBFOLDER_NAME_PREFIX = "total_";
 
     // Holds reco-space histograms for data (BNB and EXT) bin counts
     std::map< NFT, std::unique_ptr<TH1D> > data_hists_;
@@ -268,12 +270,14 @@ SystematicsCalculator::SystematicsCalculator(
   const std::string& respmat_tdirectoryfile_name )
   : syst_config_file_name_( syst_cfg_file_name )
 {
+  // Get access to the FilePropertiesManager singleton class
+  const auto& fpm = FilePropertiesManager::Instance();
+
   // If the user didn't specify a particular systematics configuration file
   // to use when calculating covariance matrices, then use the default one
   if ( syst_config_file_name_.empty() ) {
     // Look up the location of the default configuration file using the
     // FilePropertiesManager to get the directory name
-    const auto& fpm = FilePropertiesManager::Instance();
     syst_config_file_name_ = fpm.analysis_path() + "/systcalc.conf";
   }
 
@@ -298,12 +302,24 @@ SystematicsCalculator::SystematicsCalculator(
     throw std::runtime_error( "Invalid root TDirectoryFile!" );
   }
 
+  // Construct the "total subfolder name" using the constant prefix
+  // and the name of the FilePropertiesManager configuration file that
+  // is currently active. Replace any '/' characters in the latter to
+  // avoid TDirectoryFile path problems.
+  std::string fpm_config_file = fpm.config_file_name();
+  // Do the '/' replacement here in the same way as is done for
+  // TDirectoryFile subfolders by the ResponseMatrixMaker class
+  fpm_config_file = ntuple_subfolder_from_file_name( fpm_config_file );
+
+  std::string total_subfolder_name = TOTAL_SUBFOLDER_NAME_PREFIX
+    + fpm_config_file;
+
   // Check whether a set of POT-summed histograms for each universe
   // is already present in the input response matrix file. This is
   // signalled by a TDirectoryFile with a name matching the string
-  // TOTAL_SUBFOLDER_NAME.
+  // total_subfolder_name.
   TDirectoryFile* total_subdir = nullptr;
-  root_tdir->GetObject( TOTAL_SUBFOLDER_NAME.c_str(), total_subdir );
+  root_tdir->GetObject( total_subfolder_name.c_str(), total_subdir );
 
   if ( !total_subdir ) {
 
@@ -313,7 +329,7 @@ SystematicsCalculator::SystematicsCalculator(
 
     // Create a new TDirectoryFile as a subfolder to hold the POT-summed
     // universe histograms
-    total_subdir = new TDirectoryFile( TOTAL_SUBFOLDER_NAME.c_str(),
+    total_subdir = new TDirectoryFile( total_subfolder_name.c_str(),
       "response matrices", "", root_tdir );
 
     // Write the universes to the new subfolder for faster loading

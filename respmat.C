@@ -36,40 +36,55 @@ bool is_reweightable_mc_ntuple( const std::string& input_file_name ) {
 
 int main( int argc, char* argv[] ) {
 
-  if ( argc != 4 ) {
-    std::cout << "Usage: respmat FILE_PROPERTIES_CONFIG_FILE"
-      << " RESPMAT_CONFIG_FILE OUTPUT_ROOT_FILE\n";
+  if ( argc != 4 && argc != 5 ) {
+    std::cout << "Usage: respmat LIST_FILE"
+      << " RESPMAT_CONFIG_FILE OUTPUT_ROOT_FILE"
+      << " [FILE_PROPERTIES_CONFIG_FILE]\n";
     return 1;
   }
 
-  std::string fp_config_file_name( argv[1] );
+  std::string list_file_name( argv[1] );
   std::string respmat_config_file_name( argv[2] );
   std::string output_file_name( argv[3] );
 
-  // Build a vector of input ntuple file name/type pairs using the singleton
-  // FilePropertiesManager. Use the file properties configuration file
-  // specified by the user on the command line.
-  std::vector< std::pair<std::string, NtupleFileType> > input_files;
+  // If the user specified an (optional) non-default configuration
+  // file for the FilePropertiesManager on the command line, then
+  // load it here. Note that the only place where the FilePropertiesManager
+  // configuration is relevant is in the use of MCC9Unfolder to compute
+  // total event count histograms (see below).
+  auto& fpm = FilePropertiesManager::Instance();
+  if ( argc == 5 ) {
+    fpm.load_file_properties( argv[4] );
+  }
+  // Regardless of whether the default was used or not, retrieve the
+  // name of the FilePropertiesManager configuration file that was
+  // actually used
+  std::string fp_config_file_name = fpm.config_file_name();
 
-  std::cout << "Loading FilePropertiesManager configuration from "
+  std::cout << "Loaded FilePropertiesManager configuration from "
     << fp_config_file_name << '\n';
 
-  auto& fpm = FilePropertiesManager::Instance();
-  fpm.load_file_properties( fp_config_file_name );
+  // Read in the complete list of input ntuple files that should be processed
+  std::ifstream in_file( list_file_name );
+  std::vector< std::string > input_files;
+  std::string temp_line;
+  while ( std::getline(in_file, temp_line) ) {
+    // Ignore lines that begin with the '#' character (this allows for
+    // comments in the normalization table file
+    if ( temp_line.front() == '#' ) continue;
 
-  for ( const auto& run_and_type_pair : fpm.ntuple_file_map() ) {
+    // Read in the ntuple file name from the beginning of the current line of
+    // the list file. Any trailing line contents separated from the name by
+    // whitespace will be ignored.
+    std::string file_name;
+    std::istringstream temp_ss( temp_line );
+    temp_ss >> file_name;
 
-    const auto& type_map = run_and_type_pair.second;
-
-    for ( const auto& type_and_files_pair : type_map ) {
-      const auto& type = type_and_files_pair.first;
-      const auto& file_set = type_and_files_pair.second;
-
-      for ( const std::string& file_name : file_set ) {
-        input_files.emplace_back( file_name, type );
-      }
-    }
+    input_files.push_back( file_name );
   }
+
+  std::cout << "Processing response matrices for a total of "
+    << input_files.size() << " input ntuple files\n";
 
   ROOT::EnableImplicitMT();
 
@@ -80,10 +95,7 @@ int main( int argc, char* argv[] ) {
   std::string tdirfile_name;
   bool set_tdirfile_name = false;
 
-  for ( const auto& pair : input_files ) {
-
-    const auto& input_file_name = pair.first;
-    const auto& type = pair.second;
+  for ( const auto& input_file_name : input_files ) {
 
     std::cout << "Calculating response matrices for ntuple input file "
       << input_file_name << '\n';

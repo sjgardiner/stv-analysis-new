@@ -193,6 +193,10 @@ class FilePropertiesManager {
         in_file_name = analysis_path_ + "/file_properties.txt";
       }
 
+      // Store the name of the configuration file that was used so that (if
+      // needed) we can retrieve it later
+      config_file_name_ = in_file_name;
+
       std::ifstream in_file( in_file_name );
 
       std::string temp_line;
@@ -245,6 +249,9 @@ class FilePropertiesManager {
       }
     }
 
+    inline const std::string& config_file_name() const
+      { return config_file_name_; }
+
   private:
 
     inline FilePropertiesManager() {
@@ -283,4 +290,7 @@ class FilePropertiesManager {
     // automatically on construction using the STV_ANALYSIS_DIR environment
     // variable.
     std::string analysis_path_;
+
+    // Name of the file used to configure the singleton class
+    std::string config_file_name_;
 };
