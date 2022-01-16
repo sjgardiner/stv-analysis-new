@@ -1,13 +1,38 @@
 // Executable for generating response matrix files for later analysis. It
 // has been adapted from a similar ROOT macro.
 
+// Standard library includes
+#include <stdexcept>
+
 // ROOT includes
+#include "TBranch.h"
+#include "TFile.h"
 #include "TROOT.h"
+#include "TTree.h"
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
 #include "MCC9Unfolder.hh"
 #include "ResponseMatrixMaker.hh"
+
+// Helper function that checks whether a given ROOT file represents an ntuple
+// from a reweightable MC sample. This is done by checking for the presence of
+// a branch whose name matches the TUNE_WEIGHT_NAME string defined in
+// ResponseMatrixMaker.hh. Central-value GENIE MC samples are expected to have
+// this branch. Real data, detector variation systematics samples and MC
+// samples prepared using alternative generators (e.g., NuWro) are not expected
+// to have this branch.
+bool is_reweightable_mc_ntuple( const std::string& input_file_name ) {
+  TFile temp_file( input_file_name.c_str(), "read" );
+  TTree* stv_tree = nullptr;
+  temp_file.GetObject( "stv_tree", stv_tree );
+  if ( !stv_tree ) throw std::runtime_error( "Missing TTree \"stv_tree\" in"
+    " the input ROOT file " + input_file_name );
+
+  TBranch* cv_weight_br = stv_tree->GetBranch( TUNE_WEIGHT_NAME.c_str() );
+  bool has_cv_weights = ( cv_weight_br != nullptr );
+  return has_cv_weights;
+}
 
 int main( int argc, char* argv[] ) {
 
@@ -69,14 +94,18 @@ int main( int argc, char* argv[] ) {
 
     resp_mat.add_input_file( input_file_name.c_str() );
 
-    if ( ntuple_type_is_detVar(type) || !ntuple_type_is_mc(type) ) {
-      // Ignore all event weights in the detVar post-processed ntuples
-      // TODO: revisit this if you get new samples in which the CV correction
-      // weights are calculated correctly
-      resp_mat.build_response_matrices( { "FAKE_BRANCH_NAME" } );
+    bool has_event_weights = is_reweightable_mc_ntuple( input_file_name );
+
+    if ( has_event_weights ) {
+      // If the check above was successful, then run all of the histogram
+      // calculations in the usual way
+      resp_mat.build_response_matrices();
     }
     else {
-      resp_mat.build_response_matrices();
+      // Passing in the fake list of explicit branch names below instructs
+      // the ResponseMatrixMaker class to ignore all event weights while
+      // processing the current ntuple
+      resp_mat.build_response_matrices( { "FAKE_BRANCH_NAME" } );
     }
 
     resp_mat.save_histograms( output_file_name, input_file_name );
