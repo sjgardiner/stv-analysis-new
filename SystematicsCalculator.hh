@@ -244,6 +244,13 @@ class SystematicsCalculator {
     // TODO: revisit this procedure if new detVar samples become available
     std::map< NFT, std::unique_ptr<Universe> > detvar_universes_;
 
+    // If we are working with fake data, then this will point to a Universe
+    // object containing full reco and truth information for the MC portion
+    // (as opposed to the EXT contribution which is added to the reco MC
+    // counts in the BNB "data" histogram). If we are working with real data,
+    // then this will be a null pointer.
+    std::unique_ptr< Universe > fake_data_universe_ = nullptr;
+
     // True bin configuration that was used to compute the response matrices
     std::vector< TrueBin > true_bins_;
 
@@ -447,6 +454,12 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
       // Move the detector variation Universe object into the map
       detvar_universes_[ temp_type ].reset( temp_univ.release() );
     }
+    // If we're working with fake data, then a single universe with a specific
+    // name stores all of the MC information for the "data." Save it in the
+    // dedicated fake data Universe object.
+    else if ( univ_name == "FakeDataMC" ) {
+      fake_data_universe_ = std::move( temp_univ );
+    }
     else {
       // If we've made it here, then we're working with a universe
       // for a reweightable systematic variation
@@ -510,6 +523,13 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
 }
 
 void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
+
+  // Set default values of flags used to signal the presence of fake data. If
+  // fake data are detected, corresponding truth information will be stored and
+  // a check will be performed to prevent mixing real and fake data together.
+  bool using_fake_data = false;
+  bool began_checking_for_fake_data = false;
+
   // Get some normalization factors here for easy use later.
   std::map< int, double > run_to_bnb_pot_map;
   std::map< int, double > run_to_bnb_trigs_map;
@@ -578,11 +598,18 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         std::cout << "PROCESSING response matrices for "
           << file_name << '\n';
 
+        // Default to assuming that the current ntuple file is not a fake data
+        // sample. If it is a data sample (i.e., if is_mc == false), then the
+        // value of this flag will be reconsidered below.
+        bool is_fake_data = false;
+
         // Get the simulated or measured POT belonging to the current file.
         // This will be used to normalize the relevant histograms
         double file_pot = 0.;
         if ( is_mc ) {
           // MC files have the simulated POT stored alongside the ntuple
+          // TODO: use the TDirectoryFile to handle this rather than
+          // pulling it out of the original ntuple file
           TFile temp_mc_file( file_name.c_str(), "read" );
           TParameter<float>* temp_pot = nullptr;
           temp_mc_file.GetObject( "summed_pot", temp_pot );
@@ -637,12 +664,41 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
             data_hists_.at( type )->Add( reco_hist );
           }
 
-          // We don't need to do the other MC-ntuple-specific stuff below,
-          // so just move on to the next file
-          continue;
+          // For EXT data files (always assumed to be real data), no further
+          // processing is needed, so just move to the next file
+          if ( type == NFT::kExtBNB ) continue;
+
+          // For real BNB data, we're also done. However, if we're working with
+          // fake data, then we also want to store the truth information for
+          // the current ntuple file. Check to see whether we have fake data or
+          // not by trying to retrieve the unweighted "2d" histogram (which
+          // stores event counts that simultaneously fall into a given true bin
+          // and reco bin). It will only be present for fake data ntuples.
+          TH2D* fd_check_2d_hist = nullptr;
+          subdir->GetObject( "unweighted_0_2d", fd_check_2d_hist );
+
+          is_fake_data = ( fd_check_2d_hist != nullptr );
+
+          // The BNB data files should either all be real data or all be fake
+          // data. If any mixture occurs, then this suggests that something has
+          // gone seriously wrong. Throw an exception to warn the user.
+          if ( began_checking_for_fake_data ) {
+            if ( is_fake_data != using_fake_data ) {
+              throw std::runtime_error( "Mixed real and fake data ntuple files"
+                " encountered in SystematicsCalculator::build_universes()" );
+            }
+          }
+          else {
+            using_fake_data = is_fake_data;
+            began_checking_for_fake_data = true;
+          }
+
+          // If we are working with real BNB data, then we don't need to do the
+          // other MC-ntuple-specific stuff below, so just move on to the next
+          // file
+          if ( !is_fake_data ) continue;
 
         } // data ntuple files
-
 
         // If we've made it here, then we're working with an MC ntuple
         // file. For these, all four histograms for the "unweighted"
@@ -656,8 +712,62 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         int num_true_bins = temp_2d_hist->GetXaxis()->GetNbins();
         int num_reco_bins = temp_2d_hist->GetYaxis()->GetNbins();
 
-        // Let's handle the detVar samples first.
-        if ( is_detVar ) {
+        // Let's handle the fake BNB data samples first.
+        if ( is_fake_data ) {
+
+          // If this is our first fake BNB data ntuple file, then create
+          // the Universe object that will store the full MC information
+          // (truth and reco)
+          if ( !fake_data_universe_ ) {
+
+            fake_data_universe_ = std::make_unique< Universe >( "FakeDataMC",
+              0, num_true_bins, num_reco_bins );
+
+            set_stats_and_dir( *fake_data_universe_ );
+
+          } // first fake BNB data ntuple file
+
+
+          // Since all other histograms are scaled to the POT exposure
+          // of the BNB data ones, no rescaling is needed here. Just add the
+          // contributions of the current ntuple file's histograms to the
+          // fake data Universe object.
+
+          // Retrieve the histograms for the fake data universe (which
+          // corresponds to the "unweighted" histogram name prefix) from
+          // the current TDirectoryFile.
+          // TODO: add the capability for fake data to use event weights
+          // (both in the saved fake data Universe object and in the
+          // corresponding "data" histogram of reco event counts
+          std::string hist_name_prefix = "unweighted_0";
+
+          TH1D* h_reco = nullptr;
+          TH1D* h_true = nullptr;
+          TH2D* h_2d = nullptr;
+          TH2D* h_categ = nullptr;
+
+          subdir->GetObject( (hist_name_prefix + "_reco").c_str(),
+            h_reco );
+
+          subdir->GetObject( (hist_name_prefix + "_true").c_str(),
+            h_true );
+
+          subdir->GetObject( (hist_name_prefix + "_2d").c_str(), h_2d );
+
+          subdir->GetObject( (hist_name_prefix + "_categ").c_str(),
+            h_categ );
+
+          // Add their contributions to the owned histograms for the
+          // current Universe object
+          fake_data_universe_->hist_reco_->Add( h_reco );
+          fake_data_universe_->hist_true_->Add( h_true );
+          fake_data_universe_->hist_2d_->Add( h_2d );
+          fake_data_universe_->hist_categ_->Add( h_categ );
+
+        } // fake data sample
+
+        // Now we'll take care of the detVar samples.
+        else if ( is_detVar ) {
 
           std::string dv_univ_name = fpm.ntuple_type_to_string( type );
 
@@ -841,6 +951,38 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
   } // run
 
+  // Everything is ready to go with one possible exception: if we're working
+  // with fake data ntuples, then the "data" histogram of reco-space event
+  // counts will contain the "beam-on" (MC) contribution but not the "beam-off"
+  // (EXT) contribution needed to form a full fake measurement. Correct this
+  // situation if needed by adding the total EXT histogram to the BNB "data"
+  // histogram.
+  if ( using_fake_data ) {
+
+    const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
+    TH1D* bnb_hist = data_hists_.at( NFT::kOnBNB ).get();
+
+    bnb_hist->Add( ext_hist );
+
+    // In a real measurement, the (Poisson) statistical uncertainty on each BNB
+    // data histogram bin would be simply the square root of the event count.
+    // Imitate a real measurement by replacing the existing BNB "data"
+    // histogram bin errors (based on MC and EXT data statistics) with the
+    // square root of the bin contents. Note that no scaling subtleties come
+    // into play because the BNB data histograms are never rescaled based upon
+    // POT exposure. Include the under/overflow bins when reassigning the error
+    // bars, just in case.
+    // TODO: consider whether a different approach to assigning the fake data
+    // statistical uncertainties is more appropriate
+    int num_reco_bins = bnb_hist->GetNbinsX();
+    for ( int rb = 0; rb <= num_reco_bins + 1; ++rb ) {
+      double evts = std::max( 0., bnb_hist->GetBinContent(rb) );
+      bnb_hist->SetBinError( rb, std::sqrt(rb) );
+    }
+
+    std::cout << "******* USING FAKE DATA *******\n";
+  }
+
   std::cout << "TOTAL BNB DATA POT = " << total_bnb_data_pot_ << '\n';
 }
 
@@ -883,6 +1025,14 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
       universe->hist_categ_->Write();
     }
 
+  }
+
+  // Save the fake data universe histograms if they exist
+  if ( fake_data_universe_ ) {
+    fake_data_universe_->hist_reco_->Write();
+    fake_data_universe_->hist_true_->Write();
+    fake_data_universe_->hist_2d_->Write();
+    fake_data_universe_->hist_categ_->Write();
   }
 
   // Save the total BNB data POT for easy retrieval later
@@ -1327,7 +1477,7 @@ MeasuredEvents SystematicsCalculator::get_measured_events() const
   );
 
   // Create the vector of measured event counts in the ordinary reco bins
-  TH1D* d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
+  const TH1D* d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
   TMatrixD ordinary_data( num_ordinary_reco_bins_, 1 );
   for ( int r = 0; r < num_ordinary_reco_bins_; ++r ) {
     // Switch to using the one-based TH1D index when retrieving these values
