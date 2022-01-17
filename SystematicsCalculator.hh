@@ -101,14 +101,18 @@ struct MeasuredEvents {
   MeasuredEvents() {}
 
   MeasuredEvents( TMatrixD* bkgd_subtracted_data, TMatrixD* bkgd,
-    TMatrixD* cov_mat ) : reco_signal_( bkgd_subtracted_data ),
-    reco_bkgd_( bkgd ), cov_matrix_( cov_mat )
+    TMatrixD* mc_plus_ext, TMatrixD* cov_mat )
+    : reco_signal_( bkgd_subtracted_data ), reco_bkgd_( bkgd ),
+    reco_mc_plus_ext_( mc_plus_ext ), cov_matrix_( cov_mat )
   {
     if ( bkgd_subtracted_data->GetNcols() != 1 ) throw std::runtime_error(
       "Non-row-vector background-subtracted signal passed to MeasuredEvents" );
 
     if ( bkgd->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
       " background prediction passed to MeasuredEvents" );
+
+    if ( mc_plus_ext->GetNcols() != 1 ) throw std::runtime_error(
+      "Non-row-vector MC+EXT prediction passed to MeasuredEvents" );
 
     int num_ordinary_reco_bins = bkgd_subtracted_data->GetNrows();
     if ( cov_mat->GetNcols() != num_ordinary_reco_bins
@@ -125,6 +129,10 @@ struct MeasuredEvents {
   // Background that was subtracted from each reco bin to form the signal
   // measurement
   std::unique_ptr< TMatrixD > reco_bkgd_;
+
+  // Total MC+EXT prediction in each reco bin (used to estimate the covariance
+  // matrix on the data)
+  std::unique_ptr< TMatrixD > reco_mc_plus_ext_;
 
   // Covariance matrix for the background-subtracted data
   std::unique_ptr< TMatrixD > cov_matrix_;
@@ -1469,6 +1477,9 @@ MeasuredEvents SystematicsCalculator::get_measured_events() const
   // (EXT + beam-correlated MC background) for all ordinary reco bins
   TMatrixD* ext_plus_mc_bkgd = this->get_cv_ordinary_reco_bkgd().release();
 
+  // Also get the central-value signal prediction for all ordinary reco bins
+  auto mc_signal = this->get_cv_ordinary_reco_signal();
+
   // Get the total covariance matrix on the reco-space EXT+MC prediction
   // (this will not change after subtraction of the central-value background)
   auto cov_map_ptr = this->get_covariances();
@@ -1496,6 +1507,11 @@ MeasuredEvents SystematicsCalculator::get_measured_events() const
   auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
     TMatrixD::EMatrixCreatorsOp2::kMinus, *ext_plus_mc_bkgd );
 
-  MeasuredEvents result( reco_data_minus_bkgd, ext_plus_mc_bkgd, cov_mat );
+  // Also get the total central-value EXT+MC prediction in each reco bin
+  auto* ext_plus_mc_total = new TMatrixD( *mc_signal,
+    TMatrixD::EMatrixCreatorsOp2::kPlus, *ext_plus_mc_bkgd );
+
+  MeasuredEvents result( reco_data_minus_bkgd, ext_plus_mc_bkgd,
+    ext_plus_mc_total, cov_mat );
   return result;
 }
