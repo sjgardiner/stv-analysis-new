@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 // ROOT includes
 #include "TH1.h"
@@ -22,6 +23,9 @@ class SliceHistogram {
 
     static SliceHistogram* make_slice_histogram( TH1D& reco_bin_histogram,
       const Slice& slice, const CovMatrix* input_cov_mat = nullptr );
+
+    static SliceHistogram* make_slice_histogram( TMatrixD& reco_bin_counts,
+      const Slice& slice, const TMatrixD* input_cov_mat );
 
     // TODO: revisit this implementation
     static SliceHistogram* make_slice_efficiency_histogram(
@@ -117,6 +121,111 @@ SliceHistogram* SliceHistogram::make_slice_histogram( TH1D& reco_bin_histogram,
             // the ResponseMatrixMaker numbering scheme is zero-based. I
             // correct for this here.
             cov += cmat->GetBinContent( rb_m + 1, rb_n + 1 );
+          } // reco bin index m
+        } // reco bin index n
+        covmat_hist->SetBinContent( sb_a, sb_b, cov );
+      } // slice bin index b
+    } // slice bin index a
+
+
+    // We have a finished covariance matrix for the slice. Use it to set
+    // the bin errors on the slice histogram.
+    for ( const auto& pair : slice.bin_map_ ) {
+
+      int slice_bin_idx = pair.first;
+      double bin_variance = covmat_hist->GetBinContent( slice_bin_idx,
+        slice_bin_idx );
+      double bin_error = std::sqrt( std::max(0., bin_variance) );
+
+      // This works for a multidimensional slice because a global bin index
+      // (as returned by TH1::GetBin) is used for slice_bin_idx.
+      slice_hist->SetBinError( slice_bin_idx, bin_error );
+
+    } // slice bins
+
+  } // non-null input_cov_mat
+
+  // We're done. Prepare the SliceHistogram object and return it.
+  auto* result = new SliceHistogram;
+  result->hist_.reset( slice_hist );
+  result->cmat_.cov_matrix_.reset( covmat_hist );
+
+  return result;
+}
+
+SliceHistogram* SliceHistogram::make_slice_histogram(
+  TMatrixD& reco_bin_counts, const Slice& slice,
+  const TMatrixD* input_cov_mat )
+{
+  // TODO: reduce code duplication between this function and the overloaded
+  // version that takes an input TH1& and CovMatrix*
+
+  // Check that the reco_bin_counts are given as a column vector
+  if ( reco_bin_counts.GetNcols() != 1 ) {
+    throw std::runtime_error( "Invalid dimension for bin counts passed"
+      "to SliceHistogram::make_slice_histogram()" );
+  }
+
+  // Get the binning and axis labels for the current slice by cloning the
+  // (empty) histogram owned by the Slice object
+  TH1* slice_hist = dynamic_cast< TH1* >(
+    slice.hist_->Clone("slice_hist") );
+
+  slice_hist->SetDirectory( nullptr );
+
+  // Fill the slice bins based on the input reco bins
+  for ( const auto& pair : slice.bin_map_ ) {
+
+    // One-based index for the global TH1 bin number in the slice
+    int slice_bin_idx = pair.first;
+
+    const auto& reco_bin_set = pair.second;
+
+    double slice_bin_content = 0.;
+    for ( const auto& rb_idx : reco_bin_set ) {
+      // The ResponseMatrixMaker reco bin indices are zero-based like the
+      // TMatrixD element indices
+      slice_bin_content += reco_bin_counts( rb_idx, 0 );
+    }
+
+    slice_hist->SetBinContent( slice_bin_idx, slice_bin_content );
+
+  } // slice bins
+
+  // If we've been handed a non-null pointer to a TMatrixD object representing
+  // the covariance matrix, then we will use it to propagate uncertainties.
+  TH2D* covmat_hist = nullptr;
+  if ( input_cov_mat ) {
+
+    // Create a new TH2D to hold the covariance matrix elements associated with
+    // the slice histogram.
+    // NOTE: I assume here that every slice bin is represented in the bin_map.
+    // If this isn't the case, the bin counting will be off.
+    // TODO: revisit this assumption and perhaps do something better
+    int num_slice_bins = slice.bin_map_.size();
+
+    covmat_hist = new TH2D( "covmat_hist", "covariance; slice bin;"
+      " slice bin; covariance", num_slice_bins, 0., num_slice_bins,
+      num_slice_bins, 0., num_slice_bins );
+    covmat_hist->SetDirectory( nullptr );
+    covmat_hist->SetStats( false );
+
+    // We're ready. Populate the new covariance matrix using the elements
+    // of the one for the reco bin space
+    for ( const auto& pair_a : slice.bin_map_ ) {
+      // Global slice bin index
+      int sb_a = pair_a.first;
+      // Set of reco bins that correspond to slice bin sb_a
+      const auto& rb_set_a = pair_a.second;
+      for ( const auto& pair_b : slice.bin_map_ ) {
+        int sb_b = pair_b.first;
+        const auto& rb_set_b = pair_b.second;
+
+        double cov = 0.;
+        for ( const auto& rb_m : rb_set_a ) {
+          for ( const auto& rb_n : rb_set_b ) {
+            // The TMatrixD object uses zero-based indices
+            cov += input_cov_mat->operator()( rb_m, rb_n );
           } // reco bin index m
         } // reco bin index n
         covmat_hist->SetBinContent( sb_a, sb_b, cov );
