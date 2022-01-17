@@ -152,6 +152,10 @@ class SystematicsCalculator {
       return *rw_universes_.at( CV_UNIV_NAME ).front();
     }
 
+    const std::unique_ptr< Universe >& fake_data_universe() const {
+      return fake_data_universe_;
+    }
+
     std::unique_ptr< CovMatrixMap > get_covariances() const;
 
     // Returns a background-subtracted measurement in all ordinary reco bins
@@ -458,6 +462,7 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     // name stores all of the MC information for the "data." Save it in the
     // dedicated fake data Universe object.
     else if ( univ_name == "FakeDataMC" ) {
+      std::cout << "******* USING FAKE DATA *******\n";
       fake_data_universe_ = std::move( temp_univ );
     }
     else {
