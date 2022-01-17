@@ -53,6 +53,28 @@ struct CovMatrix {
 
   CovMatrix( TH2D* cov_mat ) : cov_matrix_( cov_mat ) {}
 
+  CovMatrix( const TMatrixD& matrix ) {
+    int num_bins = matrix.GetNrows();
+    if ( matrix.GetNcols() != num_bins ) throw std::runtime_error( "Non-square"
+      " TMatrixD passed to the constructor of CovMatrix" );
+
+    TH2D* temp_hist = new TH2D( "temp_hist", "covariance; bin;"
+      " bin; covariance", num_bins, 0., num_bins, num_bins, 0., num_bins );
+    temp_hist->SetDirectory( nullptr );
+    temp_hist->SetStats( false );
+
+    for ( int r = 0; r < num_bins; ++r ) {
+      for ( int c = 0; c < num_bins; ++c ) {
+        double cov = matrix( r, c );
+        // Note that TMatrixD element indices are zero-based while TH2D bin
+        // indices are one-based. We therefore correct for this here.
+        temp_hist->SetBinContent( r + 1, c + 1 );
+      }
+    }
+
+    cov_matrix_.reset( temp_hist );
+  }
+
   std::unique_ptr< TH2D > cov_matrix_;
 
   // Helper function for operator+=
