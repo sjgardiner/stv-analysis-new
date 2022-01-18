@@ -182,20 +182,29 @@ void test_unfolding() {
   auto* mcc9_ptr = new MCC9Unfolder( respmat_file_name, "../systcalc.conf" );
   auto& mcc9 = *mcc9_ptr;
 
-  // Get the NuWro event counts in each true bin (including the background true
-  // bins). We hope to approximately reproduce these event counts in the signal
-  // true bins via unfolding the fake data.
-  TH1D* nuwro_truth = syst.fake_data_universe()->hist_true_.get();
-  int num_true_bins = nuwro_truth->GetNbinsX();
+  // Get the tuned GENIE CV prediction in each true bin (including the
+  // background true bins)
+  TH1D* genie_cv_truth = syst.cv_universe().hist_true_.get();
+  int num_true_bins = genie_cv_truth->GetNbinsX();
 
   // While we're at it, clone the histogram and zero it out. We'll fill this
   // one with our unfolded result for easy comparison
   TH1D* unfolded_events = dynamic_cast< TH1D* >(
-    nuwro_truth->Clone("unfolded_events") );
+    genie_cv_truth->Clone("unfolded_events") );
   unfolded_events->Reset();
 
-  // Also get the tuned GENIE CV prediction in each true bin
-  TH1D* genie_cv_truth = syst.cv_universe().hist_true_.get();
+  // If present, then get the fake data event counts in each true bin
+  // (including the background true bins). We hope to approximately reproduce
+  // these event counts in the signal true bins via unfolding the fake data.
+  const auto& fake_data_univ = syst.fake_data_universe();
+  TH1D* fake_data_truth_hist = nullptr;
+
+  bool using_fake_data = false;
+  if ( fake_data_univ ) {
+    using_fake_data = true;
+    fake_data_truth_hist = fake_data_univ->hist_true_.get();
+  }
+
 
   std::cout << "CC size = " << syst.get_covariance_matrix_size()
     << ", MCC9 size = " << mcc9.get_covariance_matrix_size() << '\n';
@@ -254,7 +263,7 @@ void test_unfolding() {
   }
 
   std::unique_ptr< Unfolder > unfolder (
-    new DAgostiniUnfolder( 3 )
+    new DAgostiniUnfolder( 1 )
     //new WienerSVDUnfolder( true,
     //WienerSVDUnfolder::RegularizationMatrixType::kIdentity )
   );
@@ -332,29 +341,34 @@ void test_unfolding() {
     unfolded_events->SetBinError( t + 1, error );
   }
 
-  nuwro_truth->SetStats( false );
-  nuwro_truth->SetLineColor( kBlue );
-  nuwro_truth->SetLineWidth( 3 );
-  nuwro_truth->SetLineStyle( 2 );
-  nuwro_truth->GetXaxis()->SetRangeUser( 0, num_true_signal_bins );
-
   unfolded_events->SetStats( false );
   unfolded_events->SetLineColor( kBlack );
   unfolded_events->SetLineWidth( 3 );
+  unfolded_events->GetXaxis()->SetRangeUser( 0, num_true_signal_bins );
 
   genie_cv_truth->SetStats( false );
   genie_cv_truth->SetLineColor( kRed );
   genie_cv_truth->SetLineWidth( 3 );
   genie_cv_truth->SetLineStyle( 9 );
 
-  nuwro_truth->Draw( "hist" );
-  //genie_cv_truth->Draw( "hist same" );
-  unfolded_events->Draw( "same" );
+  unfolded_events->Draw( "e" );
+  genie_cv_truth->Draw( "hist same" );
+
+  if ( using_fake_data ) {
+    fake_data_truth_hist->SetStats( false );
+    fake_data_truth_hist->SetLineColor( kBlue );
+    fake_data_truth_hist->SetLineWidth( 3 );
+    fake_data_truth_hist->SetLineStyle( 2 );
+    fake_data_truth_hist->Draw( "hist same" );
+  }
+
 
   TLegend* lg = new TLegend( 0.15, 0.7, 0.3, 0.85 );
-  lg->AddEntry( nuwro_truth, "NuWro", "l" );
-  //lg->AddEntry( genie_cv_truth, "GENIE", "l" );
   lg->AddEntry( unfolded_events, "unfolded", "l" );
+  lg->AddEntry( genie_cv_truth, "uB tune", "l" );
+  if ( using_fake_data ) {
+    lg->AddEntry( fake_data_truth_hist, "truth", "l" );
+  }
 
   lg->Draw( "same" );
 
@@ -375,9 +389,11 @@ void test_unfolding() {
 
   // Add the fake data truth using a column vector of event counts
   TMatrixD fake_data_truth( num_true_signal_bins, 1 );
-  for ( int b = 0; b < num_true_signal_bins; ++b ) {
-    double true_evts = nuwro_truth->GetBinContent( b + 1 );
-    fake_data_truth( b, 0 ) = true_evts;
+  if ( using_fake_data ) {
+    for ( int b = 0; b < num_true_signal_bins; ++b ) {
+      double true_evts = fake_data_truth_hist->GetBinContent( b + 1 );
+      fake_data_truth( b, 0 ) = true_evts;
+    }
   }
 
   // Add the GENIE CV model using a column vector of event counts
@@ -392,11 +408,17 @@ void test_unfolding() {
   // data itself)
   WienerSVDUnfolder* wsvd_ptr = dynamic_cast< WienerSVDUnfolder* >(
     unfolder.get() );
+
   if ( wsvd_ptr ) {
-    // Start with the fake data truth
+
+    // Get access to the additional smearing matrix
     const TMatrixD& A_C = wsvd_ptr->additional_smearing_matrix();
-    TMatrixD ac_truth( A_C, TMatrixD::kMult, fake_data_truth );
-    fake_data_truth = ac_truth;
+
+    // Start with the fake data truth if present
+    if ( using_fake_data ) {
+      TMatrixD ac_truth( A_C, TMatrixD::kMult, fake_data_truth );
+      fake_data_truth = ac_truth;
+    }
 
     // Also transform the GENIE CV model
     TMatrixD genie_cv_temp( A_C, TMatrixD::kMult, genie_cv_truth_vec );
@@ -421,13 +443,17 @@ void test_unfolding() {
     SliceHistogram* slice_unf = SliceHistogram::make_slice_histogram(
       *result.unfolded_signal_, slice, result.cov_matrix_.get() );
 
-    // Also use the truth information from the fake data to do the same
-    SliceHistogram* slice_truth = SliceHistogram::make_slice_histogram(
-      fake_data_truth, slice, nullptr );
-
     // Also use the GENIE CV model to do the same
     SliceHistogram* slice_cv = SliceHistogram::make_slice_histogram(
       genie_cv_truth_vec, slice, nullptr );
+
+    // If present, also use the truth information from the fake data to do the
+    // same
+    SliceHistogram* slice_truth = nullptr;
+    if ( using_fake_data ) {
+      slice_truth = SliceHistogram::make_slice_histogram( fake_data_truth,
+        slice, nullptr );
+    }
 
     // Keys are legend labels, values are SliceHistogram objects containing
     // true-space predictions from the corresponding generator models
@@ -435,7 +461,9 @@ void test_unfolding() {
     auto& slice_gen_map = *slice_gen_map_ptr;
 
     slice_gen_map[ "unfolded data" ] = slice_unf;
-    slice_gen_map[ "truth" ] = slice_truth;
+    if ( using_fake_data ) {
+      slice_gen_map[ "truth" ] = slice_truth;
+    }
     slice_gen_map[ "MicroBooNE Tune" ] = slice_cv;
 
     for ( const auto& pair : generator_truth_map ) {
@@ -518,9 +546,11 @@ void test_unfolding() {
       // Decide what other slice histogram should be compared to this one,
       // then calculate chi^2
       SliceHistogram* other = nullptr;
-      // Compare unfolded data to the fake data truth
+      // We don't need to compare the unfolded data to itself, so just skip to
+      // the next SliceHistogram and leave a dummy Chi2Result object in the map
       if ( name == "unfolded data" ) {
-        other = slice_gen_map.at( "truth" );
+        chi2_map[ name ] = SliceHistogram::Chi2Result();
+        continue;
       }
       // Compare all other distributions to the unfolded data
       else {
@@ -530,12 +560,10 @@ void test_unfolding() {
       // Store the chi^2 results in the map
       const auto& chi2_result = chi2_map[ name ] = slice_h->get_chi2( *other );
 
-      if ( name != "unfolded data" ) {
-        std::cout << "Slice " << sl_idx << ", " << name << ": \u03C7\u00b2 = "
-          << chi2_result.chi2_ << '/' << chi2_result.num_bins_ << " bin";
-        if ( chi2_result.num_bins_ > 1 ) std::cout << 's';
-        std::cout << ", p-value = " << chi2_result.p_value_ << '\n';
-      }
+      std::cout << "Slice " << sl_idx << ", " << name << ": \u03C7\u00b2 = "
+        << chi2_result.chi2_ << '/' << chi2_result.num_bins_ << " bin";
+      if ( chi2_result.num_bins_ > 1 ) std::cout << 's';
+      std::cout << ", p-value = " << chi2_result.p_value_ << '\n';
     }
 
     TCanvas* c1 = new TCanvas;
@@ -551,6 +579,9 @@ void test_unfolding() {
       const auto& name = pair.first;
       const auto* slice_h = pair.second;
 
+      double max = slice_h->hist_->GetMaximum();
+      if ( max > ymax ) ymax = max;
+
       if ( name == "unfolded data" || name == "truth"
         || name == "MicroBooNE Tune" ) continue;
 
@@ -559,27 +590,26 @@ void test_unfolding() {
       slice_h->hist_->SetLineStyle( file_info.style_ );
       slice_h->hist_->SetLineWidth( 4 );
 
-      double max = slice_h->hist_->GetMaximum();
-      if ( max > ymax ) ymax = max;
-
       slice_h->hist_->Draw( "hist same" );
     }
 
     slice_cv->hist_->SetStats( false );
     slice_cv->hist_->SetLineColor( kAzure - 7 );
     slice_cv->hist_->SetLineWidth( 5 );
-    slice_cv->hist_->SetLineStyle( 10 );
+    slice_cv->hist_->SetLineStyle( 5 );
     slice_cv->hist_->Draw( "hist same" );
 
-    slice_truth->hist_->SetStats( false );
-    slice_truth->hist_->SetLineColor( kOrange );
-    slice_truth->hist_->SetLineWidth( 5 );
-    slice_truth->hist_->Draw( "hist same" );
+    if ( using_fake_data ) {
+      slice_truth->hist_->SetStats( false );
+      slice_truth->hist_->SetLineColor( kOrange );
+      slice_truth->hist_->SetLineWidth( 5 );
+      slice_truth->hist_->Draw( "hist same" );
+    }
 
     slice_unf->hist_->GetYaxis()->SetRangeUser( 0., ymax*1.07 );
     slice_unf->hist_->Draw( "e same" );
 
-    TLegend* lg = new TLegend( 0.15, 0.6, 0.45, 0.88 );
+    TLegend* lg = new TLegend( 0.15, 0.6, 0.5, 0.88 );
     for ( const auto& pair : slice_gen_map ) {
       const auto& name = pair.first;
       const auto* slice_h = pair.second;
