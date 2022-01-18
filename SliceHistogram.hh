@@ -38,15 +38,19 @@ class SliceHistogram {
     void transform( const TMatrixD& mat );
 
     struct Chi2Result {
+
+      Chi2Result() {}
+
       Chi2Result( double chi2, int nbins, int dof, double pval )
         : chi2_( chi2 ), num_bins_( nbins ), dof_( dof ), p_value_( pval ) {}
+
       double chi2_;
       int num_bins_;
       int dof_;
       double p_value_;
     };
 
-    Chi2Result get_chi2( const SliceHistogram& other );
+    Chi2Result get_chi2( const SliceHistogram& other ) const;
 
     std::unique_ptr< TH1 > hist_;
     CovMatrix cmat_;
@@ -322,7 +326,7 @@ SliceHistogram* SliceHistogram::make_slice_efficiency_histogram(
 }
 
 SliceHistogram::Chi2Result SliceHistogram::get_chi2(
-  const SliceHistogram& other )
+  const SliceHistogram& other ) const
 {
   int num_bins = hist_->GetNbinsX();
   if ( other.hist_->GetNbinsX() != num_bins ) {
@@ -330,17 +334,26 @@ SliceHistogram::Chi2Result SliceHistogram::get_chi2(
       " calculation" );
   }
 
-  int my_cov_mat_x_bins = cmat_.cov_matrix_->GetNbinsX();
-  int my_cov_mat_y_bins = cmat_.cov_matrix_->GetNbinsY();
-  int other_cov_mat_x_bins = other.cmat_.cov_matrix_->GetNbinsY();
-  int other_cov_mat_y_bins = other.cmat_.cov_matrix_->GetNbinsY();
-  if ( my_cov_mat_x_bins != num_bins
-    || my_cov_mat_y_bins != num_bins
-    || other_cov_mat_x_bins != num_bins
-    || other_cov_mat_y_bins != num_bins )
-  {
-    throw std::runtime_error( "Invalid covariance matrix dimensions"
-      " encountered in chi^2 calculation" );
+  // If both SliceHistogram objects have a covariance matrix, then
+  // check that their dimensions match. If one is missing, it will be assumed
+  // to be a null matrix
+  if ( cmat_.cov_matrix_ && other.cmat_.cov_matrix_ ) {
+    int my_cov_mat_x_bins = cmat_.cov_matrix_->GetNbinsX();
+    int my_cov_mat_y_bins = cmat_.cov_matrix_->GetNbinsY();
+    int other_cov_mat_x_bins = other.cmat_.cov_matrix_->GetNbinsY();
+    int other_cov_mat_y_bins = other.cmat_.cov_matrix_->GetNbinsY();
+    if ( my_cov_mat_x_bins != num_bins
+      || my_cov_mat_y_bins != num_bins
+      || other_cov_mat_x_bins != num_bins
+      || other_cov_mat_y_bins != num_bins )
+    {
+      throw std::runtime_error( "Invalid covariance matrix dimensions"
+        " encountered in chi^2 calculation" );
+    }
+  }
+  else if ( !cmat_.cov_matrix_ && !other.cmat_.cov_matrix_ ) {
+    throw std::runtime_error( "Both SliceHistogram objects involved in"
+      " a chi^2 calculation have null covariance matrices" );
   }
 
   // The total covariance matrix on the difference between the
