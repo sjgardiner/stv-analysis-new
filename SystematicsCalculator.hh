@@ -68,7 +68,7 @@ struct CovMatrix {
         double cov = matrix( r, c );
         // Note that TMatrixD element indices are zero-based while TH2D bin
         // indices are one-based. We therefore correct for this here.
-        temp_hist->SetBinContent( r + 1, c + 1 );
+        temp_hist->SetBinContent( r + 1, c + 1, cov );
       }
     }
 
