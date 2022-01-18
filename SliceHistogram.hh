@@ -31,6 +31,12 @@ class SliceHistogram {
     static SliceHistogram* make_slice_efficiency_histogram(
       const TH1D& true_bin_histogram, const TH2D& hist_2d, const Slice& slice );
 
+    // Transform the bin contents by multiplying by the input TMatrixD, which
+    // must be a square matrix with a number of columns equal to the number of
+    // histogram bins. If present, the owned covariance matrix will also be
+    // transformed accordingly.
+    void transform( const TMatrixD& mat );
+
     struct Chi2Result {
       Chi2Result( double chi2, int nbins, int dof, double pval )
         : chi2_( chi2 ), num_bins_( nbins ), dof_( dof ), p_value_( pval ) {}
@@ -377,5 +383,71 @@ SliceHistogram::Chi2Result SliceHistogram::get_chi2(
 
   Chi2Result result( chi2, num_bins, dof, p_value );
   return result;
+
+}
+
+void SliceHistogram::transform( const TMatrixD& mat ) {
+
+  int dim = hist_->GetDimension();
+  if ( dim != 1 ) throw std::runtime_error( "SliceHistogram::transform() is"
+    " currently implemented only for 1D histograms." );
+
+  int num_cols = mat.GetNcols();
+  int num_bins = hist_->GetNbinsX();
+  if ( num_cols != num_bins ) throw std::runtime_error( "Incompatible"
+    " transformation matrix passed to SliceHistogram::transform()" );
+
+  int num_rows = mat.GetNrows();
+  if ( num_rows != num_cols ) throw std::runtime_error( "Transformations which"
+    " change the number of bins are currently unimplemented in"
+    " SliceHistogram::transform()" );
+
+  // Create a column vector with the current histogram bin contents
+  TMatrixD hist_vec( num_bins, 1 );
+  for ( int b = 0; b < num_bins; ++b ) {
+    // Note that TH1D bin indices are one based while TMatrixD element indices
+    // are zero-based
+    double val = hist_->GetBinContent( b + 1 );
+    hist_vec( b, 0 ) = val;
+  }
+
+  // Apply the transformation matrix to the histogram and store the result in a
+  // new column vector
+  TMatrixD transformed_hist_vec( mat,
+    TMatrixD::EMatrixCreatorsOp2::kMult, hist_vec );
+
+  // Replace the old histogram contents with the new ones
+  for ( int b = 0; b < num_bins; ++b ) {
+    double val = transformed_hist_vec( b, 0 );
+    hist_->SetBinContent( b + 1, val );
+  }
+
+  // If the covariance matrix isn't defined, then we're done and can return
+  // early. Otherwise, we'll apply a corresponding transformation to the
+  // covariance matrix.
+  if ( !cmat_.cov_matrix_ ) return;
+
+  // Get the original covariance matrix as a std::unique_ptr< TMatrixD >
+  auto orig_cov = cmat_.get_matrix();
+
+  // Take the transpose of the transformation matrix
+  TMatrixD tr_mat( TMatrixD::kTransposed, mat );
+
+  // See https://stats.stackexchange.com/q/113700
+  TMatrixD transformed_cov = mat * ( *orig_cov ) * tr_mat;
+
+  // Create a new CovMatrix object using the transformed covariance matrix
+  CovMatrix transformed_cmat( transformed_cov );
+
+  // Replace the owned CovMatrix object with the new one
+  cmat_ = std::move( transformed_cmat );
+
+  // To wrap things up, set the updated histogram bin errors based on the
+  // diagonal elements of the covariance matrix
+  for ( int b = 0; b < num_bins; ++b ) {
+    double variance = cmat_.cov_matrix_->GetBinContent( b + 1, b + 1 );
+    double err = std::sqrt( std::max(0., variance) );
+     hist_->SetBinError( b + 1, err );
+  }
 
 }
