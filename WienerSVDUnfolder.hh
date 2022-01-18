@@ -37,6 +37,9 @@ class WienerSVDUnfolder : public Unfolder {
     inline void set_regularization_type( const RegularizationMatrixType& type )
       { reg_type_ = type; }
 
+    inline const TMatrixD& additional_smearing_matrix() const
+      { return *A_C_; }
+
   protected:
 
     // Helper function that sets the contents of the regularization matrix
@@ -51,6 +54,8 @@ class WienerSVDUnfolder : public Unfolder {
     // Enum that determines the form to use for the regularization matrix C
     RegularizationMatrixType reg_type_ = kIdentity;
 
+    // Additional smearing matrix from the last call to unfold()
+    mutable std::unique_ptr< TMatrixD > A_C_;
 };
 
 UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
@@ -152,7 +157,7 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // that it is a diagonal matrix.
   // TODO: Revisit whether there is a better way to do this, perhaps with
   // a TMatrixDSparse?
-  TMatrixDSparse W_C( num_true_signal_bins, num_true_signal_bins );
+  TMatrixD W_C( num_true_signal_bins, num_true_signal_bins );
 
   // For simplicity, first calculate a column vector in which the
   // ith element corresponds to the ith value of the numerator in Eq. (3.24)
@@ -201,7 +206,9 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // Matrix multiplication is associative, which is nice because we can chain
   // together a bunch of calls to operator*( const TMatrixD&, const TMatrixD& )
   // below safely.
-  TMatrixD A_C = ( *Cinv ) * V_C * W_C * V_C_tr * C;
+  A_C_ = std::make_unique< TMatrixD >(
+    ( *Cinv ) * V_C * W_C * V_C_tr * C
+  );
 
   // Create the final unfolding matrix R_tot defined in Eq. (3.26) from the
   // paper. Avoid inverting (R^T * R) by using the trick from the Wiener-SVD

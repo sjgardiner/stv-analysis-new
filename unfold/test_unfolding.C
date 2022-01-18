@@ -85,16 +85,17 @@ std::map< std::string, SampleInfo > sample_info_map = {
 
 };
 
-// Multiplying by the conversion factor conv_factor should change a total
-// cross section value (in cm^2 / Ar) into an expected number of true event
-// counts. The value of the factor can be obtained by multiplying the number
-// of Ar targets in the fiducial volume by the integrated numu flux (for the
-// measured POT exposure) in the fiducial volume.
+// Multiplying by the conversion factor conv_factor should change a total cross
+// section value (in cm^2 / Ar) into an expected number of true event counts.
+// The value of the factor can be obtained by multiplying the number of Ar
+// targets in the fiducial volume by the integrated numu flux (for the measured
+// POT exposure) in the fiducial volume.
 //
 // This function returns a map in which the keys are legend labels for each
-// generator model. The values are TH1D objects containing the expected true
-// event counts (directly comparable to unfolded event counts from the data).
-std::map< std::string, TH1D* > get_true_events_nuisance(
+// generator model. The values are TMatrixD column vectors containing the
+// expected true event counts (directly comparable to unfolded event counts
+// from the data).
+std::map< std::string, TMatrixD* > get_true_events_nuisance(
   const SampleInfo& info, double conv_factor )
 {
   // First load the vector of 2D bin widths from the widths file for the
@@ -112,7 +113,7 @@ std::map< std::string, TH1D* > get_true_events_nuisance(
 
   // Now start to prepare the result. We'll create one prediction per
   // generator model in the truth_file_map
-  std::map< std::string, TH1D* > truth_counts_map;
+  std::map< std::string, TMatrixD* > truth_counts_map;
   for ( const auto& pair : truth_file_map ) {
     // First retrieve the raw NUISANCE histogram. It is expressed as a
     // differential cross section with true bin number along the x-axis
@@ -140,7 +141,8 @@ std::map< std::string, TH1D* > get_true_events_nuisance(
     // count. Do this using the input conversion factor (integrated numu
     // flux * number of Ar targets in the fiducial volume) and the 2D bin
     // width.
-    for ( size_t b = 0u; b < widths_2d_vec.size(); ++b ) {
+    size_t num_bins = widths_2d_vec.size();
+    for ( size_t b = 0u; b < num_bins; ++b ) {
       double width = widths_2d_vec.at( b );
       double xsec = temp_hist->GetBinContent( b + 1 );
       double err = temp_hist->GetBinError( b + 1 );
@@ -148,9 +150,15 @@ std::map< std::string, TH1D* > get_true_events_nuisance(
       temp_hist->SetBinError( b + 1, err * width * conv_factor );
     }
 
+    // Now change the TH1D into a TMatrixD column vector
+    TMatrixD* temp_mat = new TMatrixD( num_bins, 1 );
+    for ( size_t b = 0u; b < num_bins; ++b ) {
+      temp_mat->operator()( b, 0 ) = temp_hist->GetBinContent( b + 1 );
+    }
+
     // The conversion is done, so add the finished true event counts histogram
     // to the map
-    truth_counts_map[ generator_label ] = temp_hist;
+    truth_counts_map[ generator_label ] = temp_mat;
   }
 
   return truth_counts_map;
@@ -245,10 +253,12 @@ void test_unfolding() {
      }
   }
 
-  DAgostiniUnfolder unfolder( 3 );
-  //WienerSVDUnfolder unfolder( true,
-  //  WienerSVDUnfolder::RegularizationMatrixType::kIdentity );
-  auto result = unfolder.unfold( mcc9 );
+  std::unique_ptr< Unfolder > unfolder (
+    new DAgostiniUnfolder( 3 )
+    //new WienerSVDUnfolder( true,
+    //WienerSVDUnfolder::RegularizationMatrixType::kIdentity )
+  );
+  auto result = unfolder->unfold( mcc9 );
 
   //auto smearcept = mcc9.get_cv_smearceptance_matrix();
   //auto true_signal = syst.get_cv_true_signal();
@@ -271,7 +281,7 @@ void test_unfolding() {
   //auto data_signal = mcc9.get_cv_ordinary_reco_signal();
   //const auto& data_covmat = meas.cov_matrix_;
 
-  //auto result = unfolder.unfold( *data_signal, *data_covmat,
+  //auto result = unfolder->unfold( *data_signal, *data_covmat,
   //  *smearcept, *true_signal );
 
   ////// Test with original implementation
@@ -363,15 +373,44 @@ void test_unfolding() {
   auto generator_truth_map = get_true_events_nuisance( sample_info,
     conv_factor );
 
-  // Add the fake data truth
-  TH1D* fake_data_truth = dynamic_cast< TH1D* >(
-    generator_truth_map.begin()->second->Clone( "fake_data_truth" )
-  );
+  // Add the fake data truth using a column vector of event counts
+  TMatrixD fake_data_truth( num_true_signal_bins, 1 );
   for ( int b = 0; b < num_true_signal_bins; ++b ) {
     double true_evts = nuwro_truth->GetBinContent( b + 1 );
-    fake_data_truth->SetBinContent( b + 1, true_evts );
+    fake_data_truth( b, 0 ) = true_evts;
   }
-  fake_data_truth->SetDirectory( nullptr );
+
+  // Add the GENIE CV model using a column vector of event counts
+  TMatrixD genie_cv_truth_vec( num_true_signal_bins, 1 );
+  for ( int b = 0; b < num_true_signal_bins; ++b ) {
+    double true_evts = genie_cv_truth->GetBinContent( b + 1 );
+    genie_cv_truth_vec( b, 0 ) = true_evts;
+  }
+
+  // If we're working with Wiener-SVD unfolding, then apply the additional
+  // smearing matrix to all true-space distributions (except for the unfolded
+  // data itself)
+  WienerSVDUnfolder* wsvd_ptr = dynamic_cast< WienerSVDUnfolder* >(
+    unfolder.get() );
+  if ( wsvd_ptr ) {
+    // Start with the fake data truth
+    const TMatrixD& A_C = wsvd_ptr->additional_smearing_matrix();
+    TMatrixD ac_truth( A_C, TMatrixD::kMult, fake_data_truth );
+    fake_data_truth = ac_truth;
+
+    // Also transform the GENIE CV model
+    TMatrixD genie_cv_temp( A_C, TMatrixD::kMult, genie_cv_truth_vec );
+    genie_cv_truth_vec = genie_cv_temp;
+
+    // Now do the other generator predictions
+    for ( const auto& pair : generator_truth_map ) {
+      const auto& model_name = pair.first;
+      TMatrixD* truth_mat = pair.second;
+
+      TMatrixD ac_temp( A_C, TMatrixD::kMult, *truth_mat );
+      *truth_mat = ac_temp;
+    }
+  }
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
 
@@ -384,7 +423,11 @@ void test_unfolding() {
 
     // Also use the truth information from the fake data to do the same
     SliceHistogram* slice_truth = SliceHistogram::make_slice_histogram(
-      *fake_data_truth, slice, nullptr );
+      fake_data_truth, slice, nullptr );
+
+    // Also use the GENIE CV model to do the same
+    SliceHistogram* slice_cv = SliceHistogram::make_slice_histogram(
+      genie_cv_truth_vec, slice, nullptr );
 
     // Keys are legend labels, values are SliceHistogram objects containing
     // true-space predictions from the corresponding generator models
@@ -393,13 +436,14 @@ void test_unfolding() {
 
     slice_gen_map[ "unfolded data" ] = slice_unf;
     slice_gen_map[ "truth" ] = slice_truth;
+    slice_gen_map[ "MicroBooNE Tune" ] = slice_cv;
 
     for ( const auto& pair : generator_truth_map ) {
       const auto& model_name = pair.first;
-      TH1D* truth_hist = pair.second;
+      TMatrixD* truth_mat = pair.second;
 
       SliceHistogram* temp_slice = SliceHistogram::make_slice_histogram(
-        *truth_hist, slice, nullptr );
+        *truth_mat, slice, nullptr );
 
       slice_gen_map[ model_name ] = temp_slice;
     }
@@ -507,7 +551,8 @@ void test_unfolding() {
       const auto& name = pair.first;
       const auto* slice_h = pair.second;
 
-      if ( name == "unfolded data" || name == "truth" ) continue;
+      if ( name == "unfolded data" || name == "truth"
+        || name == "MicroBooNE Tune" ) continue;
 
       const auto& file_info = truth_file_map.at( name );
       slice_h->hist_->SetLineColor( file_info.color_ );
@@ -519,6 +564,12 @@ void test_unfolding() {
 
       slice_h->hist_->Draw( "hist same" );
     }
+
+    slice_cv->hist_->SetStats( false );
+    slice_cv->hist_->SetLineColor( kAzure - 7 );
+    slice_cv->hist_->SetLineWidth( 5 );
+    slice_cv->hist_->SetLineStyle( 10 );
+    slice_cv->hist_->Draw( "hist same" );
 
     slice_truth->hist_->SetStats( false );
     slice_truth->hist_->SetLineColor( kOrange );
