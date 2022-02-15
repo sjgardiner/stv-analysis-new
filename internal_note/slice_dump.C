@@ -301,8 +301,13 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 
 void slice_dump() {
 
-  auto* syst_ptr = new MCC9Unfolder( "/uboone/data/users/gardiner/"
-    "ntuples-stv/respmat-files/respmat-muon2D.root", //-NuWro-fake-data.root",
+  // Initialize the FilePropertiesManager and tell it to treat the NuWro
+  // MC ntuples as if they were data
+  auto& fpm = FilePropertiesManager::Instance();
+  fpm.load_file_properties( "../nuwro_file_properties.txt" );
+
+  auto* syst_ptr = new MCC9Unfolder(
+    "/uboone/data/users/gardiner/respmat-test-new-Muon2D.root",
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
@@ -472,7 +477,7 @@ void slice_dump() {
     // in this vector.
     const std::vector< std::string > cov_mat_keys = { "total",
       "detVar_total", "flux", "reint", "xsec_total", "POT", "numTargets",
-      "MCstats", "EXTstats"
+      "MCstats", "EXTstats", "BNBstats"
     };
 
     // Loop over the various systematic uncertainties
