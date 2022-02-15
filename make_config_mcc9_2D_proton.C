@@ -218,9 +218,10 @@ void make_config_mcc9_2D_proton() {
   sb_file << "\"reco bin number\" \"\" \"reco bin number\" \"\"\n";
   // Include an extra slice which shows everything in terms of reco bin number.
   // Also include two integrated slices (one for the 1D p_p distribution, the
-  // other for all events). Finally, include one extra slice showing the
-  // sideband control sample results (in terms of reco bin number).
-  size_t num_slices = PROTON_2D_BIN_EDGES.size() + 3;
+  // other for all events). Also include one extra slice showing the sideband
+  // control sample results (in terms of reco bin number). Finally, include
+  // extra 3 slices for the individually sidebands binned using p_p.
+  size_t num_slices = PROTON_2D_BIN_EDGES.size() + 6;
   sb_file << num_slices << '\n';
 
   // Get an iterator to the final entry in the edge map (this is the
@@ -376,4 +377,41 @@ void make_config_mcc9_2D_proton() {
   for ( size_t b = 0u; b < num_sideband_reco_bins; ++b ) {
     sb_file << b + first_sideband_bin_idx << " 1 " << b + 1 << '\n';
   }
+
+  // Make separate slices for each individual sideband. Here we can use the
+  // 1D momentum bins from above.
+  for ( const auto& sb_pair : sideband_selection_to_momentum_map ) {
+
+    // Get the selection string for the current sideband
+    const std::string& sb_sel = sb_pair.first;
+
+    sb_file << "\"events\"\n"; // y-axis label
+    // The proton momentum is the sole "active variable" in each slice
+    sb_file << "1 0 " << num_pp_edges;
+    for ( const auto& pp_edge_pair : PROTON_2D_BIN_EDGES ) {
+      const auto pp_edge = pp_edge_pair.first;
+      sb_file << ' ' << pp_edge;
+    }
+    // There is no "other" variable for this slice since we've integrated out
+    // the angular information
+    sb_file << "\n0\n";
+    // Each sideband slice has a number of bins equal to the number of 1D
+    // proton momentum bins
+    sb_file << num_pp_bins;
+
+    // Keep track of the ROOT slice bin index (one-based) with this counter
+    int cur_slice_bin_idx = 1;
+
+    for ( size_t rbin = 0u; rbin < reco_bins.size(); ++rbin ) {
+      const std::string& bin_sel = reco_bins.at( rbin ).selection_cuts_;
+      // Here we cheat by noting that the sideband bins are arranged in
+      // order of ascending p_p
+      if ( bin_sel.find(sb_sel) != std::string::npos ) {
+        sb_file << '\n' << rbin << " 1 " << cur_slice_bin_idx;
+        ++cur_slice_bin_idx;
+      }
+    } // reco bins
+    sb_file << '\n';
+  } // sideband slices
+
 }
