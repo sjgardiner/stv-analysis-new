@@ -265,7 +265,7 @@ void test_unfolding() {
   std::unique_ptr< Unfolder > unfolder (
     new DAgostiniUnfolder( 1 )
     //new WienerSVDUnfolder( true,
-    //WienerSVDUnfolder::RegularizationMatrixType::kIdentity )
+    //WienerSVDUnfolder::RegularizationMatrixType::kSecondDeriv )
   );
   auto result = unfolder->unfold( mcc9 );
 
@@ -657,7 +657,6 @@ void test_unfolding() {
   // Get the post-constraint event counts and covariance matrix in the
   // signal region
   auto meas = syst.get_measured_events();
-  auto mcc9_meas = syst.get_measured_events();
 
   for ( int rb = 0; rb < num_reco_bins; ++rb ) {
 
@@ -686,12 +685,29 @@ void test_unfolding() {
   TCanvas* c2 = new TCanvas;
 
   reco_data_hist->SetLineColor( kBlack );
-  reco_mc_and_ext_hist->SetLineColor( kRed );
-  reco_constrained_hist->SetLineColor( kBlue );
+  reco_data_hist->SetLineWidth( 5 );
 
-  reco_data_hist->Draw();
-  reco_mc_and_ext_hist->Draw( "same" );
-  reco_constrained_hist->Draw( "same" );
+  reco_mc_and_ext_hist->SetLineColor( kRed );
+  reco_mc_and_ext_hist->SetLineStyle( 2 );
+  reco_mc_and_ext_hist->SetLineWidth( 4 );
+
+  reco_constrained_hist->SetLineColor( kBlue );
+  reco_constrained_hist->SetLineStyle( 9 );
+  reco_constrained_hist->SetLineWidth( 4 );
+
+  reco_data_hist->Draw( "e" );
+  reco_mc_and_ext_hist->Draw( "same hist e" );
+  reco_constrained_hist->Draw( "same hist e" );
+
+  reco_data_hist->Draw( "same e" );
+
+  TLegend* lg2 = new TLegend( 0.15, 0.7, 0.3, 0.85 );
+  lg2->AddEntry( reco_data_hist, using_fake_data ? "fake data" : "data",
+    "l" );
+  lg2->AddEntry( reco_mc_and_ext_hist, "uB tune + EXT", "l" );
+  lg2->AddEntry( reco_constrained_hist, "post-constraint", "l" );
+
+  lg2->Draw( "same" );
 
 }
 
