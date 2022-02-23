@@ -1,5 +1,8 @@
 #pragma once
 
+// ROOT includes
+#include "TVectorD.h"
+
 // STV analysis includes
 #include "Unfolder.hh"
 
@@ -46,6 +49,11 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
 
   int num_ordinary_reco_bins = smearcept.GetNrows();
   int num_true_signal_bins = smearcept.GetNcols();
+
+  // Copy the measured data into a TVectorD for easy use with the
+  // TMatrixD::NormByColumn() function in the unfolding loop
+  TVectorD data_signal_vec( num_ordinary_reco_bins,
+    data_signal.GetMatrixArray() );
 
   // Start the iterations by copying the prior on the true signal
   auto* true_signal = new TMatrixD( prior_true_signal );
@@ -112,45 +120,54 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
       TMatrixD::EMatrixCreatorsOp2::kMult, data_signal );
 
     // Update the matrix used to propagate the uncertainties on the measured
-    // data points through the unfolding procedure. Do it element-by-element.
-    // Make a copy of the old error propagation matrix first since we'll
-    // be updating the original in the loop below.
-    TMatrixD old_err_prop_mat( err_prop_mat );
+    // data points through the unfolding procedure. We used to do this
+    // element-by-element. The faster (and equivalent) procedure below was
+    // taken from the RooUnfold implementation (http://roounfold.web.cern.ch/)
+
+    // Initialize some vectors of factors that will be applied to rows and
+    // columns of matrices below
+    TVectorD minus_eff_over_old_iter( num_true_signal_bins );
+    TVectorD new_iter_over_old_iter( num_true_signal_bins );
 
     for ( int t = 0; t < num_true_signal_bins; ++t ) {
-      for ( int r = 0; r < num_ordinary_reco_bins; ++r ) {
-        // Start with the first two terms of the updated matrix element. These
-        // can be evaluated without another for loop.
-        double temp_el = unfold_mat->operator()( t, r );
-        double ots = old_true_signal( t, 0 );
-        if ( ots > 0. ) {
-          temp_el += old_err_prop_mat( t, r )
-            * true_signal->operator()( t, 0 ) / ots;
-        }
-
-        // The last term involves a sum that we evaluate using for loops
-        double last_term = 0.;
-        for ( int t2 = 0; t2 < num_true_signal_bins; ++t2 ) {
-          double ots2 = old_true_signal( t2, 0 );
-          if ( ots2 <= 0. ) continue;
-
-          for ( int r2 = 0; r2 < num_ordinary_reco_bins; ++r2 ) {
-            last_term += eff_vec( t2, 0 ) * data_signal( r2, 0 )
-              * unfold_mat->operator()( t, r2 )
-              * unfold_mat->operator()( t2, r2 )
-              * old_err_prop_mat( t2, r ) / ots2;
-          }
-        }
-
-        // Note that the last term has an overall minus sign (we do the
-        // subtraction on the line below)
-        temp_el -= last_term;
-
-        // We're ready. Update the current element of the error propagation
-        // matrix
-        err_prop_mat( t, r ) = temp_el;
+      double ots = old_true_signal( t, 0 );
+      if ( ots <= 0. ) {
+        minus_eff_over_old_iter( t ) = 0.;
+        new_iter_over_old_iter( t ) = 0.;
+        continue;
       }
+
+      double ts = true_signal->operator()( t, 0 );
+      double eff = eff_vec( t, 0 );
+
+      minus_eff_over_old_iter( t ) = -eff / ots;
+      new_iter_over_old_iter( t ) = ts / ots;
     }
+
+    // Duplicate the existing error propagation matrix so that we can
+    // update the existing version in place
+    TMatrixD temp_mat1( err_prop_mat );
+
+    // If the second argument passed to TMatrixD::NormByColumn() or
+    // TMatrixD::NormByRow() is "D", then the matrix elements will be
+    // divided by the input TVectorD elements rather than multiplied
+    // by them. Following RooUnfold, I use "M" here to stress that
+    // multiplication is the intended behavior.
+    temp_mat1.NormByColumn( new_iter_over_old_iter, "M" );
+
+    TMatrixD temp_mat2(
+      TMatrixD::EMatrixCreatorsOp1::kTransposed, *unfold_mat );
+
+    temp_mat2.NormByColumn( data_signal_vec, "M" );
+    temp_mat2.NormByRow( minus_eff_over_old_iter, "M" );
+
+    TMatrixD temp_mat3( temp_mat2,
+      TMatrixD::EMatrixCreatorsOp2::kMult, err_prop_mat );
+
+    // We're ready. Update the measurement error propagation matrix.
+    err_prop_mat.Mult( *unfold_mat, temp_mat3 );
+    err_prop_mat += *unfold_mat;
+    err_prop_mat += temp_mat1;
 
   } // D'Agostini method iterations
 
