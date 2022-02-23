@@ -50,11 +50,6 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   int num_ordinary_reco_bins = smearcept.GetNrows();
   int num_true_signal_bins = smearcept.GetNcols();
 
-  // Copy the measured data into a TVectorD for easy use with the
-  // TMatrixD::NormByColumn() function in the unfolding loop
-  TVectorD data_signal_vec( num_ordinary_reco_bins,
-    data_signal.GetMatrixArray() );
-
   // Start the iterations by copying the prior on the true signal
   auto* true_signal = new TMatrixD( prior_true_signal );
 
@@ -158,7 +153,16 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
     TMatrixD temp_mat2(
       TMatrixD::EMatrixCreatorsOp1::kTransposed, *unfold_mat );
 
-    temp_mat2.NormByColumn( data_signal_vec, "M" );
+    // The measured data points already exist as a one-column TMatrixD
+    // rather than a TVectorD. To avoid an unnecessary copy, we scale
+    // the columns of temp_mat2 here manually rather than calling
+    // TMatrixD::NormByColumn()
+    for ( int r2 = 0; r2 < num_ordinary_reco_bins; ++r2 ) {
+      for ( int t2 = 0; t2 < num_true_signal_bins; ++t2 ) {
+        temp_mat2( r2, t2 ) = temp_mat2( r2, t2 ) * data_signal( r2, 0 );
+      }
+    }
+
     temp_mat2.NormByRow( minus_eff_over_old_iter, "M" );
 
     TMatrixD temp_mat3( temp_mat2,
