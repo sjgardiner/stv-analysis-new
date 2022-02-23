@@ -81,6 +81,21 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
 
   err_prop_mat.Zero(); // Zero out the elements (just in case)
 
+  // We need a 3D tensor to do the propagation of MC uncertainties. It is
+  // convenient in this case to represent it as a vector of TMatrixD objects.
+  auto err_prop_mc_vec = std::vector< TMatrixD >();
+  for ( int s = 0; s < num_true_signal_bins; ++s ) {
+    // Using emplace_back() here returns a reference to the new vector element.
+    // We will use it below to explicitly zero out the matrix contents (just in
+    // case). Use the same matrix element indexing scheme as the smearceptance
+    // matrix (i.e., rows are ordinary reco bins, columns are true signal
+    // bins).
+    auto& mat_ref = err_prop_mc_vec.emplace_back( num_ordinary_reco_bins,
+      num_true_signal_bins );
+
+    mat_ref.Zero();
+  }
+
   // Start the iterations for the D'Agostini method
   for ( int it = 0; it < num_iterations_; ++it ) {
 
@@ -173,6 +188,57 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
     err_prop_mat += *unfold_mat;
     err_prop_mat += temp_mat1;
 
+    // Also update the 3D tensor needed to propagate the MC statistical
+    // uncertainties on the smearceptance matrix through the unfolding
+    // procedure. As was done for the other error propagation matrix above,
+    // first make a full copy of the tensor, then update the original.
+    auto old_err_prop_mc_vec = std::vector< TMatrixD >();
+    for ( int s = 0; s < num_true_signal_bins; ++s ) {
+      old_err_prop_mc_vec.emplace_back( err_prop_mc_vec.at(s) );
+    }
+
+    // The outer loop over true signal bins runs over the bins used to
+    // report the unfolded measurement. The inner loops run over the elements
+    // of the smearceptance matrix.
+    for ( int t = 0; t < num_true_signal_bins; ++t ) {
+      for ( int r = 0; r < num_ordinary_reco_bins; ++r ) {
+        for ( int t2 = 0; t2 < num_true_signal_bins; ++t2 ) {
+          // Handle the Kronecker delta in the first term using an if statement
+          double temp_el = 0.;
+          if ( t == t2 ) {
+            double aux1 = ( data_signal(r, 0) * old_true_signal(t, 0)
+              / reco_expected(r, 0) ) - true_signal->operator()( t, 0 );
+            temp_el += aux1 / eff_vec( t, 0 );
+          }
+
+          temp_el -= data_signal( r, 0 ) * old_true_signal( t2, 0 )
+            * unfold_mat->operator()( t, r ) / reco_expected( r, 0 );
+
+          temp_el += true_signal->operator()( t, 0 )
+            * old_err_prop_mc_vec.at( t )( r, t2 ) / old_true_signal( t, 0 );
+
+          // These for loops take care of the sum in the last term
+          double last_term = 0.;
+          for ( int t3 = 0; t3 < num_true_signal_bins; ++t3 ) {
+            for ( int r2 = 0; r2 < num_ordinary_reco_bins; ++r2 ) {
+              last_term += data_signal( r2, 0 ) * eff_vec( t3, 0 )
+                * unfold_mat->operator()( t3, r2 )
+                * unfold_mat->operator()( t, r2 )
+                * old_err_prop_mc_vec.at( t3 )( r, t2 )
+                / old_true_signal( t3, 0 );
+            }
+          }
+
+          // We account for the overall minus sign on the last term by
+          // subtracting on the line below
+          temp_el -= last_term;
+
+          // We're ready. Update the MC error propagation matrix.
+          err_prop_mc_vec.at( t )( r, t2 ) = temp_el;
+        }
+      }
+    }
+
   } // D'Agostini method iterations
 
   // Now that we're finished with the iterations, we can also transform the
@@ -182,11 +248,60 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   TMatrixD temp_mat( data_covmat, TMatrixD::EMatrixCreatorsOp2::kMult,
     err_prop_mat_tr );
 
-  // TODO: add propagation of MC errors on the smearceptance matrix elements
-  // here
-
   auto* true_signal_covmat = new TMatrixD( err_prop_mat,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
+
+  // Here we also calculate a contribution to the covariance matrix on the
+  // unfolded result that comes from the MC statistical uncertainty on the
+  // smearceptance matrix elements
+  TMatrixD mc_covmat( num_true_signal_bins, num_true_signal_bins );
+
+  for ( int t = 0; t < num_true_signal_bins; ++t ) {
+
+    const TMatrixD& prop_mat1 = err_prop_mc_vec.at( t );
+
+    for ( int t2 = 0; t2 < num_true_signal_bins; ++t2 ) {
+
+      const TMatrixD& prop_mat2 = err_prop_mc_vec.at( t2 );
+
+      double temp_elem = 0.;
+
+      for ( int t3 = 0; t3 < num_true_signal_bins; ++t3 ) {
+
+        double prior_sig = prior_true_signal( t3, 0 );
+        if ( prior_sig <= 0. ) continue;
+
+        for ( int r = 0; r < num_ordinary_reco_bins; ++r ) {
+
+          double smear1 = smearcept( r, t3 );
+
+          for ( int r2 = 0; r2 < num_ordinary_reco_bins; ++r2 ) {
+
+            double smear2 = smearcept( r2, t3 );
+
+            double covariance = 0.;
+            // This is the covariance assumed by RooUnfold
+            // TODO: Revisit this after testing is complete
+            if ( r == r2 ) covariance = smear1 / prior_sig;
+            //if ( r == r2 ) {
+            //  covariance = smear1 * ( 1. - smear1 ) / prior_sig;
+            //}
+            //else {
+            //  covariance = -1. * smear1 * smear2 / prior_sig;
+            //}
+
+            temp_elem += prop_mat1( r, t3 ) * covariance * prop_mat2( r2, t3 );
+          }
+        }
+      }
+
+      mc_covmat( t, t2 ) = temp_elem;
+    }
+  }
+
+  // Add the MC statistical uncertainty to the other uncertainties to obtain
+  // the final covariance matrix on the unfolded measurement
+  true_signal_covmat->operator+=( mc_covmat );
 
   UnfoldedMeasurement result( true_signal, true_signal_covmat );
   return result;

@@ -3,6 +3,10 @@
 #include <iostream>
 #include <sstream>
 
+// ROOT includes
+#include "TCanvas.h"
+#include "TLegend.h"
+
 // STV analysis includes
 #include "../ConstrainedCalculator.hh"
 #include "../DAgostiniUnfolder.hh"
@@ -14,6 +18,76 @@
 
 // Wiener-SVD includes
 //#include "svd/include/WienerSVD.h"
+
+// RooUnfold includes
+//#include "RooUnfold/src/RooUnfoldResponse.h"
+//#include "RooUnfold/src/RooUnfoldBayes.h"
+
+//std::unique_ptr< RooUnfoldResponse > get_test_response(
+//  const SystematicsCalculator& sc )
+//{
+//  // Make a TH2D containing the response (or "smearceptance") matrix elements
+//  // in the format expected by RooUnfoldResponse.
+//  // Note that RooUnfoldResponse uses the axis convention reco <-> x,
+//  // true <-> y for defining the response matrix. In the TMatrixD
+//  // representation that I use here, reco <-> row and true <-> column.
+//  // Note also that the RooUnfoldResponse constructor clones the input
+//  // histograms (rather than taking ownership). In light of that behavior, we
+//  // will use temporary histograms that will go out of scope when this function
+//  // exits.
+//  auto smearcept = sc.get_cv_smearceptance_matrix();
+//  auto true_signal = sc.get_cv_true_signal();
+//
+//  int num_ordinary_reco_bins = smearcept->GetNrows();
+//  int num_true_signal_bins = smearcept->GetNcols();
+//
+//  TH2D resp( "resp", "response matrix", num_ordinary_reco_bins, 0.,
+//    num_ordinary_reco_bins, num_true_signal_bins, 0., num_true_signal_bins );
+//
+//  for ( int r = 0; r < num_ordinary_reco_bins; ++r ) {
+//    for ( int t = 0; t < num_true_signal_bins; ++t ) {
+//      double elem = smearcept->operator()( r, t );
+//      // RooUnfold expects a response matrix normalized in terms of event
+//      // counts (as opposed to event fractions). We multiply here by the
+//      // CV true signal prediction to convert from one to the other.
+//      elem *= true_signal->operator()( t, 0 );
+//      // Note that TMatrixD objects have zero-based indices while TH2D objects
+//      // have one-based indices. We correct for that explicitly here.
+//      resp.SetBinContent( r + 1, t + 1, elem );
+//    }
+//  }
+//
+//  // Now prepare TH1D objects for the prior on the true events and the measured
+//  // (background-subtracted) reco events
+//  TH1D sig( "sig", "true signal", num_true_signal_bins, 0.,
+//    num_true_signal_bins );
+//
+//  for ( int t = 0; t < num_true_signal_bins; ++t ) {
+//    double elem = true_signal->operator()( t, 0 );
+//    // Note that TMatrixD objects have zero-based indices while TH1D objects
+//    // have one-based indices. We correct for that explicitly here.
+//    sig.SetBinContent( t + 1, elem );
+//  }
+//
+//  // Get the background-subtracted measurement
+//  auto meas = sc.get_measured_events();
+//  const auto& reco_signal = meas.reco_signal_;
+//
+//  TH1D reco( "reco", "background-subtracted data", num_ordinary_reco_bins, 0.,
+//    num_ordinary_reco_bins );
+//
+//  for ( int r = 0; r < num_ordinary_reco_bins; ++r ) {
+//    double elem = reco_signal->operator()( r, 0 );
+//    // Note that TMatrixD objects have zero-based indices while TH1D objects
+//    // have one-based indices. We correct for that explicitly here.
+//    reco.SetBinContent( r + 1, elem );
+//  }
+//
+//  auto result = std::make_unique< RooUnfoldResponse >( &reco, &sig, &resp,
+//    "MyTestResponse", "test response" );
+//
+//  return result;
+//}
 
 const std::string SAMPLE_NAME = "MicroBooNE_CC1MuNp_XSec_2D_PmuCosmu_nu_MC";
 //const std::string SAMPLE_NAME = "MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC";
@@ -262,12 +336,41 @@ void test_unfolding() {
      }
   }
 
+  constexpr int NUM_DAGOSTINI_ITERATIONS = 6;
+
   std::unique_ptr< Unfolder > unfolder (
-    new DAgostiniUnfolder( 1 )
+    new DAgostiniUnfolder( NUM_DAGOSTINI_ITERATIONS )
     //new WienerSVDUnfolder( true,
     //WienerSVDUnfolder::RegularizationMatrixType::kSecondDeriv )
   );
   auto result = unfolder->unfold( mcc9 );
+
+  //// Test against RooUnfold implementation of the D'Agostini method
+  //auto test_response = get_test_response( mcc9 );
+  //RooUnfoldBayes roounfold_unfolder( test_response.get(),
+  //  test_response->Hmeasured(), NUM_DAGOSTINI_ITERATIONS );
+  //auto measured = mcc9.get_measured_events();
+  //roounfold_unfolder.SetMeasuredCov( *measured.cov_matrix_ );
+  //roounfold_unfolder.IncludeSystematics( 1 );
+
+  //auto* roo_hist = roounfold_unfolder.Hreco(
+  //  RooUnfold::ErrorTreatment::kCovariance );
+
+  //auto roo_cov = roounfold_unfolder.Ereco(
+  //  RooUnfold::ErrorTreatment::kCovariance );
+
+  //for ( int t = 0; t < num_true_signal_bins; ++t ) {
+  //  double mine = result.unfolded_signal_->operator()( t, 0 );
+  //  double my_err = std::sqrt( std::max(0.,
+  //    result.cov_matrix_->operator()( t, t )) );
+  //  double theirs = roo_hist->GetBinContent( t + 1 );
+  //  double their_err = std::sqrt( std::max(0., roo_cov(t, t)) );
+
+  //  std::cout << "t = " << t << ' ' << mine << " ± " << my_err
+  //    << "  " << theirs << " ± " << their_err << "  "
+  //    << (mine - theirs) / theirs << " ± "
+  //    << (my_err - their_err) / their_err << '\n';
+  //}
 
   //auto smearcept = mcc9.get_cv_smearceptance_matrix();
   //auto true_signal = syst.get_cv_true_signal();
