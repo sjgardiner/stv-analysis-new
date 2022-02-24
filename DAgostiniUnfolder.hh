@@ -279,16 +279,21 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
 
             double smear2 = smearcept( r2, t3 );
 
+            // Calculate the covariance matrix element for the smearceptance
+            // matrix elements. Assume independent multinomial distributions
+            // for each true bin (as D'Agostini does)
             double covariance = 0.;
-            // This is the covariance assumed by RooUnfold
-            // TODO: Revisit this after testing is complete
-            if ( r == r2 ) covariance = smear1 / prior_sig;
-            //if ( r == r2 ) {
-            //  covariance = smear1 * ( 1. - smear1 ) / prior_sig;
-            //}
-            //else {
-            //  covariance = -1. * smear1 * smear2 / prior_sig;
-            //}
+            // TODO: Account for effective statistics when using
+            // weighted events
+            // TODO: Account for situations in which the prior
+            // differs from the true event counts used to compute
+            // the smearceptance matrix elements
+            if ( r == r2 ) {
+              covariance = smear1 * ( 1. - smear1 ) / prior_sig;
+            }
+            else {
+              covariance = -1. * smear1 * smear2 / prior_sig;
+            }
 
             temp_elem += prop_mat1( r, t3 ) * covariance * prop_mat2( r2, t3 );
           }
