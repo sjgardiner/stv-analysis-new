@@ -136,8 +136,9 @@ struct TrueBin {
   public:
 
     TrueBin( const std::string& cuts = "",
-      TrueBinType bin_type = kSignalTrueBin )
-      : signal_cuts_( cuts ), type_( bin_type ) {}
+      TrueBinType bin_type = kSignalTrueBin,
+      int block = -1 )
+      : signal_cuts_( cuts ), type_( bin_type ), block_index_( block ) {}
 
     // Cuts to use in TTree::Draw for filling the bin. Any overall event weight
     // included here will be ignored. It is up to the user to ensure that only
@@ -147,10 +148,14 @@ struct TrueBin {
     // Indicates the nature of the events contained in this bin
     TrueBinType type_;
 
+    // Index used to group true signal bins together for purposes of
+    // unfolding. The numerical value is otherwise ignored.
+    int block_index_;
 };
 
 inline std::ostream& operator<<( std::ostream& out, const TrueBin& tb ) {
-  out << tb.type_ << " \"" << tb.signal_cuts_ << '\"';
+  out << tb.type_ << ' ' << tb.block_index_ << " \""
+    << tb.signal_cuts_ << '\"';
   return out;
 }
 
@@ -160,6 +165,11 @@ inline std::istream& operator>>( std::istream& in, TrueBin& tb ) {
   in >> temp_type;
 
   tb.type_ = static_cast< TrueBinType >( temp_type );
+
+  int block_idx;
+  in >> block_idx;
+
+  tb.block_index_ = block_idx;
 
   // Use two calls to std::getline using a double quote delimiter
   // in order to get the contents of the next double-quoted string
@@ -177,8 +187,10 @@ struct RecoBin {
   public:
 
     RecoBin( const std::string& cuts = "",
-      RecoBinType bin_type = kOrdinaryRecoBin )
-      : type_( bin_type ), selection_cuts_( cuts ) {}
+      RecoBinType bin_type = kOrdinaryRecoBin,
+      int block_idx = -1 )
+      : type_( bin_type ), selection_cuts_( cuts ),
+      block_index_( block_idx ) {}
 
     // Cuts to use in TTree::Draw for filling the bin. Any overall event weight
     // included here will be ignored. It is up to the user to ensure that only
@@ -188,10 +200,15 @@ struct RecoBin {
     // The kind of reco bin represented by this object
     RecoBinType type_;
 
+    // Index used to group ordinary reco bins together for purposes of
+    // unfolding. The numerical value is otherwise ignored.
+    int block_index_;
+
 };
 
 inline std::ostream& operator<<( std::ostream& out, const RecoBin& rb ) {
-  out << rb.type_ << " \"" << rb.selection_cuts_ << '\"';
+  out << rb.type_ << ' ' << rb.block_index_ << " \""
+    << rb.selection_cuts_ << '\"';
   return out;
 }
 
@@ -201,6 +218,11 @@ inline std::istream& operator>>( std::istream& in, RecoBin& rb ) {
   in >> temp_type;
 
   rb.type_ = static_cast< RecoBinType >( temp_type );
+
+  int block_idx;
+  in >> block_idx;
+
+  rb.block_index_ = block_idx;
 
   // Use two calls to std::getline using a double quote delimiter
   // in order to get the contents of the next double-quoted string
