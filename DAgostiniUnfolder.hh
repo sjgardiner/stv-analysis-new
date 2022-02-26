@@ -28,7 +28,8 @@ class DAgostiniUnfolder : public Unfolder {
 
     virtual UnfoldedMeasurement unfold( const TMatrixD& data_signal,
       const TMatrixD& data_covmat, const TMatrixD& smearcept,
-      const TMatrixD& prior_true_signal ) const override;
+      const TMatrixD& prior_true_signal, TMatrixD* err_prop = nullptr )
+      const override;
 
     inline unsigned int get_iterations() const { return num_iterations_; }
     inline void set_iterations( unsigned int iters )
@@ -49,7 +50,7 @@ class DAgostiniUnfolder : public Unfolder {
 
 UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   const TMatrixD& data_covmat, const TMatrixD& smearcept,
-  const TMatrixD& prior_true_signal ) const
+  const TMatrixD& prior_true_signal, TMatrixD* err_prop ) const
 {
   // Check input matrix dimensions for sanity
   this->check_matrices( data_signal, data_covmat,
@@ -332,6 +333,14 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
     // Add the MC statistical uncertainty to the other uncertainties to obtain
     // the final covariance matrix on the unfolded measurement
     true_signal_covmat->operator+=( mc_covmat );
+  }
+
+  // If the user requested access to the error propagation matrix (by passing
+  // a non-null value of the err_prop argument), then copy it over before
+  // returning a final result
+  if ( err_prop ) {
+    err_prop->ResizeTo( err_prop_mat );
+    err_prop->operator=( err_prop_mat );
   }
 
   UnfoldedMeasurement result( true_signal, true_signal_covmat );

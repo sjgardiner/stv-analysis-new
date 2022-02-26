@@ -26,7 +26,8 @@ class WienerSVDUnfolder : public Unfolder {
 
     virtual UnfoldedMeasurement unfold( const TMatrixD& data_signal,
       const TMatrixD& data_covmat, const TMatrixD& smearcept,
-      const TMatrixD& prior_true_signal ) const override;
+      const TMatrixD& prior_true_signal, TMatrixD* err_prop = nullptr )
+      const override;
 
     inline bool use_filter() const { return use_filter_; }
     inline void set_use_filter( bool use_filter ) { use_filter_ = use_filter; }
@@ -60,7 +61,7 @@ class WienerSVDUnfolder : public Unfolder {
 
 UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   const TMatrixD& data_covmat, const TMatrixD& smearcept,
-  const TMatrixD& prior_true_signal ) const
+  const TMatrixD& prior_true_signal, TMatrixD* err_prop ) const
 {
   // Check input matrix dimensions for sanity
   this->check_matrices( data_signal, data_covmat,
@@ -225,6 +226,16 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
 
   auto* unfolded_signal_covmat = new TMatrixD( R_tot,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
+
+  // If the user requested access to the error propagation matrix (by passing
+  // a non-null value of the err_prop argument), then copy it over before
+  // returning a final result. Note that the error propagation matrix in
+  // this case is just the unfolding matrix (in contrast to, e.g.,
+  // D'Agostini unfolding for multiple iterations)
+  if ( err_prop ) {
+    err_prop->ResizeTo( R_tot );
+    err_prop->operator=( R_tot );
+  }
 
   UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat );
   return result;
