@@ -26,6 +26,7 @@ struct SliceVariable {
 
 };
 
+
 // Reads a string surrounded by double quotes (") from an input stream
 std::string get_double_quoted_string( std::istream& in ) {
   std::string temp_str;
@@ -40,6 +41,13 @@ std::istream& operator>>( std::istream& in, SliceVariable& svar ) {
   svar.latex_name_ = get_double_quoted_string( in );
   svar.latex_units_ = get_double_quoted_string( in );
   return in;
+}
+
+std::ostream& operator<<( std::ostream& out, const SliceVariable& svar )
+{
+  out << '\"' << svar.name_ << "\" \"" << svar.units_ << "\" \""
+    << svar.latex_name_ << "\" \"" << svar.latex_units_ << '\"';
+  return out;
 }
 
 struct Slice {
@@ -81,6 +89,86 @@ struct Slice {
 
 };
 
+
+std::ostream& operator<<( std::ostream& out,
+  const Slice::OtherVariableSpec& ovs )
+{
+  out << ovs.var_index_ << ' ' << ovs.low_bin_edge_ << ' '
+    << ovs.high_bin_edge_;
+
+  return out;
+}
+
+std::ostream& operator<<( std::ostream& out, const Slice& slice )
+{
+  // TODO: add handling for multidimensional slices
+  std::string final_axis_label = slice.hist_->GetYaxis()->GetTitle();
+  size_t num_active_vars = slice.active_var_indices_.size();
+  if ( num_active_vars != 1u ) throw std::runtime_error( "Support for"
+    " multidimensional slices has not yet been implemented" );
+
+  out << '\"' << final_axis_label << "\"\n";
+  out << num_active_vars;
+
+  size_t avar_idx = slice.active_var_indices_.front();
+  int num_edges = slice.hist_->GetNbinsX() + 1;
+  out << ' ' << avar_idx << ' ' << num_edges;
+
+  // Note that ROOT TH1 bins have one-based indices (bin zero is used for
+  // underflow). By using num_edges as the maximum bin index in the loop below,
+  // we also get the lower edge of the overflow bin (equivalent to the upper
+  // edge of the last regular bin).
+  for ( int bin = 1; bin <= num_edges; ++bin ) {
+    out << ' ' << slice.hist_->GetBinLowEdge( bin );
+  }
+  out << '\n';
+
+  size_t num_other_vars = slice.other_vars_.size();
+  out << num_other_vars;
+  if ( num_other_vars == 0 ) out << '\n';
+  else out << ' ';
+
+  for ( const auto& ovar_spec : slice.other_vars_ ) out << ovar_spec << '\n';
+
+  // We need to "invert" the bin map in order for it to have the correct
+  // structure for dumping the configuration easily. Here we'll manually
+  // build a map from analysis bins to ROOT histogram bins in the slice.
+  // TODO: consider other solutions
+  std::map< size_t, std::vector< int > > analysis_to_root_bin_map;
+  for ( const auto& bin_pair : slice.bin_map_ ) {
+    int root_bin_idx = bin_pair.first;
+    const auto& analysis_bin_set = bin_pair.second;
+
+    for ( const size_t& analysis_bin_idx : analysis_bin_set ) {
+      // Get access to the vector of ROOT histogram bins for the current
+      // analysis bin. Note that the call to std::map::operator[] will create
+      // a map entry (with an empty vector) if one does not already exist.
+      auto& root_bin_vec = analysis_to_root_bin_map[ analysis_bin_idx ];
+      root_bin_vec.push_back( root_bin_idx );
+    }
+  }
+
+  // TODO: Generalize this for multidimensional slices. At present, we
+  // assume here that the *global* ROOT bin numbers (as stored in bin_map_)
+  // correspond to the active variable bin numbers on the x-axis. This is
+  // only reliably true for 1D histograms, so we're currently cheating a bit.
+  size_t num_analysis_bins = analysis_to_root_bin_map.size();
+  out << num_analysis_bins;
+
+  for ( const auto& ana_bin_pair : analysis_to_root_bin_map ) {
+    const size_t ana_bin_idx = ana_bin_pair.first;
+    const auto& root_bin_vec = ana_bin_pair.second;
+    size_t num_root_bins = root_bin_vec.size();
+
+    out << '\n' << ana_bin_idx << ' ' << num_root_bins;
+    for ( const auto& rbin_idx : root_bin_vec ) {
+      out << ' ' << rbin_idx;
+    }
+  }
+
+  return out;
+}
+
 // Defines "slices" of a possibly multidimensional phase space to use for
 // plotting results calculated in terms of reco/true bin counts or functions
 // thereof. These slices are represented by ROOT histograms.
@@ -88,7 +176,16 @@ class SliceBinning {
 
   public:
 
+    // Use this constructor if you want to fill the SliceBinning object
+    // programmatically (i.e., not via a pre-existing configuration file)
+    SliceBinning() {}
+
+    // Construct the SliceBinning object from a saved configuration file
     SliceBinning( const std::string& config_file_name );
+
+    // Prints the current configuration of the object to a std::ostream.
+    // This function can be used to create a new configuration file.
+    void print_config( std::ostream& os ) const;
 
   //protected:
 
@@ -236,7 +333,7 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
     std::string slice_hist_name = "slice_" + std::to_string( s );
 
     // Also add the label for the final axis to the title
-    slice_title += "; " + final_axis_label;
+    slice_title += ';' + final_axis_label;
 
     if ( num_active_variables == 1 ) {
       // Retrieve the vector of bin edges for the only active variable
@@ -328,4 +425,22 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
 
   } // slices
 
+}
+
+void SliceBinning::print_config( std::ostream& out ) const {
+
+  size_t num_variables = slice_vars_.size();
+  out << num_variables << '\n';
+
+  for ( const auto& svar : slice_vars_ ) out << svar << '\n';
+
+  size_t num_slices = slices_.size();
+  out << num_slices;
+
+  for ( const auto& slice : slices_ ) out << '\n' << slice;
+}
+
+std::ostream& operator<<( std::ostream& out, const SliceBinning& sb ) {
+  sb.print_config( out );
+  return out;
 }
