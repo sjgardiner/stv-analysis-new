@@ -68,6 +68,11 @@ double MCC8ForwardFolder::effective_efficiency(
     throw std::runtime_error( "Invalid reco bin" );
   }
 
+  // Correct for the one-based reco bin index here. Access the reco bin
+  // so that we can check its block index.
+  const auto& rbin = reco_bins.at( reco_bin - 1 );
+  int reco_block_index = rbin.block_index_;
+
   double numerator = 0.;
   double denominator = 0.;
   for ( int tb = 1; tb <= num_true_bins; ++tb ) {
@@ -75,6 +80,11 @@ double MCC8ForwardFolder::effective_efficiency(
     auto& tbin = true_bins_.at( tb - 1 );
     // If this isn't a signal true bin, just skip it
     if ( tbin.type_ != kSignalTrueBin ) continue;
+
+    // If the signal true bin is not in the same block as the requested
+    // reco bin, also skip it. This avoids issues with double-counting.
+    int true_block_index = tbin.block_index_;
+    if ( reco_block_index != true_block_index ) continue;
 
     double num_j_gen = univ.hist_true_->GetBinContent( tb );
     double num_ij = univ.hist_2d_->GetBinContent( tb, reco_bin );

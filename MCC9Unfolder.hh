@@ -47,6 +47,12 @@ double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
   // of events (signal + background) in the current bin in reco space
   double reco_bin_events = 0.;
 
+  // Look up the requested reco bin so that we can determine its block index.
+  // Contributions from signal true bins outside of its block will be ignored
+  // to avoid double-counting.
+  const auto& rbin = reco_bins_.at( reco_bin );
+  int reco_block_index = rbin.block_index_;
+
   bool use_detVar_CV = this->is_detvar_universe( univ );
 
   // Get access to the CV universe. We need it regardless of the input universe
@@ -72,6 +78,11 @@ double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
     const auto& tbin = true_bins_.at( tb );
 
     if ( tbin.type_ == kSignalTrueBin ) {
+
+      // Ignore contributions from signal true bins outside of the block for
+      // the current reco bin. This avoids issues with double-counting.
+      int true_block_index = tbin.block_index_;
+      if ( reco_block_index != true_block_index ) continue;
 
       // Get the CV event count for the current true bin
       double denom_CV = cv_univ->hist_true_->GetBinContent( tb + 1 );

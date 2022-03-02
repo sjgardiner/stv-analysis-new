@@ -120,6 +120,11 @@ double ConstrainedCalculator::evaluate_observable( const Universe& univ,
   ConstrainedCalculatorBinType bin_type;
   int reco_bin = this->get_reco_bin_and_type( cm_bin, bin_type );
 
+  // Look up the block index for the current reco bin. We will use this
+  // to avoid double-counting when summing over true bins below.
+  const auto& rbin = reco_bins_.at( reco_bin );
+  int reco_block_index = rbin.block_index_;
+
   size_t num_true_bins = true_bins_.size();
 
   // We need to sum the contributions of the various true bins,
@@ -129,6 +134,11 @@ double ConstrainedCalculator::evaluate_observable( const Universe& univ,
     const auto& tbin = true_bins_.at( tb );
 
     if ( tbin.type_ == kSignalTrueBin ) {
+
+      // Ignore signal true bins outside of the same block as the current
+      // reco bin. This avoids issues with double-counting.
+      int true_block_index = tbin.block_index_;
+      if ( reco_block_index != true_block_index ) continue;
 
       // Get the CV event count for the current true bin
       double denom_CV = cv_univ->hist_true_->GetBinContent( tb + 1 );
