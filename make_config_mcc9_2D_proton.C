@@ -84,7 +84,7 @@ void make_config_mcc9_2D_proton() {
 
       std::string true_bin_def = true_ss.str();
 
-      true_bins.emplace_back( true_bin_def, kSignalTrueBin );
+      true_bins.emplace_back( true_bin_def, kSignalTrueBin, 0 );
 
       std::stringstream reco_ss;
       reco_ss << selection
@@ -95,7 +95,7 @@ void make_config_mcc9_2D_proton() {
 
       std::string reco_bin_def = reco_ss.str();
 
-      reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin );
+      reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, 0 );
 
       tex_bin_table_file << cur_reco_bin << " & ";
       ++cur_reco_bin;
