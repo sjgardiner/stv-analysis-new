@@ -196,7 +196,13 @@ class SystematicsCalculator {
     virtual MeasuredEvents get_measured_events() const;
 
     // Utility functions to help with unfolding
-    std::unique_ptr< TMatrixD > get_cv_smearceptance_matrix() const;
+    inline std::unique_ptr< TMatrixD > get_cv_smearceptance_matrix() const {
+      const auto& cv_univ = this->cv_universe();
+      return this->get_smearceptance_matrix( cv_univ );
+    }
+
+    std::unique_ptr< TMatrixD > get_smearceptance_matrix(
+      const Universe& univ ) const;
 
     std::unique_ptr< TMatrixD > get_cv_true_signal() const;
 
@@ -1380,15 +1386,13 @@ bool SystematicsCalculator::is_detvar_universe( const Universe& univ ) const {
   return found_detvar_universe;
 }
 
-// Returns the smearceptance matrix in the central-value Universe.
+// Returns the smearceptance matrix in the requested Universe
 // NOTE: This function assumes that all "ordinary" reco bins are listed before
 // the sideband ones and that all signal true bins are listed before the
 // background ones.
 std::unique_ptr< TMatrixD >
-  SystematicsCalculator::get_cv_smearceptance_matrix() const
+  SystematicsCalculator::get_smearceptance_matrix( const Universe& univ ) const
 {
-  const auto& cv_univ = this->cv_universe();
-
   // The smearceptance matrix definition used here uses the reco bin as the row
   // index and the true bin as the column index. This ensures that multiplying
   // a column vector of true event counts by the matrix will yield a column
@@ -1401,8 +1405,8 @@ std::unique_ptr< TMatrixD >
       // Get the numerator and denominator of the smearceptance matrix element.
       // Note that we need to switch to one-based bin indices here to retrieve
       // the information from the ROOT histograms stored in the Universe object.
-      double numer = cv_univ.hist_2d_->GetBinContent( t + 1, r + 1 );
-      double denom = cv_univ.hist_true_->GetBinContent( t + 1 );
+      double numer = univ.hist_2d_->GetBinContent( t + 1, r + 1 );
+      double denom = univ.hist_true_->GetBinContent( t + 1 );
       // Store the result in the smearceptance matrix. Avoid dividing by zero
       // by setting any element with zero denominator to zero.
       double temp_element = 0.;
