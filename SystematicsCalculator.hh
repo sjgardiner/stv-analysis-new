@@ -1018,7 +1018,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
     int num_reco_bins = bnb_hist->GetNbinsX();
     for ( int rb = 0; rb <= num_reco_bins + 1; ++rb ) {
       double evts = std::max( 0., bnb_hist->GetBinContent(rb) );
-      bnb_hist->SetBinError( rb, std::sqrt(rb) );
+      bnb_hist->SetBinError( rb, std::sqrt(evts) );
     }
 
     std::cout << "******* USING FAKE DATA *******\n";
