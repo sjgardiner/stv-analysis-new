@@ -265,21 +265,26 @@ class SystematicsCalculator {
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const = 0;
 
-    // Evaluate a one-sigma data statistical uncertainty on the observable of
-    // interest in a given reco bin. Do the calculation either for BNB data
-    // (use_ext = false) or for EXT data (use_ext = true). NOTE: the reco bin
-    // index consumed by this function is zero-based.
-    virtual double evaluate_data_stat_unc( int reco_bin,
-      bool use_ext ) const = 0;
+    // Evaluate a covariance matrix element for the data statistical
+    // uncertainty on the observable of interest for a given pair of reco bins.
+    // In cases where every event falls into a unique reco bin, only the
+    // diagonal covariance matrix elements are non-vanishing. Do the
+    // calculation either for BNB data (use_ext = false) or for EXT data
+    // (use_ext = true). NOTE: the reco bin indices consumed by this function
+    // are zero-based.
+    virtual double evaluate_data_stat_covariance( int reco_bin_a,
+      int reco_bin_b, bool use_ext ) const = 0;
 
-    // Evaluate a one-sigma MC statistical uncertainty on the observable of
-    // interest (including contributions from both signal and background
-    // events) in a given reco bin within a particular universe. Typically the
-    // CV universe should be used. However, MC statistical uncertainties are
-    // tracked for all Universe objects in case they are needed. NOTE: the reco
-    // bin index consumed by this function is zero-based.
-    virtual double evaluate_mc_stat_unc( const Universe& univ,
-      int reco_bin ) const = 0;
+    // Evaluate a covariance matrix element for the MC statistical uncertainty
+    // on the observable of interest (including contributions from both signal
+    // and background events) for a given pair of reco bins within a particular
+    // universe. Typically the CV universe should be used, but MC statistical
+    // uncertainties are tracked for all Universe objects in case they are
+    // needed. In cases where every event falls into a unique reco bin, only
+    // the diagonal covariance matrix elements are non-vanishing. NOTE: the
+    // reco bin indices consumed by this function are zero-based.
+    virtual double evaluate_mc_stat_covariance( const Universe& univ,
+      int reco_bin_a, int reco_bin_b ) const = 0;
 
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
@@ -1306,16 +1311,17 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       size_t num_cm_bins = this->get_covariance_matrix_size();
       const auto& cv_univ = this->cv_universe();
 
-      for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
-        // Calculate the MC stat uncertainty in the current reco bin
-        // for the observable of interest. Use the CV universe.
-        double err = this->evaluate_mc_stat_unc( cv_univ, rb );
-        double err2 = err * err;
+      for ( size_t rb1 = 0u; rb1 < num_cm_bins; ++rb1 ) {
+        for ( size_t rb2 = 0u; rb2 < num_cm_bins; ++rb2 ) {
+          // Calculate the MC statistical covariance for the current pair of
+          // reco bins for the observable of interest. Use the CV universe.
+          double mc_cov = this->evaluate_mc_stat_covariance( cv_univ,
+            rb1, rb2 );
 
-        // Note the one-based reco bin index used by ROOT histograms
-        temp_cov_mat.cov_matrix_->SetBinContent( rb + 1, rb + 1, err2 );
-
-      } // reco bins
+          // Note the one-based reco bin index used by ROOT histograms
+          temp_cov_mat.cov_matrix_->SetBinContent( rb1 + 1, rb2 + 1, mc_cov );
+        }
+      }
 
     } // MCstat type
 
@@ -1326,13 +1332,15 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
 
       size_t num_cm_bins = this->get_covariance_matrix_size();
 
-      for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
-        double err = this->evaluate_data_stat_unc( rb, use_ext );
-        double err2 = err * err;
+      for ( size_t rb1 = 0u; rb1 < num_cm_bins; ++rb1 ) {
+        for ( size_t rb2 = 0u; rb2 < num_cm_bins; ++rb2 ) {
+          double stat_cov = this->evaluate_data_stat_covariance( rb1,
+            rb2, use_ext );
 
-        // Note the one-based reco bin index used by ROOT histograms
-        temp_cov_mat.cov_matrix_->SetBinContent( rb + 1, rb + 1, err2 );
-      } // reco bins
+          // Note the one-based reco bin index used by ROOT histograms
+          temp_cov_mat.cov_matrix_->SetBinContent( rb1 + 1, rb2 + 1, stat_cov );
+        }
+      }
 
     } // BNBstat and EXTstat types
 

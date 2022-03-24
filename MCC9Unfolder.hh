@@ -22,11 +22,11 @@ class MCC9Unfolder : public SystematicsCalculator {
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
       int flux_universe_index = -1 ) const override;
 
-    virtual double evaluate_mc_stat_unc( const Universe& univ,
-      int reco_bin ) const override;
+    virtual double evaluate_mc_stat_covariance( const Universe& univ,
+      int reco_bin_a, int reco_bin_b ) const override;
 
-    virtual double evaluate_data_stat_unc( int reco_bin,
-      bool use_ext ) const override;
+    virtual double evaluate_data_stat_covariance( int reco_bin_a,
+      int reco_bin_b, bool use_ext ) const override;
 
 };
 
@@ -136,20 +136,29 @@ double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
   return reco_bin_events;
 }
 
-double MCC9Unfolder::evaluate_mc_stat_unc( const Universe& univ,
-  int reco_bin ) const
+double MCC9Unfolder::evaluate_mc_stat_covariance( const Universe& univ,
+  int reco_bin_a, int reco_bin_b ) const
 {
-  // ROOT histograms use one-based bin indices, so I correct for that here
-  double err = univ.hist_reco_->GetBinError( reco_bin + 1 );
-  return err;
+  // ROOT histograms use one-based bin indices, so I correct for that here.
+  // Note that using the bin error (rather than the bin contents) enables a
+  // correct treatment for weighted events provided TH1::Sumw2() was called
+  // before filling the histogram.
+  double err = univ.hist_reco2d_->GetBinError( reco_bin_a + 1, reco_bin_b + 1 );
+  double err2 = err * err;
+  return err2;
 }
 
-double MCC9Unfolder::evaluate_data_stat_unc( int reco_bin, bool use_ext ) const
+double MCC9Unfolder::evaluate_data_stat_covariance( int reco_bin_a,
+  int reco_bin_b, bool use_ext ) const
 {
-  const TH1D* d_hist = nullptr;
-  if ( use_ext ) d_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
-  else d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
-  // ROOT histograms use one-based bin indices, so I correct for that here
-  double err = d_hist->GetBinError( reco_bin + 1 );
-  return err;
+  const TH2D* d_hist = nullptr;
+  if ( use_ext ) d_hist = data_hists2d_.at( NFT::kExtBNB ).get(); // EXT data
+  else d_hist = data_hists2d_.at( NFT::kOnBNB ).get(); // BNB data
+  // ROOT histograms use one-based bin indices, so I correct for that here.
+  // Note that using the bin error (rather than the bin contents) enables a
+  // correct treatment for weighted events provided TH1::Sumw2() was called
+  // before filling the histogram.
+  double err = d_hist->GetBinError( reco_bin_a + 1, reco_bin_b + 1 );
+  double err2 = err * err;
+  return err2;
 }

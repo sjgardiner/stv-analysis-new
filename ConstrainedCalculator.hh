@@ -29,10 +29,10 @@ class ConstrainedCalculator : public SystematicsCalculator {
     virtual double evaluate_observable( const Universe& univ, int cm_bin,
       int flux_universe_index = -1 ) const override;
 
-    virtual double evaluate_mc_stat_unc( const Universe& univ,
-      int cm_bin ) const override;
+    virtual double evaluate_mc_stat_covariance( const Universe& univ,
+      int cm_bin_a, int cm_bin_b ) const override;
 
-    virtual double evaluate_data_stat_unc( int cm_bin,
+    virtual double evaluate_data_stat_covariance( int cm_bin_a, int cm_bin_b,
       bool use_ext ) const override;
 
     // This class uses a dimension for the covariance matrix that is different
@@ -204,16 +204,26 @@ double ConstrainedCalculator::evaluate_observable( const Universe& univ,
   return reco_bin_events;
 }
 
-double ConstrainedCalculator::evaluate_mc_stat_unc( const Universe& univ,
-  int cm_bin ) const
+double ConstrainedCalculator::evaluate_mc_stat_covariance( const Universe& univ,
+  int cm_bin_a, int cm_bin_b ) const
 {
-  ConstrainedCalculatorBinType bin_type;
-  int reco_bin = this->get_reco_bin_and_type( cm_bin, bin_type );
+  ConstrainedCalculatorBinType bin_type_a, bin_type_b;
+  int reco_bin_a = this->get_reco_bin_and_type( cm_bin_a, bin_type_a );
+  int reco_bin_b = this->get_reco_bin_and_type( cm_bin_b, bin_type_b );
 
-  if ( bin_type != kOrdinaryRecoBinBkgd ) {
+  if ( bin_type_a != kOrdinaryRecoBinBkgd
+    && bin_type_b != kOrdinaryRecoBinBkgd )
+  {
     // ROOT histograms use one-based bin indices, so I correct for that here
-    double err = univ.hist_reco_->GetBinError( reco_bin + 1 );
-    return err;
+    double err = univ.hist_reco2d_->GetBinError( reco_bin_a + 1,
+      reco_bin_b + 1 );
+    double err2 = err * err;
+    return err2;
+  }
+  else {
+    // TODO: add proper handling of MC stat correlations between "ordinary
+    // background" bins
+    if ( cm_bin_a != cm_bin_b ) return 0.;
   }
 
   // Include only background bins when evaluating the MC stat uncertainty
@@ -223,35 +233,38 @@ double ConstrainedCalculator::evaluate_mc_stat_unc( const Universe& univ,
   for ( size_t tb = 0u; tb < num_true_bins; ++tb ) {
     const auto& tbin = true_bins_.at( tb );
     if ( tbin.type_ == kBackgroundTrueBin ) {
-      double bkgd_err = univ.hist_2d_->GetBinError( tb + 1, reco_bin + 1 );
+      double bkgd_err = univ.hist_2d_->GetBinError( tb + 1, reco_bin_a + 1 );
       err2 += bkgd_err * bkgd_err;
     }
   }
-  // We added the errors in quadrature over the true bins above, so take the
-  // square root here to get the uncertainty
-  double err = std::sqrt( std::max(0., err2) );
-  return err;
+
+  return err2;
 }
 
-double ConstrainedCalculator::evaluate_data_stat_unc( int cm_bin,
-  bool use_ext ) const
+double ConstrainedCalculator::evaluate_data_stat_covariance( int cm_bin_a,
+  int cm_bin_b, bool use_ext ) const
 {
-  ConstrainedCalculatorBinType bin_type;
-  int reco_bin = this->get_reco_bin_and_type( cm_bin, bin_type );
+  ConstrainedCalculatorBinType bin_type_a, bin_type_b;
+  int reco_bin_a = this->get_reco_bin_and_type( cm_bin_a, bin_type_a );
+  int reco_bin_b = this->get_reco_bin_and_type( cm_bin_b, bin_type_b );
 
-  const TH1D* d_hist = nullptr;
-  if ( use_ext ) d_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
-  else d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
+  const TH2D* d_hist = nullptr;
+  if ( use_ext ) d_hist = data_hists2d_.at( NFT::kExtBNB ).get(); // EXT data
+  else d_hist = data_hists2d_.at( NFT::kOnBNB ).get(); // BNB data
   // ROOT histograms use one-based bin indices, so I correct for that here
-  double err = d_hist->GetBinError( reco_bin + 1 );
+  double err = d_hist->GetBinError( reco_bin_a + 1, reco_bin_b + 1 );
 
-  // Don't evaluate the data statistical uncertainty for the "ordinary
-  // background" bins unless we're considering EXT events
-  if ( bin_type == kOrdinaryRecoBinBkgd && !use_ext ) {
-    return 0.;
+  bool orbb = bin_type_a == kOrdinaryRecoBinBkgd
+    || bin_type_b == kOrdinaryRecoBinBkgd;
+
+  if ( orbb ) {
+    // Don't evaluate the data statistical uncertainty for the "ordinary
+    // background" bins unless we're considering EXT events
+    if ( !use_ext ) return 0.;
   }
 
-  return err;
+  double err2 = err * err;
+  return err2;
 }
 
 size_t ConstrainedCalculator::get_covariance_matrix_size() const {

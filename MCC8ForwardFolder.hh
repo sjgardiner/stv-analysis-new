@@ -28,11 +28,11 @@ class MCC8ForwardFolder : public SystematicsCalculator {
         flux_universe_index );
     }
 
-    virtual double evaluate_data_stat_unc( int reco_bin,
-      bool use_ext ) const override;
+    virtual double evaluate_data_stat_covariance( int reco_bin_a,
+      int reco_bin_b, bool use_ext ) const override;
 
-    virtual double evaluate_mc_stat_unc( const Universe& univ,
-      int reco_bin ) const override;
+    virtual double evaluate_mc_stat_covariance( const Universe& univ,
+      int reco_bin_a, int reco_bin_b ) const override;
 
     // Helper functions for comparison to CCNp result
     double effective_efficiency( const Universe& univ, int reco_bin ) const;
@@ -185,47 +185,56 @@ double MCC8ForwardFolder::forward_folded_xsec( const Universe& univ,
   return xsec;
 }
 
-double MCC8ForwardFolder::evaluate_mc_stat_unc( const Universe& univ,
-  int reco_bin ) const
+double MCC8ForwardFolder::evaluate_mc_stat_covariance( const Universe& univ,
+  int reco_bin_a, int reco_bin_b ) const
 {
+  // TODO: refactor to correctly treat possible correlations between
+  // reco bins
+  if ( reco_bin_a != reco_bin_b ) return 0.;
+
   // The input reco bin index is zero-based, but the helper functions defined
   // below use a one-based index. Correct for this here before proceeding.
-  int rb = reco_bin + 1;
+  int rb_a = reco_bin_a + 1;
 
-  double err2 = this->expected_mc_background( univ, rb, true );
+  double err2_a = this->expected_mc_background( univ, rb_a, true );
 
-  double eff = this->effective_efficiency( univ, rb );
-  double scaling = this->xsec_scale_factor( rb );
+  double eff_a = this->effective_efficiency( univ, rb_a );
+  double scaling_a = this->xsec_scale_factor( rb_a );
 
-  if ( eff <= 0. ) err2 = 0.;
+  if ( eff <= 0. ) err2_a = 0.;
   else {
-    err2 *= std::pow( scaling / eff, 2 );
+    err2_a *= std::pow( scaling_a / eff_a, 2 );
   }
 
-  double err = std::sqrt( err2 );
-  return err;
+  return err2_a;
 }
 
-double MCC8ForwardFolder::evaluate_data_stat_unc( int reco_bin,
-  bool use_ext ) const
+double MCC8ForwardFolder::evaluate_data_stat_covariance( int reco_bin_a,
+  int reco_bin_b, bool use_ext ) const
 {
-  const TH1D* d_hist = nullptr;
-  if ( use_ext ) d_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
-  else d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
+  const TH2D* d_hist = nullptr;
+  if ( use_ext ) d_hist = data_hists2d_.at( NFT::kExtBNB ).get(); // EXT data
+  else d_hist = data_hists2d_.at( NFT::kOnBNB ).get(); // BNB data
 
   const auto& cv_univ = this->cv_universe();
 
-  // The input reco bin index is zero-based, but the ROOT histograms are
+  // The input reco bin indices is zero-based, but the ROOT histograms are
   // one-based, so I correct for that here. The helper functions below
-  // also work with the one-based index.
-  int rb = reco_bin + 1;
-  double err = d_hist->GetBinError( rb );
+  // also work with the one-based indices.
+  int rb_a = reco_bin_a + 1;
+  int rb_b = reco_bin_b + 1;
 
-  double eff = this->effective_efficiency( cv_univ, rb );
-  double scaling = this->xsec_scale_factor( rb );
+  double err = d_hist->GetBinError( rb_a, rb_b );
+  double err2 = err * err;
 
-  if ( eff <= 0. ) err = 0.;
-  else err *= ( scaling / eff );
+  double eff_a = this->effective_efficiency( cv_univ, rb_a );
+  double eff_b = this->effective_efficiency( cv_univ, rb_b );
 
-  return err;
+  double scaling_a = this->xsec_scale_factor( rb_a );
+  double scaling_b = this->xsec_scale_factor( rb_b );
+
+  if ( eff_a <= 0. || eff_b <= 0. ) err2 = 0.;
+  else err2 *= ( scaling_a / eff_a ) * ( scaling_b / eff_b );
+
+  return err2;
 }
