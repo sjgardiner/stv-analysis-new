@@ -2,9 +2,67 @@
 // Provides variable definitions for possible use in multiple configuration
 // file writer scripts
 
+// Standard library includes
 #include <map>
 #include <string>
 #include <vector>
+
+// STV analysis includes
+#include "HistUtils.hh"
+#include "SliceBinning.hh"
+
+// Helper function used to get the indices for the variables used to define a
+// SliceBinning object
+int find_slice_var_index( const std::string& name,
+  const std::vector< SliceVariable >& sv_vec )
+{
+  constexpr int BOGUS_INDEX = -1;
+  auto iter = std::find_if( sv_vec.cbegin(), sv_vec.cend(),
+    [ &name ]( const SliceVariable& svar )
+      -> bool { return name == svar.name_; }
+  );
+  if ( iter == sv_vec.cend() ) return BOGUS_INDEX;
+  else return std::distance( sv_vec.cbegin(), iter );
+}
+
+// Helper function for adding a new slice to a SliceBinning object. This
+// is useful when defining slices simultaneously with a binning scheme.
+Slice& add_slice( SliceBinning& sb, const std::vector< double >& bin_edges_1d,
+  int active_var_idx, int other_var_idx = -1, double other_low = DBL_MAX,
+  double other_high = DBL_MAX )
+{
+  sb.slices_.emplace_back();
+  auto& new_slice = sb.slices_.back();
+
+  // Create the slice histogram
+  int num_bins = bin_edges_1d.size() - 1;
+  TH1D* slice_hist = new TH1D( "slice_hist", ";;events", num_bins,
+    bin_edges_1d.data() );
+  slice_hist->SetDirectory( nullptr );
+  new_slice.hist_.reset( slice_hist );
+
+  // Also set up the slice variable definitions
+  new_slice.active_var_indices_.push_back( active_var_idx );
+
+  if ( other_var_idx >= 0 ) {
+    new_slice.other_vars_.emplace_back( other_var_idx, other_low, other_high );
+  }
+
+  return new_slice;
+}
+
+Slice& add_slice( SliceBinning& sb, int num_bins, double active_low,
+  double active_high, int active_var_idx, int other_var_idx = -1,
+  double other_low = DBL_MAX, double other_high = DBL_MAX )
+{
+  auto edges = get_bin_low_edges( active_low, active_high, num_bins );
+
+  return add_slice( sb, edges, active_var_idx, other_var_idx, other_low,
+    other_high );
+}
+
+
+
 
 // These strings provide non-default selections (in TTree::Draw format) for
 // sideband control samples.

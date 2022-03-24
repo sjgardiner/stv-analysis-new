@@ -1,4 +1,6 @@
+#include "ConfigMakerUtils.hh"
 #include "ResponseMatrixMaker.hh"
+#include "SliceBinning.hh"
 
 constexpr int DUMMY_BLOCK_INDEX = -1;
 
@@ -28,6 +30,16 @@ void make_config_mcc8() {
 
   };
 
+  // Used for converting from the variable names given in the bin edge
+  // map to the ones used by the SliceBinning object
+  std::map< std::string, std::string > var_name_map = {
+    { "p3_mu.CosTheta()", "reco cos#theta_{#mu}" },
+    { "thMuP", "reco #theta_{#mup}" },
+    { "p3_lead_p.Mag()", "reco p_{p}" },
+    { "p3_mu.Mag()", "reco p_{#mu}" },
+    { "p3_lead_p.CosTheta()", "reco cos#theta_{p}" },
+  };
+
   // Keys are the same reco variable branch expressions as above. Values
   // are bool pairs indicating whether an underflow and overflow bin
   // should be produced.
@@ -48,6 +60,20 @@ void make_config_mcc8() {
     // is imposed, however, so we will make an overflow bin.
     { "p3_mu.Mag()", { false, true } }
 
+  };
+
+  // Set up an initially empty container to hold the slice definitions. We'll
+  // populate it in parallel with defining the bins themselves.
+  SliceBinning sb;
+
+  // Set the variables to use when defining phase-space slices
+  sb.slice_vars_ = {
+    { "reco p_{#mu}", "GeV/c", "reco $p_{\\mu}$", "GeV$/c$" },
+    { "reco cos#theta_{#mu}", "", "reco $\\cos\\theta_{\\mu}$", "" },
+    { "reco p_{p}", "GeV/c", "reco $p_{\\mu}$", "GeV$/c$" },
+    { "reco cos#theta_{p}", "", "reco $\\cos\\theta_{\\mu}$", "" },
+    { "reco #theta_{#mup}", "", "reco $\\theta_{\\mu p}$", "" },
+    { "reco bin number", "", "reco bin number", "" }
   };
 
   // Adjust for the higher proton threshold used in the signal definition
@@ -74,10 +100,17 @@ void make_config_mcc8() {
   // bin definitions from the MCC8 CCNp0pi analysis
   int block_idx = -1;
   for ( const auto& pair : mcc8_bin_edge_map ) {
+    // Start a new block of related bins
     ++block_idx;
 
     std::string reco_branchexpr = pair.first;
     std::string true_branchexpr = "mc_" + reco_branchexpr;
+
+    // Get the index for the "active" variable in the current block. We will
+    // use it below to make a new slice while also defining the bins in the
+    // block.
+    const std::string& act_var_name = var_name_map.at( reco_branchexpr );
+    int act_var_idx = find_slice_var_index( act_var_name, sb.slice_vars_ );
 
     // I didn't yet make a separate branch for the opening angle between
     // the muon and proton, so fix the branch expressions for that case
@@ -111,6 +144,10 @@ void make_config_mcc8() {
     if ( num_edges >= 2u ) num_bins = num_edges - 1u;
     else continue;
 
+    // Before defining each bin, make a new Slice object and set up the
+    // corresponding ROOT histogram within it
+    auto& cur_slice = add_slice( sb, bin_edges, act_var_idx );
+
     // If needed, then create the underflow bin in both true and reco space
     if ( needs_underflow_bin ) {
       double var_underflow_max = bin_edges.front();
@@ -127,6 +164,16 @@ void make_config_mcc8() {
         << " < " << var_underflow_max;
 
       std::string reco_bin_def = reco_ss.str();
+
+      // Here we use a trick: the current analysis bin index is equal
+      // to the size of the reco_bins vector before we add the new element.
+      size_t ana_bin_idx = reco_bins.size();
+      // Here's another trick: the call to operator[]() below will create
+      // a new map entry if needed. We then insert the current analysis
+      // bin index into the map entry. Note that the ROOT histogram bin
+      // indices are one-based, so the underflow bin is always at index zero.
+      cur_slice.bin_map_[ 0 ].insert( ana_bin_idx );
+
       reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_idx );
     }
 
@@ -152,6 +199,16 @@ void make_config_mcc8() {
 
       std::string reco_bin_def = reco_ss.str();
 
+      // Here we use a trick: the current analysis bin index is equal
+      // to the size of the reco_bins vector before we add the new element.
+      size_t ana_bin_idx = reco_bins.size();
+      // Here's another trick: the call to operator[]() below will create
+      // a new map entry if needed. We then insert the current analysis
+      // bin index into the map entry. Note that the ROOT histogram bin
+      // indices are one-based, so we correct for that in the line below.
+      cur_slice.bin_map_[ b + 1 ].insert( ana_bin_idx );
+
+      // Add the completed reco bin definition to the vector
       reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_idx );
 
     } // loop over ordinary bins for the current variable
@@ -172,6 +229,18 @@ void make_config_mcc8() {
         << " >= " << var_overflow_min;
 
       std::string reco_bin_def = reco_ss.str();
+
+      // Here we use a trick: the current analysis bin index is equal
+      // to the size of the reco_bins vector before we add the new element.
+      size_t ana_bin_idx = reco_bins.size();
+      // Here's another trick: the call to operator[]() below will create
+      // a new map entry if needed. We then insert the current analysis
+      // bin index into the map entry. Note that the ROOT histogram bin
+      // indices are one-based, so the overflow bin has an index equal to
+      // the number of bin edges.
+      cur_slice.bin_map_[ bin_edges.size() ].insert( ana_bin_idx );
+
+      // Add the completed reco bin definition to the vector
       reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_idx );
     }
 
@@ -180,6 +249,18 @@ void make_config_mcc8() {
   // Add a single set of true bins for the background categories of interest
   for ( const auto& bdef : background_defs ) {
     true_bins.emplace_back( bdef, kBackgroundTrueBin, DUMMY_BLOCK_INDEX );
+  }
+
+  // Create a slice showing all blocks together as a function of bin number
+  int num_reco_bins = reco_bins.size();
+  int bin_number_var_idx = find_slice_var_index( "reco bin number",
+    sb.slice_vars_ );
+
+  auto& bin_num_slice = add_slice( sb, num_reco_bins, 0, num_reco_bins,
+    bin_number_var_idx );
+  for ( int ab = 0; ab < num_reco_bins; ++ab ) {
+    // The ROOT histogram bins are one-based, so we correct for this here
+    bin_num_slice.bin_map_[ ab + 1 ].insert( ab );
   }
 
   // Dump this information to the output file
@@ -192,4 +273,7 @@ void make_config_mcc8() {
   out_file << reco_bins.size() << '\n';
   for ( const auto& rb : reco_bins ) out_file << rb << '\n';
 
+  // Also write a SliceBinning configuration file
+  std::ofstream sb_file( "mybins_mcc8_all.txt" );
+  sb_file << sb;
 }
