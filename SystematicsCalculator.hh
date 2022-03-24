@@ -15,6 +15,22 @@
 #include "FilePropertiesManager.hh"
 #include "ResponseMatrixMaker.hh"
 
+// Helper function template that retrieves an object from a TDirectoryFile
+// and loads a pointer to it into a std::unique_ptr of the correct type
+template< typename T > std::unique_ptr< T > get_object_unique_ptr(
+  const std::string& namecycle, TDirectory& df )
+{
+  T* temp_ptr = nullptr;
+  df.GetObject( namecycle.c_str(), temp_ptr );
+
+  // Set the directory to nullptr in the case of ROOT histograms. This will
+  // avoid extra deletion attempts
+  TH1* temp_hist_ptr = dynamic_cast< TH1* >( temp_ptr );
+  if ( temp_hist_ptr ) temp_hist_ptr->SetDirectory( nullptr );
+
+  return std::unique_ptr< T >( temp_ptr );
+}
+
 // Helper function to use on a new Universe object's histograms. Prevents
 // auto-deletion problems by disassociating the Universe object's histograms
 // from any TDirectory. Also turns off the stats box when plotting for
@@ -690,11 +706,12 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         // For data, just add the reco-space event counts to the total,
         // scaling to the beam-on triggers in the case of EXT data
         if ( !is_mc ) {
-          TH1D* reco_hist = nullptr;
-          subdir->GetObject( "unweighted_0_reco", reco_hist );
 
-          TH2D* reco_hist2d = nullptr;
-          subdir->GetObject( "unweighted_0_reco2d", reco_hist2d );
+          auto reco_hist = get_object_unique_ptr< TH1D >(
+            "unweighted_0_reco", *subdir );
+
+          auto reco_hist2d = get_object_unique_ptr< TH2D >(
+            "unweighted_0_reco2d", *subdir );
 
           // If we're working with EXT data, scale it to the corresponding
           // number of triggers from the BNB data from the same run
@@ -720,7 +737,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           else {
             // Otherwise, just add its contribution to the existing
             // histogram
-            data_hists_.at( type )->Add( reco_hist );
+            data_hists_.at( type )->Add( reco_hist.get() );
           }
 
           if ( !data_hists2d_.count(type) ) {
@@ -735,7 +752,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           else {
             // Otherwise, just add its contribution to the existing
             // histogram
-            data_hists2d_.at( type )->Add( reco_hist2d );
+            data_hists2d_.at( type )->Add( reco_hist2d.get() );
           }
 
           // For EXT data files (always assumed to be real data), no further
@@ -748,10 +765,11 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // not by trying to retrieve the unweighted "2d" histogram (which
           // stores event counts that simultaneously fall into a given true bin
           // and reco bin). It will only be present for fake data ntuples.
-          TH2D* fd_check_2d_hist = nullptr;
-          subdir->GetObject( "unweighted_0_2d", fd_check_2d_hist );
 
-          is_fake_data = ( fd_check_2d_hist != nullptr );
+          auto fd_check_2d_hist = get_object_unique_ptr< TH2D >(
+            "unweighted_0_2d", *subdir );
+
+          is_fake_data = ( fd_check_2d_hist.get() != nullptr );
 
           // The BNB data files should either all be real data or all be fake
           // data. If any mixture occurs, then this suggests that something has
@@ -778,8 +796,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         // file. For these, all four histograms for the "unweighted"
         // universe are always evaluated. Use this to determine the number
         // of true and reco bins easily.
-        TH2D* temp_2d_hist = nullptr;
-        subdir->GetObject( "unweighted_0_2d", temp_2d_hist );
+        auto temp_2d_hist = get_object_unique_ptr< TH2D >(
+          "unweighted_0_2d", *subdir );
 
         // NOTE: the convention of the ResponseMatrixMaker class is to use
         // x as the true axis and y as the reco axis.
@@ -815,33 +833,28 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // corresponding "data" histogram of reco event counts
           std::string hist_name_prefix = "unweighted_0";
 
-          TH1D* h_reco = nullptr;
-          TH1D* h_true = nullptr;
-          TH2D* h_2d = nullptr;
-          TH2D* h_categ = nullptr;
-          TH2D* h_reco2d = nullptr;
+          auto h_reco = get_object_unique_ptr< TH1D >(
+            (hist_name_prefix + "_reco"), *subdir );
 
-          subdir->GetObject( (hist_name_prefix + "_reco").c_str(),
-            h_reco );
+          auto h_true = get_object_unique_ptr< TH1D >(
+            (hist_name_prefix + "_true"), *subdir );
 
-          subdir->GetObject( (hist_name_prefix + "_true").c_str(),
-            h_true );
+          auto h_2d = get_object_unique_ptr< TH2D >(
+            (hist_name_prefix + "_2d"), *subdir );
 
-          subdir->GetObject( (hist_name_prefix + "_2d").c_str(), h_2d );
+          auto h_categ = get_object_unique_ptr< TH2D >(
+            (hist_name_prefix + "_categ"), *subdir );
 
-          subdir->GetObject( (hist_name_prefix + "_categ").c_str(),
-            h_categ );
-
-          subdir->GetObject( (hist_name_prefix + "_reco2d").c_str(),
-            h_reco2d );
+          auto h_reco2d = get_object_unique_ptr< TH2D >(
+            (hist_name_prefix + "_reco2d"), *subdir );
 
           // Add their contributions to the owned histograms for the
           // current Universe object
-          fake_data_universe_->hist_reco_->Add( h_reco );
-          fake_data_universe_->hist_true_->Add( h_true );
-          fake_data_universe_->hist_2d_->Add( h_2d );
-          fake_data_universe_->hist_categ_->Add( h_categ );
-          fake_data_universe_->hist_reco2d_->Add( h_reco2d );
+          fake_data_universe_->hist_reco_->Add( h_reco.get() );
+          fake_data_universe_->hist_true_->Add( h_true.get() );
+          fake_data_universe_->hist_2d_->Add( h_2d.get() );
+          fake_data_universe_->hist_categ_->Add( h_categ.get() );
+          fake_data_universe_->hist_reco2d_->Add( h_reco2d.get() );
 
         } // fake data sample
 
@@ -866,17 +879,20 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // The detector variation universes are all labeled "unweighted"
           // in the response matrix files. Retrieve the corresponding
           // histograms.
-          TH1D* hist_reco = nullptr;
-          TH1D* hist_true = nullptr;
-          TH2D* hist_2d = nullptr;
-          TH2D* hist_categ = nullptr;
-          TH2D* hist_reco2d = nullptr;
+          auto hist_reco = get_object_unique_ptr< TH1D >(
+            "unweighted_0_reco", *subdir );
 
-          subdir->GetObject( "unweighted_0_reco", hist_reco );
-          subdir->GetObject( "unweighted_0_true", hist_true );
-          subdir->GetObject( "unweighted_0_2d", hist_2d );
-          subdir->GetObject( "unweighted_0_categ", hist_categ );
-          subdir->GetObject( "unweighted_0_reco2d", hist_reco2d );
+          auto hist_true = get_object_unique_ptr< TH1D >(
+            "unweighted_0_true", *subdir );
+
+          auto hist_2d = get_object_unique_ptr< TH2D >(
+            "unweighted_0_2d", *subdir );
+
+          auto hist_categ = get_object_unique_ptr< TH2D >(
+            "unweighted_0_categ", *subdir );
+
+          auto hist_reco2d = get_object_unique_ptr< TH2D >(
+            "unweighted_0_reco2d", *subdir );
 
           // Scale all detVar universe histograms from the simulated POT to
           // the *total* BNB data POT for all runs analyzed. Since we only
@@ -891,11 +907,11 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
           // Add the scaled contents of these histograms to the
           // corresponding histograms in the new Universe object
-          temp_univ_ptr->hist_reco_->Add( hist_reco );
-          temp_univ_ptr->hist_true_->Add( hist_true );
-          temp_univ_ptr->hist_2d_->Add( hist_2d );
-          temp_univ_ptr->hist_categ_->Add( hist_categ );
-          temp_univ_ptr->hist_reco2d_->Add( hist_reco2d );
+          temp_univ_ptr->hist_reco_->Add( hist_reco.get() );
+          temp_univ_ptr->hist_true_->Add( hist_true.get() );
+          temp_univ_ptr->hist_2d_->Add( hist_2d.get() );
+          temp_univ_ptr->hist_categ_->Add( hist_categ.get() );
+          temp_univ_ptr->hist_reco2d_->Add( hist_reco2d.get() );
 
           // Adjust the owned histograms to avoid auto-deletion problems
           set_stats_and_dir( *temp_univ_ptr );
@@ -992,25 +1008,20 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               std::string hist_name_prefix = univ_name
                 + '_' + std::to_string( u_idx );
 
-              TH1D* h_reco = nullptr;
-              TH1D* h_true = nullptr;
-              TH2D* h_2d = nullptr;
-              TH2D* h_categ = nullptr;
-              TH2D* h_reco2d = nullptr;
+              auto h_reco = get_object_unique_ptr< TH1D >(
+                (hist_name_prefix + "_reco"), *subdir );
 
-              subdir->GetObject( (hist_name_prefix + "_reco").c_str(),
-                h_reco );
+              auto h_true = get_object_unique_ptr< TH1D >(
+                (hist_name_prefix + "_true"), *subdir );
 
-              subdir->GetObject( (hist_name_prefix + "_true").c_str(),
-                h_true );
+              auto h_2d = get_object_unique_ptr< TH2D >(
+                (hist_name_prefix + "_2d"), *subdir );
 
-              subdir->GetObject( (hist_name_prefix + "_2d").c_str(), h_2d );
+              auto h_categ = get_object_unique_ptr< TH2D >(
+                (hist_name_prefix + "_categ"), *subdir );
 
-              subdir->GetObject( (hist_name_prefix + "_categ").c_str(),
-                h_categ );
-
-              subdir->GetObject( (hist_name_prefix + "_reco2d").c_str(),
-                h_reco2d );
+              auto h_reco2d = get_object_unique_ptr< TH2D >(
+                (hist_name_prefix + "_reco2d"), *subdir );
 
               // Scale these histograms to the appropriate BNB data POT for
               // the current run
@@ -1022,11 +1033,11 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
               // Add their contributions to the owned histograms for the
               // current Universe object
-              universe.hist_reco_->Add( h_reco );
-              universe.hist_true_->Add( h_true );
-              universe.hist_2d_->Add( h_2d );
-              universe.hist_categ_->Add( h_categ );
-              universe.hist_reco2d_->Add( h_reco2d );
+              universe.hist_reco_->Add( h_reco.get() );
+              universe.hist_true_->Add( h_true.get() );
+              universe.hist_2d_->Add( h_2d.get() );
+              universe.hist_categ_->Add( h_categ.get() );
+              universe.hist_reco2d_->Add( h_reco2d.get() );
 
             } // universes indices
 
