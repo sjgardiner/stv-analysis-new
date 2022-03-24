@@ -1,5 +1,7 @@
 #include "ResponseMatrixMaker.hh"
 
+constexpr int DUMMY_BLOCK_INDEX = -1;
+
 void make_config_mcc8() {
 
   // Keys are the reco STV ntuple branch names of interest. Values
@@ -48,39 +50,31 @@ void make_config_mcc8() {
 
   };
 
-  // Variable nicknames to use when naming the output config files
-  std::map< std::string, std::string > mcc8_var_name_map = {
-
-    { "p3_mu.CosTheta()", "cth_mu" },
-
-    { "p3_lead_p.CosTheta()", "cth_p" },
-
-    { "thMuP", "th_mu_p" },
-
-    { "p3_lead_p.Mag()", "p_p" },
-
-    { "p3_mu.Mag()", "p_mu" }
-
-  };
-
-  std::string selection = "sel_CCNp0pi";
-  std::string signal_def = "mc_is_signal";
+  // Adjust for the higher proton threshold used in the signal definition
+  // of the MCC8 CCNp0pi analysis. We will ignore the tiny difference
+  // between the pionless and mesonless signal definitions (a ~0.06% effect).
+  std::string selection = "sel_CCNp0pi && p3_lead_p.Mag() >= 0.3";
+  std::string signal_def = "mc_is_signal && mc_p3_lead_p.Mag() >= 0.3";
 
   // By construction, MC event categories 5-11 contain all beam-correlated
   // backgrounds. This list is therefore comprehensive apart from cosmic
   // overlay stuff which is directly measured in a dedicated sample.
+  // NOTE: We add an extra background bin for events that the MCC9 analysis
+  // considers signal and the MCC8 analysis considers background.
   std::vector< std::string > background_defs = {
+    "mc_is_signal && mc_p3_lead_p.Mag() < 0.3",
     "category == 5", "category == 6", "category == 7", "category == 8",
     "category == 9", "category == 10", "category == 11"
   };
 
+  std::vector< TrueBin > true_bins;
+  std::vector< RecoBin > reco_bins;
 
-  // Iterate over each kinematic variable and make a config file for it
-  // based on the binning from the MCC8 CCNp0pi analysis
+  // Create separate blocks of bins for each kinematic variable using the
+  // bin definitions from the MCC8 CCNp0pi analysis
+  int block_idx = -1;
   for ( const auto& pair : mcc8_bin_edge_map ) {
-
-    std::vector< TrueBin > true_bins;
-    std::vector< RecoBin > reco_bins;
+    ++block_idx;
 
     std::string reco_branchexpr = pair.first;
     std::string true_branchexpr = "mc_" + reco_branchexpr;
@@ -89,11 +83,17 @@ void make_config_mcc8() {
     // the muon and proton, so fix the branch expressions for that case
     // with this ugly hack
     if ( reco_branchexpr == "thMuP" ) {
-      reco_branchexpr = "TMath::ACos( (p3_mu.X()*p3_lead_p.X() + p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) / p3_mu.Mag() / p3_lead_p.Mag() )";
-      true_branchexpr = "TMath::ACos( (mc_p3_mu.X()*mc_p3_lead_p.X() + mc_p3_mu.Y()*mc_p3_lead_p.Y() + mc_p3_mu.Z()*mc_p3_lead_p.Z()) / mc_p3_mu.Mag() / mc_p3_lead_p.Mag() )";
 
-      // Add to the necessary maps as well so we don't break the lookups below
-      mcc8_var_name_map[ reco_branchexpr ] = mcc8_var_name_map.at( "thMuP" );
+      reco_branchexpr = "TMath::ACos( (p3_mu.X()*p3_lead_p.X()"
+        " + p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) /"
+        " p3_mu.Mag() / p3_lead_p.Mag() )";
+
+      true_branchexpr = "TMath::ACos( (mc_p3_mu.X()*mc_p3_lead_p.X()"
+        " + mc_p3_mu.Y()*mc_p3_lead_p.Y() + mc_p3_mu.Z()*mc_p3_lead_p.Z()) /"
+        " mc_p3_mu.Mag() / mc_p3_lead_p.Mag() )";
+
+      // Add to the under/overflow map as well so we don't break the lookups
+      // below
       mcc8_under_overflow_map[ reco_branchexpr ]
         = mcc8_under_overflow_map.at( "thMuP" );
     }
@@ -120,14 +120,14 @@ void make_config_mcc8() {
         << " < " << var_underflow_max;
 
       std::string true_bin_def = true_ss.str();
-      true_bins.emplace_back( true_bin_def, kSignalTrueBin );
+      true_bins.emplace_back( true_bin_def, kSignalTrueBin, block_idx );
 
       std::stringstream reco_ss;
       reco_ss << selection << " && " << reco_branchexpr
         << " < " << var_underflow_max;
 
       std::string reco_bin_def = reco_ss.str();
-      reco_bins.emplace_back( reco_bin_def );
+      reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_idx );
     }
 
     // Create the ordinary signal bins using the requested edges
@@ -143,7 +143,7 @@ void make_config_mcc8() {
 
       std::string true_bin_def = true_ss.str();
 
-      true_bins.emplace_back( true_bin_def, kSignalTrueBin );
+      true_bins.emplace_back( true_bin_def, kSignalTrueBin, block_idx );
 
       std::stringstream reco_ss;
       reco_ss << selection
@@ -152,7 +152,7 @@ void make_config_mcc8() {
 
       std::string reco_bin_def = reco_ss.str();
 
-      reco_bins.emplace_back( reco_bin_def );
+      reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_idx );
 
     } // loop over ordinary bins for the current variable
 
@@ -165,33 +165,31 @@ void make_config_mcc8() {
         << " >= " << var_overflow_min;
 
       std::string true_bin_def = true_ss.str();
-      true_bins.emplace_back( true_bin_def, kSignalTrueBin );
+      true_bins.emplace_back( true_bin_def, kSignalTrueBin, block_idx );
 
       std::stringstream reco_ss;
       reco_ss << selection << " && " << reco_branchexpr
         << " >= " << var_overflow_min;
 
       std::string reco_bin_def = reco_ss.str();
-      reco_bins.emplace_back( reco_bin_def );
+      reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_idx );
     }
-
-    // Add true bins for the background categories of interest
-    for ( const auto& bdef : background_defs ) {
-      true_bins.emplace_back( bdef, kBackgroundTrueBin );
-    }
-
-    std::string var_name = mcc8_var_name_map.at( reco_branchexpr );
-
-    // Dump this information to the output file
-    std::ofstream out_file( "myconfig_mcc8_" + var_name + ".txt" );
-    out_file << "mcc8_" << var_name << '\n';
-    out_file << "stv_tree\n";
-    out_file << true_bins.size() << '\n';
-    for ( const auto& tb : true_bins ) out_file << tb << '\n';
-
-    out_file << reco_bins.size() << '\n';
-    for ( const auto& rb : reco_bins ) out_file << rb << '\n';
 
   } // loop over kinematic variables
+
+  // Add a single set of true bins for the background categories of interest
+  for ( const auto& bdef : background_defs ) {
+    true_bins.emplace_back( bdef, kBackgroundTrueBin, DUMMY_BLOCK_INDEX );
+  }
+
+  // Dump this information to the output file
+  std::ofstream out_file( "myconfig_mcc8_all.txt" );
+  out_file << "mcc8_all" << '\n';
+  out_file << "stv_tree\n";
+  out_file << true_bins.size() << '\n';
+  for ( const auto& tb : true_bins ) out_file << tb << '\n';
+
+  out_file << reco_bins.size() << '\n';
+  for ( const auto& rb : reco_bins ) out_file << rb << '\n';
 
 }
