@@ -31,6 +31,9 @@ void set_stats_and_dir( Universe& univ ) {
 
   univ.hist_categ_->SetStats( false );
   univ.hist_categ_->SetDirectory( nullptr );
+
+  univ.hist_reco2d_->SetStats( false );
+  univ.hist_reco2d_->SetDirectory( nullptr );
 }
 
 // Tests whether a string ends with another string. Taken from
@@ -273,6 +276,7 @@ class SystematicsCalculator {
 
     // Holds reco-space histograms for data (BNB and EXT) bin counts
     std::map< NFT, std::unique_ptr<TH1D> > data_hists_;
+    std::map< NFT, std::unique_ptr<TH2D> > data_hists2d_;
 
     // Holds universe objects for reweightable systematics
     std::map< std::string, std::vector< std::unique_ptr<Universe> > >
@@ -460,20 +464,22 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     TH1D* hist_reco = nullptr;
     TH2D* hist_2d = nullptr;
     TH2D* hist_categ = nullptr;
+    TH2D* hist_reco2d = nullptr;
 
     total_subdir.GetObject( (key + "_true").c_str(), hist_true );
     total_subdir.GetObject( (key + "_reco").c_str(), hist_reco );
     total_subdir.GetObject( (key + "_2d").c_str(), hist_2d );
     total_subdir.GetObject( (key + "_categ").c_str(), hist_categ );
+    total_subdir.GetObject( (key + "_reco2d").c_str(), hist_reco2d );
 
-    if ( !hist_true || !hist_reco || !hist_2d || !hist_categ ) {
+    if ( !hist_true || !hist_reco || !hist_2d || !hist_categ || !hist_reco2d ) {
       throw std::runtime_error( "Failed to retrieve histograms for the "
         + key + " universe" );
     }
 
     // Reconstruct the Universe object from the retrieved histograms
     auto temp_univ = std::make_unique< Universe >( univ_name, univ_index,
-      hist_true, hist_reco, hist_2d, hist_categ );
+      hist_true, hist_reco, hist_2d, hist_categ, hist_reco2d );
 
     // Determine whether the current universe represents a detector
     // variation or a reweightable variation. We'll use this information to
@@ -537,20 +543,28 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     std::string data_name = fpm.ntuple_type_to_string( file_type );
     std::string hist_name = data_name + "_reco";
 
+    std::string hist2d_name = data_name + "_reco2d";
+
     TH1D* hist = nullptr;
     total_subdir.GetObject( hist_name.c_str(), hist );
-    hist->SetDirectory( nullptr );
 
-    if ( !hist ) {
+    TH2D* hist2d = nullptr;
+    total_subdir.GetObject( hist2d_name.c_str(), hist2d );
+
+    if ( !hist || !hist2d ) {
       throw std::runtime_error( "Missing data histogram for " + data_name );
     }
 
-    if ( data_hists_.count(file_type) ) {
+    hist->SetDirectory( nullptr );
+    hist2d->SetDirectory( nullptr );
+
+    if ( data_hists_.count(file_type) || data_hists2d_.count(file_type) ) {
       throw std::runtime_error( "Duplicate data histogram for "
         + data_name );
     }
 
     data_hists_[ file_type ].reset( hist );
+    data_hists2d_[ file_type ].reset( hist2d );
   }
 
   TParameter< double >* temp_pot = nullptr;
@@ -679,6 +693,9 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           TH1D* reco_hist = nullptr;
           subdir->GetObject( "unweighted_0_reco", reco_hist );
 
+          TH2D* reco_hist2d = nullptr;
+          subdir->GetObject( "unweighted_0_reco2d", reco_hist2d );
+
           // If we're working with EXT data, scale it to the corresponding
           // number of triggers from the BNB data from the same run
           if ( type == NFT::kExtBNB ) {
@@ -686,6 +703,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
             double ext_trigs = run_to_ext_trigs_map.at( run );
 
             reco_hist->Scale( bnb_trigs / ext_trigs );
+            reco_hist2d->Scale( bnb_trigs / ext_trigs );
           }
 
           // If we don't have a histogram in the map for this data type
@@ -703,6 +721,21 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
             // Otherwise, just add its contribution to the existing
             // histogram
             data_hists_.at( type )->Add( reco_hist );
+          }
+
+          if ( !data_hists2d_.count(type) ) {
+            TH2D* temp_clone = dynamic_cast<TH2D*>(
+              reco_hist2d->Clone("temp_clone")
+            );
+            temp_clone->SetStats( false );
+            temp_clone->SetDirectory( nullptr );
+            // Note: here the map entry takes ownership of the histogram
+            data_hists2d_[ type ].reset( temp_clone );
+          }
+          else {
+            // Otherwise, just add its contribution to the existing
+            // histogram
+            data_hists2d_.at( type )->Add( reco_hist2d );
           }
 
           // For EXT data files (always assumed to be real data), no further
@@ -786,6 +819,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           TH1D* h_true = nullptr;
           TH2D* h_2d = nullptr;
           TH2D* h_categ = nullptr;
+          TH2D* h_reco2d = nullptr;
 
           subdir->GetObject( (hist_name_prefix + "_reco").c_str(),
             h_reco );
@@ -798,12 +832,16 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           subdir->GetObject( (hist_name_prefix + "_categ").c_str(),
             h_categ );
 
+          subdir->GetObject( (hist_name_prefix + "_reco2d").c_str(),
+            h_reco2d );
+
           // Add their contributions to the owned histograms for the
           // current Universe object
           fake_data_universe_->hist_reco_->Add( h_reco );
           fake_data_universe_->hist_true_->Add( h_true );
           fake_data_universe_->hist_2d_->Add( h_2d );
           fake_data_universe_->hist_categ_->Add( h_categ );
+          fake_data_universe_->hist_reco2d_->Add( h_reco2d );
 
         } // fake data sample
 
@@ -832,11 +870,13 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           TH1D* hist_true = nullptr;
           TH2D* hist_2d = nullptr;
           TH2D* hist_categ = nullptr;
+          TH2D* hist_reco2d = nullptr;
 
           subdir->GetObject( "unweighted_0_reco", hist_reco );
           subdir->GetObject( "unweighted_0_true", hist_true );
           subdir->GetObject( "unweighted_0_2d", hist_2d );
           subdir->GetObject( "unweighted_0_categ", hist_categ );
+          subdir->GetObject( "unweighted_0_reco2d", hist_reco2d );
 
           // Scale all detVar universe histograms from the simulated POT to
           // the *total* BNB data POT for all runs analyzed. Since we only
@@ -847,6 +887,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           hist_true->Scale( total_bnb_data_pot_ / file_pot );
           hist_2d->Scale( total_bnb_data_pot_ / file_pot );
           hist_categ->Scale( total_bnb_data_pot_ / file_pot );
+          hist_reco2d->Scale( total_bnb_data_pot_ / file_pot );
 
           // Add the scaled contents of these histograms to the
           // corresponding histograms in the new Universe object
@@ -854,6 +895,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           temp_univ_ptr->hist_true_->Add( hist_true );
           temp_univ_ptr->hist_2d_->Add( hist_2d );
           temp_univ_ptr->hist_categ_->Add( hist_categ );
+          temp_univ_ptr->hist_reco2d_->Add( hist_reco2d );
 
           // Adjust the owned histograms to avoid auto-deletion problems
           set_stats_and_dir( *temp_univ_ptr );
@@ -954,6 +996,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               TH1D* h_true = nullptr;
               TH2D* h_2d = nullptr;
               TH2D* h_categ = nullptr;
+              TH2D* h_reco2d = nullptr;
 
               subdir->GetObject( (hist_name_prefix + "_reco").c_str(),
                 h_reco );
@@ -966,12 +1009,16 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               subdir->GetObject( (hist_name_prefix + "_categ").c_str(),
                 h_categ );
 
+              subdir->GetObject( (hist_name_prefix + "_reco2d").c_str(),
+                h_reco2d );
+
               // Scale these histograms to the appropriate BNB data POT for
               // the current run
               h_reco->Scale( rw_scale_factor );
               h_true->Scale( rw_scale_factor );
               h_2d->Scale( rw_scale_factor );
               h_categ->Scale( rw_scale_factor );
+              h_reco2d->Scale( rw_scale_factor );
 
               // Add their contributions to the owned histograms for the
               // current Universe object
@@ -979,6 +1026,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               universe.hist_true_->Add( h_true );
               universe.hist_2d_->Add( h_2d );
               universe.hist_categ_->Add( h_categ );
+              universe.hist_reco2d_->Add( h_reco2d );
 
             } // universes indices
 
@@ -993,17 +1041,22 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
   } // run
 
   // Everything is ready to go with one possible exception: if we're working
-  // with fake data ntuples, then the "data" histogram of reco-space event
+  // with fake data ntuples, then the "data" histograms of reco-space event
   // counts will contain the "beam-on" (MC) contribution but not the "beam-off"
   // (EXT) contribution needed to form a full fake measurement. Correct this
-  // situation if needed by adding the total EXT histogram to the BNB "data"
-  // histogram.
+  // situation if needed by adding the total EXT histograms to the BNB "data"
+  // histograms.
   if ( using_fake_data ) {
 
     const TH1D* ext_hist = data_hists_.at( NFT::kExtBNB ).get(); // EXT data
     TH1D* bnb_hist = data_hists_.at( NFT::kOnBNB ).get();
 
     bnb_hist->Add( ext_hist );
+
+    const TH2D* ext_hist2d = data_hists2d_.at( NFT::kExtBNB ).get(); // EXT data
+    TH2D* bnb_hist2d = data_hists2d_.at( NFT::kOnBNB ).get();
+
+    bnb_hist2d->Add( ext_hist2d );
 
     // In a real measurement, the (Poisson) statistical uncertainty on each BNB
     // data histogram bin would be simply the square root of the event count.
@@ -1019,6 +1072,12 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
     for ( int rb = 0; rb <= num_reco_bins + 1; ++rb ) {
       double evts = std::max( 0., bnb_hist->GetBinContent(rb) );
       bnb_hist->SetBinError( rb, std::sqrt(evts) );
+
+      for ( int rb2 = 0; rb2 <= num_reco_bins + 1; ++rb2 ) {
+        double evts2d = std::max( 0., bnb_hist2d->GetBinContent(rb, rb2) );
+        bnb_hist2d->SetBinError( rb, rb2, std::sqrt(evts2d) );
+      }
+
     }
 
     std::cout << "******* USING FAKE DATA *******\n";
@@ -1041,7 +1100,16 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     const auto& fpm = FilePropertiesManager::Instance();
     std::string univ_name = fpm.ntuple_type_to_string( type );
     hist->Write( (univ_name + "_reco").c_str() );
+  }
 
+  for ( const auto& pair : data_hists2d_ ) {
+
+    NFT type = pair.first;
+    auto& hist2d = pair.second;
+
+    const auto& fpm = FilePropertiesManager::Instance();
+    std::string univ_name = fpm.ntuple_type_to_string( type );
+    hist2d->Write( (univ_name + "_reco2d").c_str() );
   }
 
   // Save the detector variation histograms
@@ -1053,6 +1121,7 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     universe->hist_true_->Write();
     universe->hist_2d_->Write();
     universe->hist_categ_->Write();
+    universe->hist_reco2d_->Write();
   }
 
   // Save the reweightable systematic histograms
@@ -1064,6 +1133,7 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
       universe->hist_true_->Write();
       universe->hist_2d_->Write();
       universe->hist_categ_->Write();
+      universe->hist_reco2d_->Write();
     }
 
   }
@@ -1074,6 +1144,7 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     fake_data_universe_->hist_true_->Write();
     fake_data_universe_->hist_2d_->Write();
     fake_data_universe_->hist_categ_->Write();
+    fake_data_universe_->hist_reco2d_->Write();
   }
 
   // Save the total BNB data POT for easy retrieval later

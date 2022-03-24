@@ -260,6 +260,11 @@ class Universe {
         "; true bin number; reco bin number; counts", num_true_bins, 0.,
         num_true_bins, num_reco_bins, 0., num_reco_bins );
 
+      hist_reco2d_ = std::make_unique< TH2D >(
+        (hist_name_prefix + "_reco2d").c_str(),
+        "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
+        num_reco_bins, num_reco_bins, 0., num_reco_bins );
+
       // Get the number of defined EventCategory values by checking the number
       // of elements in the "label map" managed by the EventCategoryInterpreter
       // singleton class
@@ -277,21 +282,23 @@ class Universe {
       hist_reco_->Sumw2();
       hist_2d_->Sumw2();
       hist_categ_->Sumw2();
+      hist_reco2d_->Sumw2();
     }
 
     // Note: the new Universe object takes ownership of the histogram
     // pointers passed to this constructor
     Universe( const std::string& universe_name,
       size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d,
-      TH2D* hist_categ )
+      TH2D* hist_categ, TH2D* hist_reco2d )
       : universe_name_( universe_name ), index_( universe_index ),
       hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d ),
-      hist_categ_( hist_categ )
+      hist_categ_( hist_categ ), hist_reco2d_( hist_reco2d )
     {
       hist_true_->SetDirectory( nullptr );
       hist_reco_->SetDirectory( nullptr );
       hist_2d_->SetDirectory( nullptr );
       hist_categ_->SetDirectory( nullptr );
+      hist_reco2d_->SetDirectory( nullptr );
     }
 
     std::unique_ptr< Universe > clone() const {
@@ -304,6 +311,7 @@ class Universe {
       result->hist_reco_->Add( this->hist_reco_.get() );
       result->hist_2d_->Add( this->hist_2d_.get() );
       result->hist_categ_->Add( this->hist_categ_.get() );
+      result->hist_reco2d_->Add( this->hist_reco2d_.get() );
 
       return result;
     }
@@ -314,6 +322,7 @@ class Universe {
     std::unique_ptr< TH1D > hist_reco_;
     std::unique_ptr< TH2D > hist_2d_;
     std::unique_ptr< TH2D > hist_categ_;
+    std::unique_ptr< TH2D > hist_reco2d_;
 };
 
 class ResponseMatrixMaker {
@@ -677,9 +686,15 @@ void ResponseMatrixMaker::build_response_matrices(
 
         for ( const auto& rb : matched_reco_bins ) {
           universe.hist_reco_->Fill( rb.bin_index_, rb.weight_ * safe_wgt );
+
           for ( const auto& c : matched_category_indices ) {
             universe.hist_categ_->Fill( c.bin_index_, rb.bin_index_,
               c.weight_ * rb.weight_ * safe_wgt );
+          }
+
+          for ( const auto& other_rb : matched_reco_bins ) {
+            universe.hist_reco2d_->Fill( rb.bin_index_, other_rb.bin_index_,
+              rb.weight_ * other_rb.weight_ * safe_wgt );
           }
         } // reco bins
       } // universes
@@ -699,11 +714,19 @@ void ResponseMatrixMaker::build_response_matrices(
     } // true bins
 
     for ( const auto& rb : matched_reco_bins ) {
+
       univ.hist_reco_->Fill( rb.bin_index_, rb.weight_ );
+
       for ( const auto& c : matched_category_indices ) {
         univ.hist_categ_->Fill( c.bin_index_, rb.bin_index_,
           c.weight_ * rb.weight_ );
       }
+
+      for ( const auto& other_rb : matched_reco_bins ) {
+        univ.hist_reco2d_->Fill( rb.bin_index_, other_rb.bin_index_,
+          rb.weight_ * other_rb.weight_ );
+      }
+
     } // reco bins
 
   } // TChain entries
@@ -838,8 +861,9 @@ void ResponseMatrixMaker::save_histograms(
   for ( auto& pair : universes_ ) {
     auto& u_vec = pair.second;
     for ( auto& univ : u_vec ) {
-      // Always save the reco histogram
+      // Always save the reco histograms
       univ.hist_reco_->Write();
+      univ.hist_reco2d_->Write();
 
       // Save the others if the true histogram was filled at least once
       // (used to infer that we have MC truth information)
