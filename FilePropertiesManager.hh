@@ -199,6 +199,11 @@ class FilePropertiesManager {
 
       std::ifstream in_file( in_file_name );
 
+      if ( !in_file ) {
+        throw std::runtime_error( "The file properties configuration file \""
+          + in_file_name + "\" could not be opened." );
+      }
+
       std::string temp_line;
       while ( std::getline(in_file, temp_line) ) {
         // Ignore lines that begin with the '#' character (this allows for
