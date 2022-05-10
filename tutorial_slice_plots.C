@@ -77,10 +77,10 @@ void tutorial_slice_plots() {
     SliceHistogram* slice_mc_plus_ext = SliceHistogram::make_slice_histogram(
       *reco_mc_plus_ext_hist, slice, &matrix_map.at("total") );
 
-    //auto chi2_result = slice_bnb->get_chi2( *slice_mc_plus_ext );
-    //std::cout << "Slice " << sl_idx << ": \u03C7\u00b2 = "
-    //  << chi2_result.chi2_ << '/' << chi2_result.num_bins_ << " bins,"
-    //  << " p-value = " << chi2_result.p_value_ << '\n';
+    auto chi2_result = slice_bnb->get_chi2( *slice_mc_plus_ext );
+    std::cout << "Slice " << sl_idx << ": \u03C7\u00b2 = "
+      << chi2_result.chi2_ << '/' << chi2_result.num_bins_ << " bins,"
+      << " p-value = " << chi2_result.p_value_ << '\n';
 
     // Build a stack of categorized central-value MC predictions plus the
     // extBNB contribution in slice space
