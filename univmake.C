@@ -37,14 +37,14 @@ bool is_reweightable_mc_ntuple( const std::string& input_file_name ) {
 int main( int argc, char* argv[] ) {
 
   if ( argc != 4 && argc != 5 ) {
-    std::cout << "Usage: respmat LIST_FILE"
-      << " RESPMAT_CONFIG_FILE OUTPUT_ROOT_FILE"
+    std::cout << "Usage: univmake LIST_FILE"
+      << " UNIVMAKE_CONFIG_FILE OUTPUT_ROOT_FILE"
       << " [FILE_PROPERTIES_CONFIG_FILE]\n";
     return 1;
   }
 
   std::string list_file_name( argv[1] );
-  std::string respmat_config_file_name( argv[2] );
+  std::string univmake_config_file_name( argv[2] );
   std::string output_file_name( argv[3] );
 
   // If the user specified an (optional) non-default configuration
@@ -100,9 +100,9 @@ int main( int argc, char* argv[] ) {
     std::cout << "Calculating response matrices for ntuple input file "
       << input_file_name << '\n';
     std::cout << "Loading ResponseMatrixMaker configuration from "
-      << respmat_config_file_name << '\n';
+      << univmake_config_file_name << '\n';
 
-    ResponseMatrixMaker resp_mat( respmat_config_file_name );
+    ResponseMatrixMaker resp_mat( univmake_config_file_name );
 
     resp_mat.add_input_file( input_file_name.c_str() );
 

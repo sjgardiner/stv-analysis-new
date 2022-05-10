@@ -1,6 +1,6 @@
-all: analyzer respmat
+all: analyzer univmake
 
-respmat: respmat.C
+univmake: univmake.C
 	$(CXX) $(shell root-config --cflags --libs) -O3 -o $@ $^
 
 analyzer: analyzer.C
@@ -9,4 +9,4 @@ analyzer: analyzer.C
 .PHONY: clean
 
 clean:
-	$(RM) respmat analyzer
+	$(RM) univmake analyzer
