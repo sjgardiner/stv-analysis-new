@@ -3,7 +3,7 @@
 
 // STV analysis includes
 #include "../FilePropertiesManager.hh"
-#include "../MCC9Unfolder.hh"
+#include "../MCC9SystematicsCalculator.hh"
 #include "../PlotUtils.hh"
 
 // ROOT integer code for Arial font
@@ -43,7 +43,7 @@ void smear_matrix() {
     "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
     "RespMat-myconfig_mcc9_2D_proton.root" );
 
-  auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name,
+  auto* syst_ptr = new MCC9SystematicsCalculator( input_respmat_file_name,
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
 

@@ -11,7 +11,7 @@
 #include "../ConstrainedCalculator.hh"
 #include "../DAgostiniUnfolder.hh"
 #include "../FiducialVolume.hh"
-#include "../MCC9Unfolder.hh"
+#include "../MCC9SystematicsCalculator.hh"
 #include "../SliceBinning.hh"
 #include "../SliceHistogram.hh"
 #include "../WienerSVDUnfolder.hh"
@@ -246,14 +246,17 @@ void test_unfolding() {
   fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
   const auto& sample_info = sample_info_map.at( SAMPLE_NAME );
-  const auto& respmat_file_name = sample_info.respmat_file_;
+  //const auto& respmat_file_name = sample_info.respmat_file_;
+
+  const std::string respmat_file_name( "/uboone/data/users/gardiner/"
+    "RESPMAT2DNEW.root" );
 
   // Do the systematics calculations in preparation for unfolding
   auto* syst_ptr = new ConstrainedCalculator( respmat_file_name,
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
-  auto* mcc9_ptr = new MCC9Unfolder( respmat_file_name, "../systcalc.conf" );
+  auto* mcc9_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc.conf" );
   auto& mcc9 = *mcc9_ptr;
 
   // Get the tuned GENIE CV prediction in each true bin (including the
@@ -474,6 +477,7 @@ void test_unfolding() {
   }
 
   lg->Draw( "same" );
+  return;
 
   // Plot slices of the unfolded result
   auto* sb_ptr = new SliceBinning( sample_info.sb_file_ );

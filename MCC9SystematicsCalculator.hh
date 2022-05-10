@@ -11,11 +11,11 @@
 // or D'Agostini methods (e.g., cross-section systematic uncertainties are
 // evaluated fully on backgrounds but enter only via the response matrix for
 // signal events).
-class MCC9Unfolder : public SystematicsCalculator {
+class MCC9SystematicsCalculator : public SystematicsCalculator {
 
   public:
 
-    MCC9Unfolder( const std::string& input_respmat_file_name,
+    MCC9SystematicsCalculator( const std::string& input_respmat_file_name,
       const std::string& syst_cfg_file_name = "",
       const std::string& respmat_tdirectoryfile_name = "" );
 
@@ -30,7 +30,7 @@ class MCC9Unfolder : public SystematicsCalculator {
 
 };
 
-MCC9Unfolder::MCC9Unfolder(
+MCC9SystematicsCalculator::MCC9SystematicsCalculator(
   const std::string& input_respmat_file_name,
   const std::string& syst_cfg_file_name,
   const std::string& respmat_tdirectoryfile_name )
@@ -40,10 +40,10 @@ MCC9Unfolder::MCC9Unfolder(
 
 }
 
-double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
+double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ, int reco_bin,
   int flux_universe_index ) const
 {
-  // For the MCC9Unfolder class, the observable of interest is the total number
+  // For the MCC9SystematicsCalculator class, the observable of interest is the total number
   // of events (signal + background) in the current bin in reco space
   double reco_bin_events = 0.;
 
@@ -136,7 +136,7 @@ double MCC9Unfolder::evaluate_observable( const Universe& univ, int reco_bin,
   return reco_bin_events;
 }
 
-double MCC9Unfolder::evaluate_mc_stat_covariance( const Universe& univ,
+double MCC9SystematicsCalculator::evaluate_mc_stat_covariance( const Universe& univ,
   int reco_bin_a, int reco_bin_b ) const
 {
   // ROOT histograms use one-based bin indices, so I correct for that here.
@@ -148,7 +148,7 @@ double MCC9Unfolder::evaluate_mc_stat_covariance( const Universe& univ,
   return err2;
 }
 
-double MCC9Unfolder::evaluate_data_stat_covariance( int reco_bin_a,
+double MCC9SystematicsCalculator::evaluate_data_stat_covariance( int reco_bin_a,
   int reco_bin_b, bool use_ext ) const
 {
   const TH2D* d_hist = nullptr;

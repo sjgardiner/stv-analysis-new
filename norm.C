@@ -4,7 +4,7 @@
 // STV analysis includes
 #include "FilePropertiesManager.hh"
 #include "MCC8ForwardFolder.hh"
-#include "MCC9Unfolder.hh"
+#include "MCC9SystematicsCalculator.hh"
 #include "PlotUtils.hh"
 #include "SliceBinning.hh"
 
@@ -12,7 +12,7 @@ using NFT = NtupleFileType;
 
 void covMat( const std::string& input_respmat_file_name ) {
 
-  auto* syst_ptr = new MCC9Unfolder( input_respmat_file_name,
+  auto* syst_ptr = new MCC9SystematicsCalculator( input_respmat_file_name,
     "systcalc.conf" );
   auto& syst = *syst_ptr;
 
@@ -529,7 +529,7 @@ SliceHistogram* make_slice_histogram( TH1D& reco_bin_histogram,
 
 void norm() {
 
-  auto* syst_ptr = new MCC9Unfolder( "/uboone/data/users/gardiner/"
+  auto* syst_ptr = new MCC9SystematicsCalculator( "/uboone/data/users/gardiner/"
     "ntuples-stv-MCC9InternalNote/respmat-files/RespMat-mcc9-2D_proton.root",
     "systcalc.conf" );
   auto& syst = *syst_ptr;
