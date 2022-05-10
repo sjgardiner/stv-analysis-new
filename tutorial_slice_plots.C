@@ -59,7 +59,7 @@ void tutorial_slice_plots() {
   auto* matrix_map_ptr = syst.get_covariances().release();
   auto& matrix_map = *matrix_map_ptr;
 
-  auto* sb_ptr = new SliceBinning( "tutorial_slice_config.txt" );
+  auto* sb_ptr = new SliceBinning( "tutorial_reco_slice_config.txt" );
   auto& sb = *sb_ptr;
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
@@ -132,11 +132,6 @@ void tutorial_slice_plots() {
     slice_mc_plus_ext->hist_->Draw( "same hist e" );
 
     slice_bnb->hist_->Draw( "same e" );
-
-    //std::string out_pdf_name = "plot_slice_";
-    //if ( sl_idx < 10 ) out_pdf_name += "0";
-    //out_pdf_name += std::to_string( sl_idx ) + ".pdf";
-    //c1->SaveAs( out_pdf_name.c_str() );
 
     // Get the binning and axis labels for the current slice by cloning the
     // (empty) histogram owned by the Slice object

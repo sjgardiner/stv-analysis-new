@@ -1,7 +1,7 @@
 3
-"reco p_{p}" "GeV/c" "reco $p_{\mu}$" "GeV$/c$"
-"reco cos#theta_{p}" "" "reco $\cos\theta_{\mu}$" ""
-"reco bin number" "" "reco bin number" ""
+"p_{p}" "GeV" "$p_{p}$" "GeV"
+"cos#theta_{p}" "" "$\cos\theta_{p}$" ""
+"true bin number" "" "true bin number" ""
 3
 "events"
 1 1 10 -1 -0.5 0 0.27 0.45 0.62 0.76 0.86 0.94 1
