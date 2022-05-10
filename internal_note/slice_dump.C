@@ -10,7 +10,7 @@
 
 // STV analysis includes
 #include "../FilePropertiesManager.hh"
-#include "../MCC9Unfolder.hh"
+#include "../MCC9SystematicsCalculator.hh"
 #include "../PlotUtils.hh"
 #include "../SliceBinning.hh"
 #include "../SliceHistogram.hh"
@@ -306,7 +306,7 @@ void slice_dump() {
   auto& fpm = FilePropertiesManager::Instance();
   fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
-  auto* syst_ptr = new MCC9Unfolder(
+  auto* syst_ptr = new MCC9SystematicsCalculator(
     "/uboone/data/users/gardiner/respmat-test-new-Muon2D.root",
     "../systcalc.conf" );
   auto& syst = *syst_ptr;

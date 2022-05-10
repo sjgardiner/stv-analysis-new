@@ -12,7 +12,7 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
-#include "MCC9Unfolder.hh"
+#include "MCC9SystematicsCalculator.hh"
 #include "ResponseMatrixMaker.hh"
 
 // Helper function that checks whether a given ROOT file represents an ntuple
@@ -50,7 +50,7 @@ int main( int argc, char* argv[] ) {
   // If the user specified an (optional) non-default configuration
   // file for the FilePropertiesManager on the command line, then
   // load it here. Note that the only place where the FilePropertiesManager
-  // configuration is relevant is in the use of MCC9Unfolder to compute
+  // configuration is relevant is in the use of MCC9SystematicsCalculator to compute
   // total event count histograms (see below).
   auto& fpm = FilePropertiesManager::Instance();
   if ( argc == 5 ) {
@@ -90,7 +90,7 @@ int main( int argc, char* argv[] ) {
 
   // Store the name of the root TDirectoryFile created by the
   // ResponseMatrixMaker objects below. We will use it to ensure that
-  // the MCC9Unfolder object used to calculate the total event counts
+  // the MCC9SystematicsCalculator object used to calculate the total event counts
   // will always be working with the correct sets of universes.
   std::string tdirfile_name;
   bool set_tdirfile_name = false;
@@ -131,13 +131,13 @@ int main( int argc, char* argv[] ) {
 
   } // loop over input files
 
-  // Use a temporary MCC9Unfolder object to automatically calculate the total
+  // Use a temporary MCC9SystematicsCalculator object to automatically calculate the total
   // event counts in each universe across all input files. Since the
   // get_covariances() member function is never called, the specific
   // systematics configuration file used doesn't matter. The empty string
   // passed as the second argument to the constructor just instructs the
-  // MCC9Unfolder class to use the default systematics configuration file.
-  MCC9Unfolder unfolder( output_file_name, "", tdirfile_name );
+  // MCC9SystematicsCalculator class to use the default systematics configuration file.
+  MCC9SystematicsCalculator unfolder( output_file_name, "", tdirfile_name );
 
   return 0;
 }
