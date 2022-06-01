@@ -96,6 +96,7 @@ constexpr float LEAD_P_MIN_MOM_CUT = 0.250; // GeV/c
 constexpr float LEAD_P_MAX_MOM_CUT = 1.200; // GeV/c
 constexpr float MUON_MOM_CUT = 0.100; // GeV/c
 constexpr float CHARGED_PI_MOM_CUT = 0.; // GeV/c
+constexpr float MUON_MOM_QUALITY_CUT = 0.25; // fractional difference
 
 constexpr float TOPO_SCORE_CUT = 0.1;
 constexpr float COSMIC_IP_CUT = 10.; // cm
@@ -317,9 +318,6 @@ class AnalysisEvent {
 
     EventCategory category_ = kUnknown;
 
-    // Informational boolean flags
-    bool reco_muon_contained_ = false;
-
     // **** Reco selection requirements ****
 
     // Whether the event passed the numu CC selection (a subset of the cuts
@@ -339,6 +337,15 @@ class AnalysisEvent {
 
     // True if a generation == 2 muon candidate was identified
     bool sel_has_muon_candidate_ = false;
+
+    // Whether the end point of the muon candidate track is contained
+    // in the "containment volume"
+    bool sel_muon_contained_ = false;
+
+    // Whether the muon candidate has MCS- and range-based reco momenta
+    // that agree within a given tolerance
+    bool sel_muon_quality_ok_ = false;
+
     // Whether the muon candidate has a reco momentum above threshold
     bool sel_muon_above_threshold_ = false;
 
@@ -673,10 +680,6 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "nslice", &ev.nslice_, create,
     "nslice/I" );
 
-  // Informational boolean flags
-  set_output_branch_address( out_tree, "reco_muon_contained",
-    &ev.reco_muon_contained_, create, "reco_muon_contained/O" );
-
   // CCNp0pi selection criteria
   set_output_branch_address( out_tree, "sel_nu_mu_cc", &ev.sel_nu_mu_cc_,
     create, "sel_nu_mu_cc/O" );
@@ -700,8 +703,14 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     &ev.sel_has_muon_candidate_, create,
     "sel_has_muon_candidate/O" );
 
+  set_output_branch_address( out_tree, "sel_muon_contained",
+    &ev.sel_muon_contained_, create, "sel_muon_contained/O" );
+
   set_output_branch_address( out_tree, "sel_muon_above_threshold",
     &ev.sel_muon_above_threshold_, create, "sel_muon_above_threshold/O" );
+
+  set_output_branch_address( out_tree, "sel_muon_quality_ok",
+    &ev.sel_muon_quality_ok_, create, "sel_muon_quality_ok/O" );
 
   set_output_branch_address( out_tree, "sel_has_p_candidate",
     &ev.sel_has_p_candidate_, create, "sel_has_p_candidate/O" );
@@ -1311,7 +1320,7 @@ void AnalysisEvent::apply_selection() {
   sel_protons_contained_ = true;
 
   // Set flags that default to false here
-  reco_muon_contained_ = false;
+  sel_muon_contained_ = false;
 
   for ( int p = 0; p < num_pf_particles_; ++p ) {
 
@@ -1331,15 +1340,32 @@ void AnalysisEvent::apply_selection() {
       float endz = track_endz_->at( p );
       bool end_contained = this->in_proton_containment_vol( endx, endy, endz );
 
-      if ( end_contained ) reco_muon_contained_ = true;
+      if ( end_contained ) sel_muon_contained_ = true;
 
       // Check that the muon candidate is above threshold. Use the best
       // momentum based on whether it was contained or not.
+
       float muon_mom = LOW_FLOAT;
-      if ( reco_muon_contained_ ) muon_mom = track_range_mom_mu_->at( p );
-      else muon_mom = track_mcs_mom_mu_->at( p );
+      float range_muon_mom = track_range_mom_mu_->at( p );
+      float mcs_muon_mom = track_mcs_mom_mu_->at( p );
+
+      if ( sel_muon_contained_ ) muon_mom = range_muon_mom;
+      else muon_mom = mcs_muon_mom;
 
       if ( muon_mom >= MUON_MOM_CUT ) sel_muon_above_threshold_ = true;
+
+      // Apply muon candidate quality cut by comparing MCS and range-based
+      // momentum estimators. Default to failing the cut.
+      sel_muon_quality_ok_ = false;
+
+      double frac_diff_range_mcs = std::abs( range_muon_mom - mcs_muon_mom );
+      if ( range_muon_mom > 0. ) {
+        frac_diff_range_mcs /= range_muon_mom;
+        if ( frac_diff_range_mcs < MUON_MOM_QUALITY_CUT ) {
+          sel_muon_quality_ok_ = true;
+        }
+      }
+
     }
     else {
 
@@ -1398,7 +1424,7 @@ void AnalysisEvent::apply_selection() {
   // whether all were passed (and thus the event is selected as a CCNp0pi
   // candidate)
   sel_CCNp0pi_ = sel_nu_mu_cc_ && sel_no_reco_showers_
-    && sel_muon_above_threshold_
+    && sel_muon_above_threshold_ && sel_muon_contained_ && sel_muon_quality_ok_
     && sel_has_p_candidate_ && sel_passed_proton_pid_cut_
     && sel_protons_contained_ && sel_lead_p_passed_mom_cuts_;
 }
@@ -1496,11 +1522,11 @@ void AnalysisEvent::compute_observables() {
     float mu_diry = track_diry_->at( muon_candidate_idx_ );
     float mu_dirz = track_dirz_->at( muon_candidate_idx_ );
 
-    // The "info" flag indicating whether the muon candidate is contained was
-    // already set when the selection was applied. Use it to choose the best
-    // momentum estimator to use.
+    // The selection flag indicating whether the muon candidate is contained
+    // was already set when the selection was applied. Use it to choose the
+    // best momentum estimator to use.
     float muon_mom = LOW_FLOAT;
-    if ( reco_muon_contained_ ) {
+    if ( sel_muon_contained_ ) {
       muon_mom = track_range_mom_mu_->at( muon_candidate_idx_ );
     }
     else {
