@@ -1542,7 +1542,7 @@ void AnalysisEvent::compute_observables() {
       float p_mom = real_sqrt( KEp*KEp + 2.*PROTON_MASS*KEp );
 
       TVector3 p3_temp( p_dirx, p_diry, p_dirz );
-      p3_temp = p3p.Unit() * p_mom;
+      p3_temp = p3_temp.Unit() * p_mom;
 
       p3_p_vec_->push_back( p3_temp );
     }
