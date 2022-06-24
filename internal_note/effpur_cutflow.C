@@ -222,17 +222,21 @@ void effpur_cutflow() {
   const std::vector< std::string > selection_defs = { "1",
   "sel_reco_vertex_in_FV",
   "sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV",
-  "sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV && sel_topo_cut_passed",
   "sel_nu_mu_cc",
-  "sel_nu_mu_cc && sel_no_reco_showers",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_p_candidate",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_p_candidate"
+  "sel_nu_mu_cc && sel_muon_above_threshold",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold"
+    " && sel_muon_contained",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold"
+    " && sel_muon_contained && sel_muon_quality_ok",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold"
+    " && sel_muon_contained && sel_muon_quality_ok && sel_has_p_candidate",
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold"
+    " && sel_muon_contained && sel_muon_quality_ok && sel_has_p_candidate"
     " && sel_protons_contained ",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_p_candidate"
+  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_above_threshold"
+    " && sel_muon_contained && sel_muon_quality_ok && sel_has_p_candidate"
     " && sel_protons_contained && sel_passed_proton_pid_cut",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_has_p_candidate"
-    " && sel_protons_contained && sel_passed_proton_pid_cut"
-    " && sel_muon_above_threshold",
   "sel_CCNp0pi" };
 
   size_t num_points = selection_defs.size();
@@ -267,9 +271,9 @@ void effpur_cutflow() {
   } // selection definitions
 
   const std::vector< std::string > bin_labels = { "no cuts",
-  "in FV", "starts contained", "topo score OK", "has muon candidate",
-  "no showers", "has p candidate", "p contained",
-  "proton PID", "muon threshold", "p limits" };
+  "in FV", "starts contained", "CCincl",
+  "#mu threshold", "no showers", "#mu contained", "#mu quality",
+  "has p candidate", "p contained", "proton PID", "p momentum limits" };
 
   TCanvas* c1 = new TCanvas;
   c1->SetBottomMargin(0.21);
