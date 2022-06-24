@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 27 June 2021
+// Updated 24 June 2022
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -93,8 +93,9 @@ constexpr int PI_PLUS = 211;
 // Values of parameters to use in analysis cuts
 constexpr float DEFAULT_PROTON_PID_CUT = 0.2;
 constexpr float LEAD_P_MIN_MOM_CUT = 0.250; // GeV/c
-constexpr float LEAD_P_MAX_MOM_CUT = 1.200; // GeV/c
-constexpr float MUON_MOM_CUT = 0.100; // GeV/c
+constexpr float LEAD_P_MAX_MOM_CUT = 1.; // GeV/c
+constexpr float MUON_P_MIN_MOM_CUT = 0.100; // GeV/c
+constexpr float MUON_P_MAX_MOM_CUT = 1.200; // GeV/c
 constexpr float CHARGED_PI_MOM_CUT = 0.; // GeV/c
 constexpr float MUON_MOM_QUALITY_CUT = 0.25; // fractional difference
 
@@ -306,7 +307,7 @@ class AnalysisEvent {
     bool is_mc_ = false;
     bool mc_neutrino_is_numu_ = false;
     bool mc_vertex_in_FV_ = false;
-    bool mc_pmu_above_threshold_ = false;
+    bool mc_muon_in_mom_range_ = false;
     bool mc_lead_p_in_mom_range_ = false;
     bool mc_no_fs_mesons_ = false;
     // Intersection of all of these requirements
@@ -347,7 +348,7 @@ class AnalysisEvent {
     bool sel_muon_quality_ok_ = false;
 
     // Whether the muon candidate has a reco momentum above threshold
-    bool sel_muon_above_threshold_ = false;
+    bool sel_muon_passed_mom_cuts_ = false;
 
     // False if at least one generation == 2 shower was reconstructed
     bool sel_no_reco_showers_ = false;
@@ -618,8 +619,8 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "mc_vertex_in_FV",
     &ev.mc_vertex_in_FV_, create, "mc_vertex_in_FV/O" );
 
-  set_output_branch_address( out_tree, "mc_pmu_above_threshold",
-    &ev.mc_pmu_above_threshold_, create, "mc_pmu_above_threshold/O" );
+  set_output_branch_address( out_tree, "mc_muon_in_mom_range",
+    &ev.mc_muon_in_mom_range_, create, "mc_muon_in_mom_range/O" );
 
   set_output_branch_address( out_tree, "mc_lead_p_in_mom_range",
     &ev.mc_lead_p_in_mom_range_, create, "mc_lead_p_in_mom_range/O" );
@@ -706,8 +707,8 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "sel_muon_contained",
     &ev.sel_muon_contained_, create, "sel_muon_contained/O" );
 
-  set_output_branch_address( out_tree, "sel_muon_above_threshold",
-    &ev.sel_muon_above_threshold_, create, "sel_muon_above_threshold/O" );
+  set_output_branch_address( out_tree, "sel_muon_passed_mom_cuts",
+    &ev.sel_muon_passed_mom_cuts_, create, "sel_muon_passed_mom_cuts/O" );
 
   set_output_branch_address( out_tree, "sel_muon_quality_ok",
     &ev.sel_muon_quality_ok_, create, "sel_muon_quality_ok/O" );
@@ -1121,7 +1122,7 @@ EventCategory AnalysisEvent::categorize_event() {
   }
 
   // Set flags to their default values here
-  mc_pmu_above_threshold_ = false;
+  mc_muon_in_mom_range_ = false;
   mc_lead_p_in_mom_range_ = false;
   mc_no_fs_pi0_ = true;
   mc_no_charged_pi_above_threshold_ = true;
@@ -1139,10 +1140,12 @@ EventCategory AnalysisEvent::categorize_event() {
       mc_no_fs_mesons_ = false;
     }
 
+
+    // Check that the muon has a momentum within the allowed range
     if ( pdg == MUON ) {
       double mom = real_sqrt( std::pow(energy, 2) - std::pow(MUON_MASS, 2) );
-      if ( mom > MUON_MOM_CUT ) {
-        mc_pmu_above_threshold_ = true;
+      if ( mom >= MUON_P_MIN_MOM_CUT && mom <= MUON_P_MAX_MOM_CUT ) {
+        mc_muon_in_mom_range_ = true;
       }
     }
     else if ( pdg == PROTON ) {
@@ -1166,7 +1169,7 @@ EventCategory AnalysisEvent::categorize_event() {
   }
 
   mc_is_signal_ = mc_vertex_in_FV_ && mc_neutrino_is_numu_
-    && mc_pmu_above_threshold_ && mc_lead_p_in_mom_range_
+    && mc_muon_in_mom_range_ && mc_lead_p_in_mom_range_
     && mc_no_fs_mesons_;
 
   // Sort signal by interaction mode
@@ -1352,7 +1355,9 @@ void AnalysisEvent::apply_selection() {
       if ( sel_muon_contained_ ) muon_mom = range_muon_mom;
       else muon_mom = mcs_muon_mom;
 
-      if ( muon_mom >= MUON_MOM_CUT ) sel_muon_above_threshold_ = true;
+      if ( muon_mom >= MUON_P_MIN_MOM_CUT && muon_mom <= MUON_P_MAX_MOM_CUT ) {
+        sel_muon_passed_mom_cuts_ = true;
+      }
 
       // Apply muon candidate quality cut by comparing MCS and range-based
       // momentum estimators. Default to failing the cut.
@@ -1424,7 +1429,7 @@ void AnalysisEvent::apply_selection() {
   // whether all were passed (and thus the event is selected as a CCNp0pi
   // candidate)
   sel_CCNp0pi_ = sel_nu_mu_cc_ && sel_no_reco_showers_
-    && sel_muon_above_threshold_ && sel_muon_contained_ && sel_muon_quality_ok_
+    && sel_muon_passed_mom_cuts_ && sel_muon_contained_ && sel_muon_quality_ok_
     && sel_has_p_candidate_ && sel_passed_proton_pid_cut_
     && sel_protons_contained_ && sel_lead_p_passed_mom_cuts_;
 }
