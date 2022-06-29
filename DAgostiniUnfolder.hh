@@ -28,8 +28,7 @@ class DAgostiniUnfolder : public Unfolder {
 
     virtual UnfoldedMeasurement unfold( const TMatrixD& data_signal,
       const TMatrixD& data_covmat, const TMatrixD& smearcept,
-      const TMatrixD& prior_true_signal, TMatrixD* err_prop = nullptr )
-      const override;
+      const TMatrixD& prior_true_signal ) const override;
 
     inline unsigned int get_iterations() const { return num_iterations_; }
     inline void set_iterations( unsigned int iters )
@@ -50,7 +49,7 @@ class DAgostiniUnfolder : public Unfolder {
 
 UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   const TMatrixD& data_covmat, const TMatrixD& smearcept,
-  const TMatrixD& prior_true_signal, TMatrixD* err_prop ) const
+  const TMatrixD& prior_true_signal ) const
 {
   // Check input matrix dimensions for sanity
   this->check_matrices( data_signal, data_covmat,
@@ -86,9 +85,10 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   // uncertainties through the unfolding procedure. The iterations introduce
   // non-trivial correlations which cause this matrix to differ from the
   // unfolding matrix itself.
-  TMatrixD err_prop_mat( num_true_signal_bins, num_ordinary_reco_bins );
+  auto* err_prop_mat = new TMatrixD( num_true_signal_bins,
+    num_ordinary_reco_bins );
 
-  err_prop_mat.Zero(); // Zero out the elements (just in case)
+  err_prop_mat->Zero(); // Zero out the elements (just in case)
 
   // We need a 3D tensor to do the propagation of MC uncertainties. It is
   // convenient in this case to represent it as a vector of TMatrixD objects.
@@ -170,7 +170,7 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
 
     // Duplicate the existing error propagation matrix so that we can
     // update the existing version in place
-    TMatrixD temp_mat1( err_prop_mat );
+    TMatrixD temp_mat1( *err_prop_mat );
 
     // If the second argument passed to TMatrixD::NormByColumn() or
     // TMatrixD::NormByRow() is "D", then the matrix elements will be
@@ -195,12 +195,12 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
     temp_mat2.NormByRow( minus_eff_over_old_iter, "M" );
 
     TMatrixD temp_mat3( temp_mat2,
-      TMatrixD::EMatrixCreatorsOp2::kMult, err_prop_mat );
+      TMatrixD::EMatrixCreatorsOp2::kMult, *err_prop_mat );
 
     // We're ready. Update the measurement error propagation matrix.
-    err_prop_mat.Mult( *unfold_mat, temp_mat3 );
-    err_prop_mat += *unfold_mat;
-    err_prop_mat += temp_mat1;
+    err_prop_mat->Mult( *unfold_mat, temp_mat3 );
+    err_prop_mat->operator+=( *unfold_mat );
+    err_prop_mat->operator+=( temp_mat1 );
 
     // Also update the 3D tensor needed to propagate the MC statistical
     // uncertainties on the smearceptance matrix through the unfolding
@@ -266,11 +266,11 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   // Now that we're finished with the iterations, we can also transform the
   // data covariance matrix to the unfolded true space using the error
   // propagation matrix.
-  TMatrixD err_prop_mat_tr( TMatrixD::kTransposed, err_prop_mat );
+  TMatrixD err_prop_mat_tr( TMatrixD::kTransposed, *err_prop_mat );
   TMatrixD temp_mat( data_covmat, TMatrixD::EMatrixCreatorsOp2::kMult,
     err_prop_mat_tr );
 
-  auto* true_signal_covmat = new TMatrixD( err_prop_mat,
+  auto* true_signal_covmat = new TMatrixD( *err_prop_mat,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
 
 
@@ -335,14 +335,11 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
     true_signal_covmat->operator+=( mc_covmat );
   }
 
-  // If the user requested access to the error propagation matrix (by passing
-  // a non-null value of the err_prop argument), then copy it over before
-  // returning a final result
-  if ( err_prop ) {
-    err_prop->ResizeTo( err_prop_mat );
-    err_prop->operator=( err_prop_mat );
-  }
+  // Compute the additional smearing matrix
+  auto* add_smear = new TMatrixD( *unfold_mat,
+    TMatrixD::EMatrixCreatorsOp2::kMult, smearcept );
 
-  UnfoldedMeasurement result( true_signal, true_signal_covmat );
+  UnfoldedMeasurement result( true_signal, true_signal_covmat,
+    unfold_mat.release(), err_prop_mat, add_smear );
   return result;
 }

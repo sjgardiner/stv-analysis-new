@@ -26,8 +26,7 @@ class WienerSVDUnfolder : public Unfolder {
 
     virtual UnfoldedMeasurement unfold( const TMatrixD& data_signal,
       const TMatrixD& data_covmat, const TMatrixD& smearcept,
-      const TMatrixD& prior_true_signal, TMatrixD* err_prop = nullptr )
-      const override;
+      const TMatrixD& prior_true_signal ) const override;
 
     inline bool use_filter() const { return use_filter_; }
     inline void set_use_filter( bool use_filter ) { use_filter_ = use_filter; }
@@ -37,9 +36,6 @@ class WienerSVDUnfolder : public Unfolder {
 
     inline void set_regularization_type( const RegularizationMatrixType& type )
       { reg_type_ = type; }
-
-    inline const TMatrixD& additional_smearing_matrix() const
-      { return *A_C_; }
 
   protected:
 
@@ -54,14 +50,11 @@ class WienerSVDUnfolder : public Unfolder {
 
     // Enum that determines the form to use for the regularization matrix C
     RegularizationMatrixType reg_type_ = kIdentity;
-
-    // Additional smearing matrix from the last call to unfold()
-    mutable std::unique_ptr< TMatrixD > A_C_;
 };
 
 UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   const TMatrixD& data_covmat, const TMatrixD& smearcept,
-  const TMatrixD& prior_true_signal, TMatrixD* err_prop ) const
+  const TMatrixD& prior_true_signal ) const
 {
   // Check input matrix dimensions for sanity
   this->check_matrices( data_signal, data_covmat,
@@ -207,37 +200,33 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // Matrix multiplication is associative, which is nice because we can chain
   // together a bunch of calls to operator*( const TMatrixD&, const TMatrixD& )
   // below safely.
-  A_C_ = std::make_unique< TMatrixD >(
+  auto* A_C = new TMatrixD(
     ( *Cinv ) * V_C * W_C * V_C_tr * C
   );
 
   // Create the final unfolding matrix R_tot defined in Eq. (3.26) from the
   // paper. Avoid inverting (R^T * R) by using the trick from the Wiener-SVD
   // source code.
-  TMatrixD R_tot = ( *Cinv ) * V_C * W_C_tilde * D_C_tr * U_C_tr * Q;
+  auto* R_tot = new TMatrixD(
+    ( *Cinv ) * V_C * W_C_tilde * D_C_tr * U_C_tr * Q
+  );
 
   // Get the unfolded signal event counts as a column vector
-  auto* unfolded_signal = new TMatrixD( R_tot,
+  auto* unfolded_signal = new TMatrixD( *R_tot,
     TMatrixD::EMatrixCreatorsOp2::kMult, data_signal );
 
   // Get the covariance matrix on the unfolded signal
-  TMatrixD R_tot_tr( TMatrixD::EMatrixCreatorsOp1::kTransposed, R_tot );
+  TMatrixD R_tot_tr( TMatrixD::EMatrixCreatorsOp1::kTransposed, *R_tot );
   TMatrixD temp_mat = data_covmat * R_tot_tr;
 
-  auto* unfolded_signal_covmat = new TMatrixD( R_tot,
+  auto* unfolded_signal_covmat = new TMatrixD( *R_tot,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
 
-  // If the user requested access to the error propagation matrix (by passing
-  // a non-null value of the err_prop argument), then copy it over before
-  // returning a final result. Note that the error propagation matrix in
-  // this case is just the unfolding matrix (in contrast to, e.g.,
-  // D'Agostini unfolding for multiple iterations)
-  if ( err_prop ) {
-    err_prop->ResizeTo( R_tot );
-    err_prop->operator=( R_tot );
-  }
-
-  UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat );
+  // Note that the error propagation matrix in this case is just the unfolding
+  // matrix (in contrast to, e.g., D'Agostini unfolding for multiple
+  // iterations)
+  UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat,
+    R_tot, R_tot, A_C );
   return result;
 }
 
