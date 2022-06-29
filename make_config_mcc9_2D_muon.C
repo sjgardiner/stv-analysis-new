@@ -117,29 +117,8 @@ void make_config_mcc9_2D_muon() {
 
   } // loop over muon momentum bins
 
-
-  // Create the single overflow bin for muon momentum in both true and reco
-  // space
-
-  double pmu_overflow_min = last->first;
-
-  std::stringstream true_ss;
-  true_ss << signal_def << " && mc_p3_mu.Mag() >= " << pmu_overflow_min;
-
-  std::string true_bin_def = true_ss.str();
-  true_bins.emplace_back( true_bin_def, kSignalTrueBin, 0 );
-
-  std::stringstream reco_ss;
-  reco_ss << selection << " && p3_mu.Mag() >= " << pmu_overflow_min;
-
-  std::string reco_bin_def = reco_ss.str();
-  reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, 0 );
-
-  // Add the overflow bin to the LaTeX table file
-  tex_bin_table_file << cur_reco_bin << " & " << pmu_overflow_min
-    << " & {$\\infty$} & -1 & 1 &  & \\\\\n";
-  // Write the closing lines of the LaTeX table file
-  tex_bin_table_file << "\\bottomrule\n\\end{tabular}\n\\end{document}\n";
+  // No overflow bin is needed due to the muon momentum upper limit in the
+  // signal definition
 
   // Add true bins for the background categories of interest
   for ( const auto& bdef : background_defs ) {

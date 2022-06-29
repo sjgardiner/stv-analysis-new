@@ -184,20 +184,6 @@ void make_config_mcc9_2D_proton() {
       reco_bins.emplace_back( reco_bin_def, kSidebandRecoBin );
     } // 1D reco momentum bins
 
-    // For sidebands that use bins of muon candidate momentum, create the
-    // overflow bin. This isn't needed for the proton momentum due to the
-    // upper limit imposed in the signal definition.
-    if ( mom_branch != "p3_mu" ) continue;
-
-    double pmu_overflow_min = bin_edge_map->crbegin()->first;
-
-    std::stringstream reco_ss;
-    reco_ss << side_sel << " && " << mom_branch << ".Mag() >= "
-      << pmu_overflow_min;
-
-    std::string reco_bin_def = reco_ss.str();
-    reco_bins.emplace_back( reco_bin_def, kSidebandRecoBin );
-
   } // sideband selection definitions
 
   // Dump this information to the output file
