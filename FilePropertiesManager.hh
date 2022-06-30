@@ -41,6 +41,9 @@ enum class NtupleFileType {
   kDetVarMCWMYZ, // wireMod YZ
   kDetVarMCCVExtra, // alternate CV for small samples
 
+  // An alternate CV MC simulation
+  kAltCVMC,
+
   // Placeholder for invalid values
   kUnknown,
 };
@@ -60,6 +63,11 @@ bool ntuple_type_is_detVar( const NtupleFileType& type ) {
   const auto end = detVar_types.cend();
   const auto iter = std::find( begin, end, type );
   if ( iter != end ) return true;
+  return false;
+}
+
+bool ntuple_type_is_altCV( const NtupleFileType& type ) {
+  if ( type == NtupleFileType::kAltCVMC ) return true;
   return false;
 }
 
@@ -289,6 +297,7 @@ class FilePropertiesManager {
       { "detVarWMX", NtupleFileType::kDetVarMCWMX },
       { "detVarWMYZ", NtupleFileType::kDetVarMCWMYZ },
       { "detVarCVExtra", NtupleFileType::kDetVarMCCVExtra },
+      { "altCVMC", NtupleFileType::kAltCVMC },
     };
 
     // Folder that stores the STV analysis configuration files. This is set

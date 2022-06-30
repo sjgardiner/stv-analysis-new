@@ -316,6 +316,10 @@ class SystematicsCalculator {
     // then this will be a null pointer.
     std::unique_ptr< Universe > fake_data_universe_ = nullptr;
 
+    // "Alternate CV" universes for assessing unisim systematics related to
+    // interaction modeling
+    std::map< NFT, std::unique_ptr<Universe> > alt_cv_universes_;
+
     // True bin configuration that was used to compute the response matrices
     std::vector< TrueBin > true_bins_;
 
@@ -458,9 +462,10 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
   int num_keys = universe_key_list->GetEntries();
 
   // Loop over the keys in the TDirectoryFile. Build a universe object
-  // for each key ending in "_2d" and store it in either the rw_universes_
-  // map (for reweightable systematic universes) or the detvar_universes_
-  // map (for detector systematic universes)
+  // for each key ending in "_2d" and store it in the rw_universes_
+  // map (for reweightable systematic universes), the detvar_universes_
+  // map (for detector systematic universes), or the alt_cv_universes_
+  // map (for alternate CV model universes)
   for ( int k = 0; k < num_keys; ++k ) {
     // To avoid double-counting universes, search only for the 2D event
     // count histograms
@@ -509,17 +514,27 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     if ( temp_type != NFT::kUnknown ) {
 
       bool is_detvar = ntuple_type_is_detVar( temp_type );
-      if ( !is_detvar ) throw std::runtime_error( "Universe name "
-        + univ_name + " matches a non-detVar file type. Handling of"
-        + " this situation is currently unimplemented." );
+      bool is_altCV = ntuple_type_is_altCV( temp_type );
+      if ( !is_detvar && !is_altCV ) throw std::runtime_error( "Universe name "
+        + univ_name + " matches a non-detVar and non-altCV file type."
+        + " Handling of this situation is currently unimplemented." );
 
-      if ( detvar_universes_.count(temp_type) ) {
+      if ( is_detvar && detvar_universes_.count(temp_type) ) {
         throw std::runtime_error( "detVar multisims are not currently"
+          " supported" );
+      }
+      else if ( is_altCV && alt_cv_universes_.count(temp_type) ) {
+        throw std::runtime_error( "altCV multisims are not currently"
           " supported" );
       }
 
       // Move the detector variation Universe object into the map
-      detvar_universes_[ temp_type ].reset( temp_univ.release() );
+      if ( is_detvar ) {
+        detvar_universes_[ temp_type ].reset( temp_univ.release() );
+      }
+      else { // is_altCV
+        alt_cv_universes_[ temp_type ].reset( temp_univ.release() );
+      }
     }
     // If we're working with fake data, then a single universe with a specific
     // name stores all of the MC information for the "data." Save it in the
@@ -666,6 +681,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
       const auto& file_set = type_and_files_pair.second;
 
       bool is_detVar = ntuple_type_is_detVar( type );
+      bool is_altCV = ntuple_type_is_altCV( type );
       bool is_reweightable_mc = ntuple_type_is_reweightable_mc( type );
       bool is_mc = ntuple_type_is_mc( type );
 
@@ -863,27 +879,45 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
         } // fake data sample
 
-        // Now we'll take care of the detVar samples.
-        else if ( is_detVar ) {
+        // Now we'll take care of the detVar and altCV samples.
+        else if ( is_detVar || is_altCV ) {
 
           std::string dv_univ_name = fpm.ntuple_type_to_string( type );
+
+          // Make a temporary new Universe object to store
+          // (POT-scaled) detVar/altCV histograms (if needed)
+          auto temp_univ = std::make_unique< Universe >( dv_univ_name,
+            0, num_true_bins, num_reco_bins );
+
+          // Temporary pointer that will allow us to treat the single-file
+          // detector variation samples as the multi-file alternate CV samples
+          // on the same footing below
+          Universe* temp_univ_ptr = nullptr;
+
+          // Check whether a prior altCV Universe exists in the map
+          bool prior_altCV = alt_cv_universes_.count( type ) > 0;
 
           // Right now, we're assuming there's just one detVar ntuple file
           // per universe. If this assumption is violated, our scaling will
           // be screwed up. Prevent this from happening by throwing an
           // exception when a duplicate is encountered.
-          if ( detvar_universes_.count(type) ) {
+          // TODO: revisit this when you have detVar samples for all runs
+          if ( is_detVar && detvar_universes_.count(type) ) {
             throw std::runtime_error( "Duplicate detVar ntuple file!" );
           }
+          // For the alternate CV sample, if a previous universe already
+          // exists in the map, then get access to it via a pointer
+          else if ( is_altCV && prior_altCV ) {
+            temp_univ_ptr = alt_cv_universes_.at( type ).get();
+          }
+          else {
+            temp_univ_ptr = temp_univ.get();
+          }
 
-          // Otherwise, make a new Universe object to store the
-          // (POT-scaled) detVar histograms.
-          auto temp_univ_ptr = std::make_unique< Universe >( dv_univ_name,
-            0, num_true_bins, num_reco_bins );
-
-          // The detector variation universes are all labeled "unweighted"
-          // in the response matrix files. Retrieve the corresponding
-          // histograms.
+          // The detector variation and alternate CV universes are all labeled
+          // "unweighted" in the response matrix files. Retrieve the
+          // corresponding histograms.
+          // TODO: revisit this assumption as appropriate
           auto hist_reco = get_object_unique_ptr< TH1D >(
             "unweighted_0_reco", *subdir );
 
@@ -899,16 +933,29 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           auto hist_reco2d = get_object_unique_ptr< TH2D >(
             "unweighted_0_reco2d", *subdir );
 
-          // Scale all detVar universe histograms from the simulated POT to
-          // the *total* BNB data POT for all runs analyzed. Since we only
-          // have detVar samples for Run 3b, we assume that they can be
-          // applied globally in this step.
-          // TODO: revisit this as appropriate
-          hist_reco->Scale( total_bnb_data_pot_ / file_pot );
-          hist_true->Scale( total_bnb_data_pot_ / file_pot );
-          hist_2d->Scale( total_bnb_data_pot_ / file_pot );
-          hist_categ->Scale( total_bnb_data_pot_ / file_pot );
-          hist_reco2d->Scale( total_bnb_data_pot_ / file_pot );
+          double temp_scale_factor = 1.;
+          if ( is_altCV ) {
+            // AltCV ntuple files are available for all runs, so scale
+            // each individually to the BNB data POT for the current run
+            double temp_run_pot = run_to_bnb_pot_map.at( run );
+            temp_scale_factor = temp_run_pot / file_pot;
+          }
+          else {
+            // Scale all detVar universe histograms from the simulated POT to
+            // the *total* BNB data POT for all runs analyzed. Since we only
+            // have detVar samples for Run 3b, we assume that they can be
+            // applied globally in this step.
+            // TODO: revisit this as appropriate
+            temp_scale_factor = total_bnb_data_pot_ / file_pot;
+          }
+
+          // Apply the scaling factor defined above to all histograms that
+          // will be owned by the new Universe
+          hist_reco->Scale( temp_scale_factor );
+          hist_true->Scale( temp_scale_factor );
+          hist_2d->Scale( temp_scale_factor );
+          hist_categ->Scale( temp_scale_factor );
+          hist_reco2d->Scale( temp_scale_factor );
 
           // Add the scaled contents of these histograms to the
           // corresponding histograms in the new Universe object
@@ -921,10 +968,16 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // Adjust the owned histograms to avoid auto-deletion problems
           set_stats_and_dir( *temp_univ_ptr );
 
-          // Move the finished Universe object into the map
-          detvar_universes_[ type ].reset( temp_univ_ptr.release() );
+          // If one wasn't present before, then move the finished Universe
+          // object into the map
+          if ( is_detVar ) {
+            detvar_universes_[ type ].reset( temp_univ.release() );
+          }
+          else if ( !prior_altCV ) { // is_altCV
+            alt_cv_universes_[ type ].reset( temp_univ.release() );
+          }
 
-        } // detVar sample
+        } // detVar and altCV samples
 
         // Now handle the reweightable systematic universes
         else if ( is_reweightable_mc ) {
@@ -1130,6 +1183,18 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
 
   // Save the detector variation histograms
   for ( const auto& pair : detvar_universes_ ) {
+    NFT type = pair.first;
+    auto& universe = pair.second;
+
+    universe->hist_reco_->Write();
+    universe->hist_true_->Write();
+    universe->hist_2d_->Write();
+    universe->hist_categ_->Write();
+    universe->hist_reco2d_->Write();
+  }
+
+  // Save the alternate CV MC histograms
+  for ( const auto& pair : alt_cv_universes_ ) {
     NFT type = pair.first;
     auto& universe = pair.second;
 
@@ -1433,6 +1498,19 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
         avg_over_universes, is_flux_variation );
 
     } // RW and FluxRW types
+
+    else if ( type == "AltUniv" ) {
+
+      std::vector< const Universe* > alt_univ_vec;
+      for ( const auto& univ_pair : alt_cv_universes_ ) {
+        const auto* univ_ptr = univ_pair.second.get();
+        alt_univ_vec.push_back( univ_ptr );
+      }
+
+      const auto& cv_univ = this->cv_universe();
+      make_cov_mat( *this, temp_cov_mat, cv_univ, alt_univ_vec,
+        true, false );
+    }
 
     // Complain if we don't know how to calculate the requested covariance
     // matrix
