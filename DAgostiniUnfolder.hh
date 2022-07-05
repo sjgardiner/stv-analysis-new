@@ -1,5 +1,10 @@
 #pragma once
 
+// Standard library includes
+#include <cmath>
+#include <iostream>
+#include <stdexcept>
+
 // ROOT includes
 #include "TVectorD.h"
 
@@ -20,8 +25,24 @@ class DAgostiniUnfolder : public Unfolder {
 
   public:
 
+    // The maximum number of iterations to perform (to avoid infinite loops)
+    static constexpr unsigned int DAGOSTINI_MAX_ITERATIONS = 99;
+
+    // Enumerated type describing the rule to use to
+    // stop the iterations
+    enum ConvergenceCriterion {
+      FixedIterations = 0, // Stop after a predefined iteration count
+      FigureOfMerit = 1, // Stop once a figure of merit falls below threshold
+    };
+
     DAgostiniUnfolder( unsigned int default_iterations = 1u )
-      : Unfolder(), num_iterations_( default_iterations ) {}
+      : Unfolder(), conv_criter_( ConvergenceCriterion::FixedIterations ),
+      num_iterations_( default_iterations ) {}
+
+    DAgostiniUnfolder( ConvergenceCriterion cc, double fig_merit_target )
+      : Unfolder(), conv_criter_( cc ),
+      num_iterations_( DAGOSTINI_MAX_ITERATIONS ),
+      fig_merit_target_( fig_merit_target ) {}
 
     // Trick taken from https://stackoverflow.com/a/18100999
     using Unfolder::unfold;
@@ -43,7 +64,14 @@ class DAgostiniUnfolder : public Unfolder {
 
   protected:
 
+    // Calculates the "figure of merit" used to determine convergence of the
+    // iterations when using the ConvergenceCriterion::FigureOfMerit option
+    double calc_figure_of_merit( const TMatrixD& old_true_signal,
+      const TMatrixD& new_true_signal ) const;
+
+    ConvergenceCriterion conv_criter_;
     unsigned int num_iterations_;
+    double fig_merit_target_;
     bool include_respmat_covariance_ = false;
 };
 
@@ -111,7 +139,19 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   }
 
   // Start the iterations for the D'Agostini method
-  for ( int it = 0; it < num_iterations_; ++it ) {
+  int it = 0;
+  double fm = DBL_MAX;
+  while ( true ) {
+
+    // If we've hit the configured or global maximum number of iterations, then
+    // stop the loop
+    if ( conv_criter_ == ConvergenceCriterion::FixedIterations
+      && it >= num_iterations_ ) break;
+    else if ( it >= DAGOSTINI_MAX_ITERATIONS ) break;
+
+    // If the figure of merit for convergence has gone below threshold, then
+    // stop the loop
+    if ( fm < fig_merit_target_ ) break;
 
     // Compute the column vector of expected reco-space signal event counts
     // given the (fixed) smearceptance matrix and the current estimate of the
@@ -261,7 +301,17 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
 
     }
 
+    // If needed, update the figure of merit for this iteration
+    if ( conv_criter_ == ConvergenceCriterion::FigureOfMerit ) {
+      fm = this->calc_figure_of_merit( old_true_signal, *true_signal );
+    }
+
+    // Proceed to the next iteration
+    ++it;
+
   } // D'Agostini method iterations
+
+  std::cout << "D'Agostini unfolding stopped after " << it << " iterations.\n";
 
   // Now that we're finished with the iterations, we can also transform the
   // data covariance matrix to the unfolded true space using the error
@@ -342,4 +392,24 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   UnfoldedMeasurement result( true_signal, true_signal_covmat,
     unfold_mat.release(), err_prop_mat, add_smear );
   return result;
+}
+
+double DAgostiniUnfolder::calc_figure_of_merit(
+  const TMatrixD& old_true_signal, const TMatrixD& new_true_signal ) const
+{
+  int num_rows = old_true_signal.GetNrows();
+  if ( num_rows != new_true_signal.GetNrows() ) {
+    throw std::runtime_error( "Row mismatch in DAgostiniUnfolder::"
+      "calc_figure_of_merit" );
+  }
+
+  double fm = 0.;
+  for ( int r = 0; r < num_rows; ++r ) {
+    double old_val = old_true_signal( r, 0 );
+    double new_val = new_true_signal( r, 0 );
+    fm += std::abs( new_val - old_val ) / new_val;
+  }
+
+  fm /= num_rows;
+  return fm;
 }
