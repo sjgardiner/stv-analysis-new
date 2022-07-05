@@ -211,6 +211,10 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
     ( *Cinv ) * V_C * W_C_tilde * D_C_tr * U_C_tr * Q
   );
 
+  // Clone R_tot to avoid memory management issues when interpreting it as
+  // both the unfolding matrix and the error propagation matrix
+  auto* R_tot_clone = dynamic_cast< TMatrixD* >( R_tot->Clone() );
+
   // Get the unfolded signal event counts as a column vector
   auto* unfolded_signal = new TMatrixD( *R_tot,
     TMatrixD::EMatrixCreatorsOp2::kMult, data_signal );
@@ -226,7 +230,7 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   // matrix (in contrast to, e.g., D'Agostini unfolding for multiple
   // iterations)
   UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat,
-    R_tot, R_tot, A_C );
+    R_tot, R_tot_clone, A_C );
   return result;
 }
 

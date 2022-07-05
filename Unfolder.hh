@@ -182,19 +182,20 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
   // covariance matrix on the unfolded bin counts (including inter-block
   // covariances)
   int num_ordinary_reco_bins = data_signal.GetNrows();
-  TMatrixD err_prop( num_true_signal_bins, num_ordinary_reco_bins );
+  auto* err_prop = new TMatrixD( num_true_signal_bins, num_ordinary_reco_bins );
   // Zero out the initial elements, just in case
-  err_prop.Zero();
+  err_prop->Zero();
 
   // Create a TMatrixD to hold the full unfolding matrix combined over
   // multiple blocks
-  TMatrixD unfold_mat( num_true_signal_bins, num_ordinary_reco_bins );
-  unfold_mat.Zero();
+  auto* unfold_mat = new TMatrixD( num_true_signal_bins,
+    num_ordinary_reco_bins );
+  unfold_mat->Zero();
 
   // Create a TMatrixD to hold the additional smearing matrix used to apply
   // regularization to theoretical predictions
-  TMatrixD add_smear( num_true_signal_bins, num_true_signal_bins );
-  add_smear.Zero();
+  auto* add_smear = new TMatrixD( num_true_signal_bins, num_true_signal_bins );
+  add_smear->Zero();
 
   // Loop over the blocks. For each block, populate the input matrices and
   // unfold.
@@ -279,12 +280,12 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
 
         // Copy the measurement error propagation matrix element from the
         // current block
-        err_prop( tb, rb ) = block_result.err_prop_matrix_->operator()(
-          block_tb, block_rb );
+        err_prop->operator()( tb, rb ) = block_result.err_prop_matrix_
+          ->operator()( block_tb, block_rb );
 
         // Copy the unfolding matrix element from the current block
-        unfold_mat( tb, rb ) = block_result.unfolding_matrix_->operator()(
-          block_tb, block_rb );
+        unfold_mat->operator()( tb, rb ) = block_result.unfolding_matrix_
+          ->operator()( block_tb, block_rb );
       }
 
       for ( int block_tb2 = 0; block_tb2 < num_block_true_bins; ++block_tb2 ) {
@@ -294,8 +295,8 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
         int tb2 = block_bins.true_bin_indices_.at( block_tb2 );
 
         // Copy the additional smearing matrix element from the current block
-        add_smear( tb, tb2 ) = block_result.add_smear_matrix_->operator()(
-          block_tb, block_tb2 );
+        add_smear->operator()( tb, tb2 ) = block_result.add_smear_matrix_
+          ->operator()( block_tb, block_tb2 );
       }
 
     }
@@ -306,14 +307,14 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
   // measurement through the unfolding procedure. Do that transformation
   // using the measurement error propagation matrix built from all of the
   // blocks.
-  TMatrixD err_prop_tr( TMatrixD::kTransposed, err_prop );
+  TMatrixD err_prop_tr( TMatrixD::kTransposed, *err_prop );
   TMatrixD temp_mat( data_covmat, TMatrixD::EMatrixCreatorsOp2::kMult,
     err_prop_tr );
 
-  auto* unfolded_signal_covmat = new TMatrixD( err_prop,
+  auto* unfolded_signal_covmat = new TMatrixD( *err_prop,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
 
   UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat,
-    &unfold_mat, &err_prop, &add_smear );
+    unfold_mat, err_prop, add_smear );
   return result;
 }
