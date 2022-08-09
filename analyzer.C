@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 24 June 2022
+// Updated 9 August 2022
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -382,7 +382,7 @@ class AnalysisEvent {
     // ordered from highest to lowest by magnitude
     MyPointer< std::vector<TVector3> > p3_p_vec_;
 
-    // Reco STVs
+    // Reco STVs and other variables of interest
     float delta_pT_ = BOGUS;
     float delta_phiT_ = BOGUS;
     float delta_alphaT_ = BOGUS;
@@ -390,6 +390,7 @@ class AnalysisEvent {
     float pn_ = BOGUS;
     float delta_pTx_ = BOGUS;
     float delta_pTy_ = BOGUS;
+    float theta_mu_p_ = BOGUS;
 
     // ** MC truth observables **
     // These are loaded for signal events whenever we have MC information
@@ -403,7 +404,7 @@ class AnalysisEvent {
     // by magnitude
     MyPointer< std::vector<TVector3> > mc_p3_p_vec_;
 
-    // MC truth STVs
+    // MC truth STVs and other variables of interest
     float mc_delta_pT_ = BOGUS;
     float mc_delta_phiT_ = BOGUS;
     float mc_delta_alphaT_ = BOGUS;
@@ -411,6 +412,7 @@ class AnalysisEvent {
     float mc_pn_ = BOGUS;
     float mc_delta_pTx_ = BOGUS;
     float mc_delta_pTy_ = BOGUS;
+    float mc_theta_mu_p_ = BOGUS;
 
     bool reco_vertex_inside_FV() {
       return point_inside_FV( nu_vx_, nu_vy_, nu_vz_ );
@@ -781,6 +783,9 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "delta_pTy",
     &ev.delta_pTy_, create, "delta_pTy/F" );
 
+  set_output_branch_address( out_tree, "theta_mu_p",
+    &ev.theta_mu_p_, create, "theta_mu_p/F" );
+
   // MC STVs (only filled for signal events)
   set_output_branch_address( out_tree, "mc_delta_pT",
     &ev.mc_delta_pT_, create, "mc_delta_pT/F" );
@@ -802,6 +807,9 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
 
   set_output_branch_address( out_tree, "mc_delta_pTy",
     &ev.mc_delta_pTy_, create, "mc_delta_pTy/F" );
+
+  set_output_branch_address( out_tree, "mc_theta_mu_p",
+    &ev.mc_theta_mu_p_, create, "mc_theta_mu_p/F" );
 
   // *** Branches copied directly from the input ***
 
@@ -1590,6 +1598,8 @@ void AnalysisEvent::compute_observables() {
   if ( muon && lead_p ) {
     compute_stvs( p3mu, p3p, delta_pT_, delta_phiT_,
       delta_alphaT_, delta_pL_, pn_, delta_pTx_, delta_pTy_ );
+
+    theta_mu_p_ = std::acos( p3mu.Dot(p3p) / p3mu.Mag() / p3p.Mag() );
   }
 }
 
@@ -1669,6 +1679,9 @@ void AnalysisEvent::compute_mc_truth_observables() {
   if ( true_muon && true_lead_p ) {
     compute_stvs( *mc_p3_mu_, *mc_p3_lead_p_, mc_delta_pT_, mc_delta_phiT_,
       mc_delta_alphaT_, mc_delta_pL_, mc_pn_, mc_delta_pTx_, mc_delta_pTy_ );
+
+    mc_theta_mu_p_ = std::acos( mc_p3_mu_->Dot(*mc_p3_lead_p_)
+      / mc_p3_mu_->Mag() / mc_p3_lead_p_->Mag() );
   }
 }
 
