@@ -11,6 +11,7 @@
 #include "../DAgostiniUnfolder.hh"
 #include "../FiducialVolume.hh"
 #include "../MCC9SystematicsCalculator.hh"
+#include "../NormShapeCovMatrix.hh"
 #include "../SliceBinning.hh"
 #include "../SliceHistogram.hh"
 #include "../WienerSVDUnfolder.hh"
@@ -247,21 +248,19 @@ std::map< std::string, TMatrixD* > get_true_events_nuisance(
 
 void test_unfolding() {
 
-  // Initialize the FilePropertiesManager and tell it to treat the NuWro
-  // MC ntuples as if they were data
-  auto& fpm = FilePropertiesManager::Instance();
-  fpm.load_file_properties( "../nuwro_file_properties.txt" );
+  //// Initialize the FilePropertiesManager and tell it to treat the NuWro
+  //// MC ntuples as if they were data
+  //auto& fpm = FilePropertiesManager::Instance();
+  //fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
   const auto& sample_info = sample_info_map.at( SAMPLE_NAME );
   //const auto& respmat_file_name = sample_info.respmat_file_;
 
-  const std::string respmat_file_name( "/uboone/data/users/gardiner/"
-    "afro-tki-more.root" );
-    //"afro-new-both2D.root" );
+  const std::string respmat_file_name( "/uboone/data/users/gardiner/ccnp-universes/tki-new-bin.root" );
 
   // Do the systematics calculations in preparation for unfolding
-  auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );
-  //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc.conf" );
+  //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );
+  auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
   // Get the tuned GENIE CV prediction in each true bin (including the
@@ -462,7 +461,6 @@ void test_unfolding() {
 
   // Plot slices of the unfolded result
   auto* sb_ptr = new SliceBinning( "../mybins_tki.txt" );
-  //auto* sb_ptr = new SliceBinning( "../mybins_mcc9_2D_both-new.txt" );
   auto& sb = *sb_ptr;
 
   // Get the factors needed to convert to cross-section units
@@ -519,7 +517,6 @@ void test_unfolding() {
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {
 
-    //if ( sl_idx == 14 || sl_idx == 16 | sl_idx == 22 ) ++sl_idx;
     const auto& slice = sb.slices_.at( sl_idx );
 
     // Make a histogram showing the unfolded true event counts in the current
@@ -596,7 +593,7 @@ void test_unfolding() {
     for ( int b = 0; b < num_slice_bins; ++b ) {
       double width = slice_unf->hist_->GetBinWidth( b + 1 );
       width *= other_var_width;
-      trans_mat( b, b ) = 1e37 / ( width * integ_flux * num_Ar );
+      trans_mat( b, b ) = 1e38 / ( width * integ_flux * num_Ar );
     }
 
     // Convert all slice histograms from true event counts to differential
@@ -613,7 +610,7 @@ void test_unfolding() {
       else {
         slice_y_title += "#sigma";
       }
-      slice_y_title += " (10^{-37} cm^{2}" + diff_xsec_units_denom + " / Ar)";
+      slice_y_title += " (10^{-38} cm^{2}" + diff_xsec_units_denom + " / Ar)";
 
       slice_h->hist_->GetYaxis()->SetTitle( slice_y_title.c_str() );
     }
@@ -692,6 +689,9 @@ void test_unfolding() {
 
     slice_unf->hist_->GetYaxis()->SetRangeUser( 0., ymax*1.07 );
     slice_unf->hist_->Draw( "e same" );
+
+    // Normalization error band
+    slice_unf->norm_and_mixed_errors_->Draw( "hist same" );
 
     TLegend* lg = new TLegend( 0.15, 0.6, 0.5, 0.88 );
     for ( const auto& pair : slice_gen_map ) {
