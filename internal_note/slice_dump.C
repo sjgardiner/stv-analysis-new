@@ -301,13 +301,14 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 
 void slice_dump() {
 
-  // Initialize the FilePropertiesManager and tell it to treat the NuWro
-  // MC ntuples as if they were data
-  auto& fpm = FilePropertiesManager::Instance();
-  fpm.load_file_properties( "../nuwro_file_properties.txt" );
+  //// Initialize the FilePropertiesManager and tell it to treat the NuWro
+  //// MC ntuples as if they were data
+  //auto& fpm = FilePropertiesManager::Instance();
+  //fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
   auto* syst_ptr = new MCC9SystematicsCalculator(
-    "/uboone/data/users/gardiner/respmat-test-new-Muon2D.root",
+    "/uboone/data/users/gardiner/tki-new-bin.root",
+    //"../systcalc_unfold_fd.conf" );
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
 
@@ -330,12 +331,12 @@ void slice_dump() {
   // Add in the CV MC prediction
   reco_mc_plus_ext_hist->Add( syst.cv_universe().hist_reco_.get() );
 
-  //// Keys are covariance matrix types, values are CovMatrix objects that
-  //// represent the corresponding matrices
+  // Keys are covariance matrix types, values are CovMatrix objects that
+  // represent the corresponding matrices
   auto* matrix_map_ptr = syst.get_covariances().release();
   auto& matrix_map = *matrix_map_ptr;
 
-  auto* sb_ptr = new SliceBinning( "../mybins_mcc9_2D_muon.txt" );
+  auto* sb_ptr = new SliceBinning( "../mybins_tki.txt" );
   auto& sb = *sb_ptr;
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {

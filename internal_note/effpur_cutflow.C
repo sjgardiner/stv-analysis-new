@@ -298,8 +298,8 @@ void effpur_cutflow() {
   pur_graph->SetMarkerStyle(20);
   pur_graph->Draw("same lp");
 
-  mc_pur_graph->SetLineColor(kGreen);
-  mc_pur_graph->SetMarkerColor(kGreen);
+  mc_pur_graph->SetLineColor(kBlack);
+  mc_pur_graph->SetMarkerColor(kBlack);
   mc_pur_graph->SetLineWidth(3);
   mc_pur_graph->SetMarkerStyle(20);
   mc_pur_graph->Draw("same lp");
