@@ -4,6 +4,8 @@
 #include "SliceBinning.hh"
 #include "SliceHistogram.hh"
 
+constexpr double REALLY_BIG_NUMBER = 1e300;
+
 // Utility functions used to prepare input files for use with the LaTeX package
 // PGFPlots
 
@@ -64,8 +66,10 @@ void dump_slice_variables( const SliceBinning& sb, size_t slice_idx,
     std::string col_prefix = "ov" + std::to_string( b );
     pgfplots_params_table[ col_prefix + "_name" ] = name_for_dump;
     pgfplots_params_table[ col_prefix + "_units" ] = units_for_dump;
-    pgfplots_params_table[ col_prefix + "_low" ] = std::to_string( low );
-    pgfplots_params_table[ col_prefix + "_high" ] = std::to_string( high );
+    pgfplots_params_table[ col_prefix + "_low" ]
+      = low < -REALLY_BIG_NUMBER ? "{inf}" : std::to_string( low );
+    pgfplots_params_table[ col_prefix + "_high" ]
+      = high > REALLY_BIG_NUMBER ? "{inf}" : std::to_string( high );
   }
 }
 

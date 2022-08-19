@@ -669,10 +669,12 @@ void test_unfolding() {
       if ( temp_name != "true bin number" ) {
         var_count += slice.active_var_indices_.size();
         diff_xsec_denom += 'd' + var_spec.name_;
-        diff_xsec_units_denom += " / " + var_spec.units_;
-
         diff_xsec_denom_latex += " d" + var_spec.latex_name_;
-        diff_xsec_units_denom_latex += " / " + var_spec.latex_units_;
+
+        if ( !var_spec.units_.empty() ) {
+          diff_xsec_units_denom += " / " + var_spec.units_;
+          diff_xsec_units_denom_latex += " / " + var_spec.latex_units_;
+        }
       }
     }
 
