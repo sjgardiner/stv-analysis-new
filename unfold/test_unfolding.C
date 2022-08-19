@@ -12,6 +12,7 @@
 #include "../FiducialVolume.hh"
 #include "../MCC9SystematicsCalculator.hh"
 #include "../NormShapeCovMatrix.hh"
+#include "../PGFPlotsDumpUtils.hh"
 #include "../SliceBinning.hh"
 #include "../SliceHistogram.hh"
 #include "../WienerSVDUnfolder.hh"
@@ -142,6 +143,17 @@ std::map< std::string, TruthFileInfo > truth_file_map = {
 
 };
 
+std::map< std::string, std::string > samples_to_hist_names {
+  { "unfolded data", "UnfData" },
+  { "MicroBooNE Tune", "uBTune" },
+  { "truth", "FakeData" },
+  { "GENIE 2.12.10", "gv2" },
+  { "GENIE 3.0.6", "gv3" },
+  { "NEUT 5.4.0.1", "neut" },
+  { "NuWro 19.02.1", "nuwro" },
+  { "GiBUU 2019", "gibuu" },
+};
+
 struct SampleInfo {
 
   SampleInfo() {}
@@ -246,6 +258,46 @@ std::map< std::string, TMatrixD* > get_true_events_nuisance(
   return truth_counts_map;
 }
 
+
+void dump_slice_errors( const std::string& hist_col_prefix,
+  const Slice& slice, const std::map< std::string,
+  std::unique_ptr<SliceHistogram> >& slice_hist_cov_matrix_map,
+  std::map< std::string, std::vector<double> >& pgf_plots_hist_table )
+{
+  for ( const auto& pair : slice_hist_cov_matrix_map ) {
+    std::string err_name = pair.first;
+    std::string err_col_name = hist_col_prefix + '_' + err_name + "_error";
+    pgf_plots_hist_table[ err_col_name ] = std::vector<double>();
+  }
+
+  for ( const auto& bin_pair : slice.bin_map_ ) {
+    // TODO: revisit for multi-dimensional slices
+    int global_bin_idx = bin_pair.first;
+
+    for ( const auto& err_pair : slice_hist_cov_matrix_map ) {
+
+      std::string err_name = err_pair.first;
+      std::string err_col_name = hist_col_prefix + '_' + err_name + "_error";
+
+      const auto* hist = err_pair.second->hist_.get();
+      double err = hist->GetBinError( global_bin_idx );
+
+      pgf_plots_hist_table.at( err_col_name ).push_back( err );
+    }
+
+  } // slice bins
+
+  // Add a (presumably empty) overflow bin to get certain PGFPlots styles to
+  // look right.
+  for ( const auto& err_pair : slice_hist_cov_matrix_map ) {
+    std::string err_name = err_pair.first;
+    std::string err_col_name = hist_col_prefix + '_' + err_name + "_error";
+
+    pgf_plots_hist_table.at( err_col_name ).push_back( 0. );
+  }
+
+}
+
 void test_unfolding() {
 
   //// Initialize the FilePropertiesManager and tell it to treat the NuWro
@@ -320,6 +372,23 @@ void test_unfolding() {
   );
 
   UnfoldedMeasurement result = unfolder->unfold( syst );
+
+  // Propagate all defined covariance matrices through the unfolding procedure
+  const TMatrixD& err_prop = *result.err_prop_matrix_;
+  TMatrixD err_prop_tr( TMatrixD::kTransposed, err_prop );
+
+  std::map< std::string, std::unique_ptr<TMatrixD> > unfolded_cov_matrix_map;
+
+  for ( const auto& matrix_pair : matrix_map ) {
+    const std::string& matrix_key = matrix_pair.first;
+    auto temp_cov_mat = matrix_pair.second.get_matrix();
+
+    TMatrixD temp_mat( *temp_cov_mat, TMatrixD::EMatrixCreatorsOp2::kMult,
+      err_prop_tr );
+
+    unfolded_cov_matrix_map[ matrix_key ] = std::make_unique< TMatrixD >(
+      err_prop, TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
+  }
 
   //// Test against RooUnfold implementation of the D'Agostini method
   //auto test_response = get_test_response( mcc9 );
@@ -524,6 +593,20 @@ void test_unfolding() {
     SliceHistogram* slice_unf = SliceHistogram::make_slice_histogram(
       *result.unfolded_signal_, slice, result.cov_matrix_.get() );
 
+    // Temporary copies of the unfolded true event count slices with
+    // different covariance matrices
+    std::map< std::string, std::unique_ptr<SliceHistogram> > sh_cov_map;
+    for ( const auto& uc_pair : unfolded_cov_matrix_map ) {
+      const auto& uc_name = uc_pair.first;
+      const auto& uc_matrix = uc_pair.second;
+
+      auto& uc_ptr = sh_cov_map[ uc_name ];
+      uc_ptr.reset(
+        SliceHistogram::make_slice_histogram( *result.unfolded_signal_, slice,
+        uc_matrix.get() )
+      );
+    }
+
     // Also use the GENIE CV model to do the same
     SliceHistogram* slice_cv = SliceHistogram::make_slice_histogram(
       genie_cv_truth_vec, slice, nullptr );
@@ -560,6 +643,8 @@ void test_unfolding() {
     int var_count = 0;
     std::string diff_xsec_denom;
     std::string diff_xsec_units_denom;
+    std::string diff_xsec_denom_latex;
+    std::string diff_xsec_units_denom_latex;
     double other_var_width = 1.;
     for ( const auto& ov_spec : slice.other_vars_ ) {
       double high = ov_spec.high_bin_edge_;
@@ -569,9 +654,11 @@ void test_unfolding() {
         ++var_count;
         other_var_width *= ( high - low );
         diff_xsec_denom += 'd' + var_spec.name_;
+        diff_xsec_denom_latex += " d" + var_spec.latex_name_;
         const std::string& temp_units = var_spec.units_;
         if ( !temp_units.empty() ) {
           diff_xsec_units_denom += " / " + temp_units;
+          diff_xsec_units_denom_latex += " / " + var_spec.latex_units_;
         }
       }
     }
@@ -583,6 +670,9 @@ void test_unfolding() {
         var_count += slice.active_var_indices_.size();
         diff_xsec_denom += 'd' + var_spec.name_;
         diff_xsec_units_denom += " / " + var_spec.units_;
+
+        diff_xsec_denom_latex += " d" + var_spec.latex_name_;
+        diff_xsec_units_denom_latex += " / " + var_spec.latex_units_;
       }
     }
 
@@ -596,23 +686,39 @@ void test_unfolding() {
       trans_mat( b, b ) = 1e38 / ( width * integ_flux * num_Ar );
     }
 
+    std::string slice_y_title;
+    std::string slice_y_latex_title;
+    if ( var_count > 0 ) {
+      slice_y_title += "d";
+      slice_y_latex_title += "{$d";
+      if ( var_count > 1 ) {
+        slice_y_title += "^{" + std::to_string( var_count ) + "}";
+        slice_y_latex_title += "^{" + std::to_string( var_count ) + "}";
+      }
+      slice_y_title += "#sigma/" + diff_xsec_denom;
+      slice_y_latex_title += "\\sigma / " + diff_xsec_denom_latex;
+    }
+    else {
+      slice_y_title += "#sigma";
+      slice_y_latex_title += "\\sigma";
+    }
+    slice_y_title += " (10^{-38} cm^{2}" + diff_xsec_units_denom + " / Ar)";
+    slice_y_latex_title += "\\text{ }(10^{-38}\\text{ cm}^{2}"
+      + diff_xsec_units_denom_latex + " / \\mathrm{Ar})$}";
+
     // Convert all slice histograms from true event counts to differential
     // cross-section units
     for ( auto& pair : slice_gen_map ) {
       auto* slice_h = pair.second;
       slice_h->transform( trans_mat );
-
-      std::string slice_y_title;
-      if ( var_count > 0 ) {
-        slice_y_title += "d^{" + std::to_string( var_count ) + "}#sigma";
-        slice_y_title += '/' + diff_xsec_denom;
-      }
-      else {
-        slice_y_title += "#sigma";
-      }
-      slice_y_title += " (10^{-38} cm^{2}" + diff_xsec_units_denom + " / Ar)";
-
       slice_h->hist_->GetYaxis()->SetTitle( slice_y_title.c_str() );
+    }
+
+    // Also transform all of the unfolded data slice histograms which have
+    // specific covariance matrices
+    for ( auto& sh_cov_pair : sh_cov_map ) {
+      auto& slice_h = sh_cov_pair.second;
+      slice_h->transform( trans_mat );
     }
 
     // Keys are generator legend labels, values are the results of a chi^2
@@ -713,6 +819,59 @@ void test_unfolding() {
     }
 
     lg->Draw( "same" );
+
+    // Dump the unfolded results to text files compatible with PGFPlots
+    std::map< std::string, std::vector<double> > slice_hist_table;
+    std::map< std::string, std::string > slice_params_table;
+
+    dump_slice_variables( sb, sl_idx, slice_params_table );
+
+    for ( const auto& pair : slice_gen_map ) {
+      const auto hist_name = samples_to_hist_names.at( pair.first );
+      const auto* slice_hist = pair.second;
+      bool include_x_coords = ( hist_name == "UnfData" );
+      bool include_y_error = include_x_coords;
+      bool include_error_decomp = include_x_coords;
+      dump_slice_histogram( hist_name, *slice_hist, slice, slice_hist_table,
+        include_y_error, include_x_coords, include_error_decomp );
+    }
+
+    dump_slice_plot_limits( *slice_unf, *slice_cv, slice, slice_params_table );
+
+    dump_slice_errors( "UnfData", slice, sh_cov_map, slice_hist_table );
+
+    // Dump the chi^2 test results
+    for ( const auto& chi2_pair : chi2_map ) {
+      const auto hist_name = samples_to_hist_names.at( chi2_pair.first );
+      const auto& chi2_result = chi2_pair.second;
+
+      // Comparing the data histogram to itself is trivial, so skip it
+      if ( hist_name == "UnfData" ) continue;
+      else {
+        slice_params_table[ hist_name + "_chi2" ]
+          = std::to_string( chi2_result.chi2_ );
+        slice_params_table[ hist_name + "_pvalue" ]
+          = std::to_string( chi2_result.p_value_ );
+      }
+    }
+
+    // Dump the total data POT and number of bins in the slice
+    slice_params_table[ "bnb_data_pot" ] = std::to_string( total_pot );
+    slice_params_table[ "num_bins" ] = std::to_string( num_slice_bins );
+
+    // Dump a LaTeX title for the y-axis
+    slice_params_table[ "y_axis_title" ] = slice_y_latex_title;
+
+    // Before moving on to the next slice, dump information about the
+    // current one to new pgfplots files that can be used for offline plotting
+    std::string output_file_prefix = "dump/pgfplots_slice_";
+    // Use at least three digits for numbering the slice output files
+    if ( sl_idx < 10 ) output_file_prefix += '0';
+    if ( sl_idx < 100 ) output_file_prefix += '0';
+    output_file_prefix += std::to_string( sl_idx );
+
+    write_pgfplots_files( output_file_prefix, slice_hist_table,
+      slice_params_table );
 
   } // slices
   return;

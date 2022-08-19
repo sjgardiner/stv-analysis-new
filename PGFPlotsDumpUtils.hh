@@ -39,8 +39,8 @@ void dump_slice_variables( const SliceBinning& sb, size_t slice_idx,
     size_t av_idx = slice.active_var_indices_.at( a );
     const SliceVariable& svar = vars.at( av_idx );
 
-    std::string name_for_dump = '{' + svar.latex_name_ + '}';
-    std::string units_for_dump = '{' + svar.latex_units_ + '}';
+    std::string name_for_dump = "{$" + svar.latex_name_ + "$}";
+    std::string units_for_dump = "{$" + svar.latex_units_ + "$}";
 
     std::string col_prefix = "av" + std::to_string( a );
     pgfplots_params_table[ col_prefix + "_name" ] = name_for_dump;
@@ -55,8 +55,8 @@ void dump_slice_variables( const SliceBinning& sb, size_t slice_idx,
     size_t ov_idx = ov_spec.var_index_;
     const SliceVariable& svar = vars.at( ov_idx );
 
-    std::string name_for_dump = '{' + svar.latex_name_ + '}';
-    std::string units_for_dump = '{' + svar.latex_units_ + '}';
+    std::string name_for_dump = "{$" + svar.latex_name_ + "$}";
+    std::string units_for_dump = "{$" + svar.latex_units_ + "$}";
 
     double low = ov_spec.low_bin_edge_;
     double high = ov_spec.high_bin_edge_;
@@ -217,7 +217,8 @@ void dump_slice_plot_limits( const SliceHistogram& slice_bnb,
 void dump_slice_histogram( const std::string& hist_col_prefix,
   const SliceHistogram& slice_hist, const Slice& slice,
   std::map< std::string, std::vector<double> >& pgf_plots_hist_table,
-  bool include_yerror = true, bool include_x_coords = false )
+  bool include_yerror = true, bool include_x_coords = false,
+  bool include_error_decomp = false )
 {
   // Write information about the input SliceHistogram to the input map of
   // PGFPlots table columns
@@ -239,6 +240,19 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
     pgf_plots_hist_table[ yerror_col_name ] = std::vector<double>();
   }
 
+  std::string y_norm_error_col_name;
+  std::string y_shape_error_col_name;
+  std::string y_mixed_error_col_name;
+  if ( include_error_decomp ) {
+    y_norm_error_col_name = hist_col_prefix + "_norm_error";
+    y_shape_error_col_name = hist_col_prefix + "_shape_error";
+    y_mixed_error_col_name = hist_col_prefix + "_mixed_error";
+
+    pgf_plots_hist_table[ y_norm_error_col_name ] = std::vector<double>();
+    pgf_plots_hist_table[ y_shape_error_col_name ] = std::vector<double>();
+    pgf_plots_hist_table[ y_mixed_error_col_name ] = std::vector<double>();
+  }
+
   for ( const auto& bin_pair : slice.bin_map_ ) {
     int global_bin_idx = bin_pair.first;
     double y = hist->GetBinContent( global_bin_idx );
@@ -255,6 +269,21 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 
       dump_bin_edges_and_half_widths( "", *hist, global_bin_idx,
         pgf_plots_hist_table );
+    }
+
+    if ( include_error_decomp ) {
+      double y_shape_error = slice_hist.shape_errors_.at( global_bin_idx - 1 );
+      double y_norm_error = slice_hist.norm_errors_.at( global_bin_idx - 1 );
+      double y_mixed_error = slice_hist.mixed_errors_.at( global_bin_idx - 1 );
+
+      pgf_plots_hist_table.at( y_shape_error_col_name )
+        .push_back( y_shape_error );
+
+      pgf_plots_hist_table.at( y_norm_error_col_name )
+        .push_back( y_norm_error );
+
+      pgf_plots_hist_table.at( y_mixed_error_col_name )
+        .push_back( y_mixed_error );
     }
 
   } // slice bins
@@ -285,4 +314,13 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
     dump_bin_edges_and_half_widths( "", *hist, last_overflow_global_bin_idx,
       pgf_plots_hist_table );
   }
+
+  if ( include_error_decomp ) {
+    pgf_plots_hist_table.at( y_shape_error_col_name ).push_back( 0. );
+
+    pgf_plots_hist_table.at( y_norm_error_col_name ).push_back( 0. );
+
+    pgf_plots_hist_table.at( y_mixed_error_col_name ).push_back( 0. );
+  }
+
 }

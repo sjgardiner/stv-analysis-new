@@ -66,8 +66,10 @@ class SliceHistogram {
     // Bin-by-bin error bars for the norm+mixed and shape components of the
     // covariance matrix. These are calculated according to the approach from
     // https://microboone-docdb.fnal.gov/cgi-bin/sso/RetrieveFile?docid=5926.
-    std::unique_ptr< TH1 > norm_and_mixed_errors_;
     std::vector< double > shape_errors_;
+    std::vector< double > norm_errors_;
+    std::vector< double > mixed_errors_;
+    std::unique_ptr< TH1 > norm_and_mixed_errors_;
 
 };
 
@@ -174,15 +176,15 @@ SliceHistogram* SliceHistogram::make_slice_histogram( TH1D& reco_bin_histogram,
   result->hist_.reset( slice_hist );
   result->cmat_.cov_matrix_.reset( covmat_hist );
 
-  // Switch to showing shape-only error bars on the main histogram
-  // TODO: consider what refactoring may be needed for multidimensional slices
+  //// Switch to showing shape-only error bars on the main histogram
+  //// TODO: consider what refactoring may be needed for multidimensional slices
   result->calc_norm_shape_errors();
-  if ( !result->shape_errors_.empty() ) {
-    for ( int b = 0; b < result->hist_->GetNbinsX(); ++b ) {
-      double sh_err = result->shape_errors_.at( b );
-      result->hist_->SetBinError( b + 1, sh_err );
-    }
-  }
+  //if ( !result->shape_errors_.empty() ) {
+  //  for ( int b = 0; b < result->hist_->GetNbinsX(); ++b ) {
+  //    double sh_err = result->shape_errors_.at( b );
+  //    result->hist_->SetBinError( b + 1, sh_err );
+  //  }
+  //}
   return result;
 }
 
@@ -288,15 +290,15 @@ SliceHistogram* SliceHistogram::make_slice_histogram(
   result->hist_.reset( slice_hist );
   result->cmat_.cov_matrix_.reset( covmat_hist );
 
-  // Switch to showing shape-only error bars on the main histogram
-  // TODO: consider what refactoring may be needed for multidimensional slices
+  //// Switch to showing shape-only error bars on the main histogram
+  //// TODO: consider what refactoring may be needed for multidimensional slices
   result->calc_norm_shape_errors();
-  if ( !result->shape_errors_.empty() ) {
-    for ( int b = 0; b < result->hist_->GetNbinsX(); ++b ) {
-      double sh_err = result->shape_errors_.at( b );
-      result->hist_->SetBinError( b + 1, sh_err );
-    }
-  }
+  //if ( !result->shape_errors_.empty() ) {
+  //  for ( int b = 0; b < result->hist_->GetNbinsX(); ++b ) {
+  //    double sh_err = result->shape_errors_.at( b );
+  //    result->hist_->SetBinError( b + 1, sh_err );
+  //  }
+  //}
   return result;
 }
 
@@ -484,11 +486,11 @@ void SliceHistogram::transform( const TMatrixD& mat ) {
   this->calc_norm_shape_errors();
 
   // To wrap things up, set the updated histogram bin errors based on the
-  // diagonal elements of the shape-only covariance matrix
+  // diagonal elements of the covariance matrix
   for ( int b = 0; b < num_bins; ++b ) {
-    //double variance = cmat_.cov_matrix_->GetBinContent( b + 1, b + 1 );
-    //double err = std::sqrt( std::max(0., variance) );
-    double err = shape_errors_.at( b );
+    double variance = cmat_.cov_matrix_->GetBinContent( b + 1, b + 1 );
+    double err = std::sqrt( std::max(0., variance) );
+    //double err = shape_errors_.at( b );
     hist_->SetBinError( b + 1, err );
   }
 
@@ -522,6 +524,9 @@ void SliceHistogram::calc_norm_shape_errors() {
   // Clear out any previous storage of the shape and norm+mixed errors before
   // recalculating them
   shape_errors_.clear();
+  norm_errors_.clear();
+  mixed_errors_.clear();
+
   norm_and_mixed_errors_.reset(dynamic_cast<TH1*>( hist_->Clone() ));
   norm_and_mixed_errors_->Reset();
 
@@ -537,11 +542,17 @@ void SliceHistogram::calc_norm_shape_errors() {
     double mixed_variance = ns_cov.mixed_( b, b );
 
     double shape_err = std::sqrt( std::max(0., shape_variance) );
+    double norm_err = std::sqrt( std::max(0., norm_variance) );
+    double mixed_err = std::sqrt( std::max(0., mixed_variance) );
+
     double norm_and_mixed_err = std::sqrt(
       std::max(0., norm_variance + mixed_variance) );
 
     norm_and_mixed_errors_->SetBinContent( b + 1, norm_and_mixed_err );
+
     shape_errors_.push_back( shape_err );
+    norm_errors_.push_back( norm_err );
+    mixed_errors_.push_back( mixed_err );
   }
 
 }
