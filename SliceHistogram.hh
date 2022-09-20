@@ -62,15 +62,6 @@ class SliceHistogram {
 
     std::unique_ptr< TH1 > hist_;
     CovMatrix cmat_;
-
-    // Bin-by-bin error bars for the norm+mixed and shape components of the
-    // covariance matrix. These are calculated according to the approach from
-    // https://microboone-docdb.fnal.gov/cgi-bin/sso/RetrieveFile?docid=5926.
-    std::vector< double > shape_errors_;
-    std::vector< double > norm_errors_;
-    std::vector< double > mixed_errors_;
-    std::unique_ptr< TH1 > norm_and_mixed_errors_;
-
 };
 
 // Creates a new event histogram and an associated covariance matrix for a
@@ -176,15 +167,6 @@ SliceHistogram* SliceHistogram::make_slice_histogram( TH1D& reco_bin_histogram,
   result->hist_.reset( slice_hist );
   result->cmat_.cov_matrix_.reset( covmat_hist );
 
-  //// Switch to showing shape-only error bars on the main histogram
-  //// TODO: consider what refactoring may be needed for multidimensional slices
-  result->calc_norm_shape_errors();
-  //if ( !result->shape_errors_.empty() ) {
-  //  for ( int b = 0; b < result->hist_->GetNbinsX(); ++b ) {
-  //    double sh_err = result->shape_errors_.at( b );
-  //    result->hist_->SetBinError( b + 1, sh_err );
-  //  }
-  //}
   return result;
 }
 
@@ -290,15 +272,6 @@ SliceHistogram* SliceHistogram::make_slice_histogram(
   result->hist_.reset( slice_hist );
   result->cmat_.cov_matrix_.reset( covmat_hist );
 
-  //// Switch to showing shape-only error bars on the main histogram
-  //// TODO: consider what refactoring may be needed for multidimensional slices
-  result->calc_norm_shape_errors();
-  //if ( !result->shape_errors_.empty() ) {
-  //  for ( int b = 0; b < result->hist_->GetNbinsX(); ++b ) {
-  //    double sh_err = result->shape_errors_.at( b );
-  //    result->hist_->SetBinError( b + 1, sh_err );
-  //  }
-  //}
   return result;
 }
 
@@ -483,8 +456,6 @@ void SliceHistogram::transform( const TMatrixD& mat ) {
   // Replace the owned CovMatrix object with the new one
   cmat_ = std::move( transformed_cmat );
 
-  this->calc_norm_shape_errors();
-
   // To wrap things up, set the updated histogram bin errors based on the
   // diagonal elements of the covariance matrix
   for ( int b = 0; b < num_bins; ++b ) {
@@ -507,52 +478,4 @@ TMatrixD SliceHistogram::get_col_vect() const {
     hist_vec( b, 0 ) = val;
   }
   return hist_vec;
-}
-
-void SliceHistogram::calc_norm_shape_errors() {
-
-  // Don't do anything if we do not have a covariance matrix available
-  if ( !cmat_.cov_matrix_ ) return;
-
-  // Get access to the vector of bin counts and the full covariance matrix
-  TMatrixD temp_counts_vec = this->get_col_vect();
-  std::unique_ptr< TMatrixD > temp_full_cov_mat = this->cmat_.get_matrix();
-
-  // Decompose the covariance matrix into normalization, shape, and mixed pieces
-  NormShapeCovMatrix ns_cov( temp_counts_vec, *temp_full_cov_mat );
-
-  // Clear out any previous storage of the shape and norm+mixed errors before
-  // recalculating them
-  shape_errors_.clear();
-  norm_errors_.clear();
-  mixed_errors_.clear();
-
-  norm_and_mixed_errors_.reset(dynamic_cast<TH1*>( hist_->Clone() ));
-  norm_and_mixed_errors_->Reset();
-
-  // Set the style for showing the normalization error histogram
-  norm_and_mixed_errors_->SetFillColorAlpha( kGray + 1, 0.45 );
-  norm_and_mixed_errors_->SetLineColor( kGray + 1 );
-  norm_and_mixed_errors_->SetMarkerColor( kGray + 1 );
-
-  int num_bins = temp_counts_vec.GetNrows();
-  for ( int b = 0; b < num_bins; ++b ) {
-    double shape_variance = ns_cov.shape_( b, b );
-    double norm_variance = ns_cov.norm_( b, b );
-    double mixed_variance = ns_cov.mixed_( b, b );
-
-    double shape_err = std::sqrt( std::max(0., shape_variance) );
-    double norm_err = std::sqrt( std::max(0., norm_variance) );
-    double mixed_err = std::sqrt( std::max(0., mixed_variance) );
-
-    double norm_and_mixed_err = std::sqrt(
-      std::max(0., norm_variance + mixed_variance) );
-
-    norm_and_mixed_errors_->SetBinContent( b + 1, norm_and_mixed_err );
-
-    shape_errors_.push_back( shape_err );
-    norm_errors_.push_back( norm_err );
-    mixed_errors_.push_back( mixed_err );
-  }
-
 }
