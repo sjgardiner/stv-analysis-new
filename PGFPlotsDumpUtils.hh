@@ -221,8 +221,7 @@ void dump_slice_plot_limits( const SliceHistogram& slice_bnb,
 void dump_slice_histogram( const std::string& hist_col_prefix,
   const SliceHistogram& slice_hist, const Slice& slice,
   std::map< std::string, std::vector<double> >& pgf_plots_hist_table,
-  bool include_yerror = true, bool include_x_coords = false,
-  bool include_error_decomp = false )
+  bool include_yerror = true, bool include_x_coords = false )
 {
   // Write information about the input SliceHistogram to the input map of
   // PGFPlots table columns
@@ -247,15 +246,6 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
   std::string y_norm_error_col_name;
   std::string y_shape_error_col_name;
   std::string y_mixed_error_col_name;
-  if ( include_error_decomp ) {
-    y_norm_error_col_name = hist_col_prefix + "_norm_error";
-    y_shape_error_col_name = hist_col_prefix + "_shape_error";
-    y_mixed_error_col_name = hist_col_prefix + "_mixed_error";
-
-    pgf_plots_hist_table[ y_norm_error_col_name ] = std::vector<double>();
-    pgf_plots_hist_table[ y_shape_error_col_name ] = std::vector<double>();
-    pgf_plots_hist_table[ y_mixed_error_col_name ] = std::vector<double>();
-  }
 
   for ( const auto& bin_pair : slice.bin_map_ ) {
     int global_bin_idx = bin_pair.first;
@@ -273,21 +263,6 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 
       dump_bin_edges_and_half_widths( "", *hist, global_bin_idx,
         pgf_plots_hist_table );
-    }
-
-    if ( include_error_decomp ) {
-      double y_shape_error = slice_hist.shape_errors_.at( global_bin_idx - 1 );
-      double y_norm_error = slice_hist.norm_errors_.at( global_bin_idx - 1 );
-      double y_mixed_error = slice_hist.mixed_errors_.at( global_bin_idx - 1 );
-
-      pgf_plots_hist_table.at( y_shape_error_col_name )
-        .push_back( y_shape_error );
-
-      pgf_plots_hist_table.at( y_norm_error_col_name )
-        .push_back( y_norm_error );
-
-      pgf_plots_hist_table.at( y_mixed_error_col_name )
-        .push_back( y_mixed_error );
     }
 
   } // slice bins
@@ -317,14 +292,6 @@ void dump_slice_histogram( const std::string& hist_col_prefix,
 
     dump_bin_edges_and_half_widths( "", *hist, last_overflow_global_bin_idx,
       pgf_plots_hist_table );
-  }
-
-  if ( include_error_decomp ) {
-    pgf_plots_hist_table.at( y_shape_error_col_name ).push_back( 0. );
-
-    pgf_plots_hist_table.at( y_norm_error_col_name ).push_back( 0. );
-
-    pgf_plots_hist_table.at( y_mixed_error_col_name ).push_back( 0. );
   }
 
 }
