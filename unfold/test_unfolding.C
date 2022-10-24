@@ -131,16 +131,15 @@ struct TruthFileInfo {
 // predictions in each true bin
 std::map< std::string, TruthFileInfo > truth_file_map = {
   { "GENIE 2.12.10",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-tki/comp-gv2.root", kBlue, 1 } },
+    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv2.root", kBlue, 1 } },
   { "GENIE 3.0.6",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-tki/comp-gv3.root", kBlack, 2} },
+    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3.root", kBlack, 2} },
   { "NEUT 5.4.0.1",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-tki/comp-neut.root", kRed, 9} },
+    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-neut.root", kRed, 9} },
   { "NuWro 19.02.1",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-tki/comp-nuwro.root", kViolet, 7} },
- //{ "GiBUU 2019",
- //  {"/uboone/app/users/gardiner/stv/mc/comp_cc1muNp_gibuu.root", kGreen, 10} },
-
+    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-nuwro.root", kViolet, 7} },
+// { "GiBUU 2021",
+//    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/nuisance/build/myout.root", kGreen, 10} },
 };
 
 std::map< std::string, std::string > samples_to_hist_names {
@@ -151,7 +150,7 @@ std::map< std::string, std::string > samples_to_hist_names {
   { "GENIE 3.0.6", "gv3" },
   { "NEUT 5.4.0.1", "neut" },
   { "NuWro 19.02.1", "nuwro" },
-  { "GiBUU 2019", "gibuu" },
+  { "GiBUU 2021", "gibuu" },
 };
 
 struct SampleInfo {
@@ -308,7 +307,7 @@ void test_unfolding() {
   const auto& sample_info = sample_info_map.at( SAMPLE_NAME );
   //const auto& respmat_file_name = sample_info.respmat_file_;
 
-  const std::string respmat_file_name( "/uboone/data/users/gardiner/ccnp-universes/tki-new-bin.root" );
+  const std::string respmat_file_name( "/uboone/data/users/gardiner/myuniverses-all.root" );
 
   // Do the systematics calculations in preparation for unfolding
   //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );
@@ -389,6 +388,22 @@ void test_unfolding() {
     unfolded_cov_matrix_map[ matrix_key ] = std::make_unique< TMatrixD >(
       err_prop, TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
   }
+
+  // Decompose the block-diagonal pieces of the total covariance matrix
+  // into normalization, shape, and mixed components (for later plotting
+  // purposes)
+  NormShapeCovMatrix bd_ns_covmat = make_block_diagonal_norm_shape_covmat(
+    *result.unfolded_signal_, *result.cov_matrix_, syst.true_bins_ );
+
+  // Add the blockwise decomposed matrices into the map
+  unfolded_cov_matrix_map[ "total_blockwise_norm" ]
+    = std::make_unique< TMatrixD >( bd_ns_covmat.norm_ );
+
+  unfolded_cov_matrix_map[ "total_blockwise_shape" ]
+    = std::make_unique< TMatrixD >( bd_ns_covmat.shape_ );
+
+  unfolded_cov_matrix_map[ "total_blockwise_mixed" ]
+    = std::make_unique< TMatrixD >( bd_ns_covmat.mixed_ );
 
   //// Test against RooUnfold implementation of the D'Agostini method
   //auto test_response = get_test_response( mcc9 );
@@ -529,7 +544,7 @@ void test_unfolding() {
   lg->Draw( "same" );
 
   // Plot slices of the unfolded result
-  auto* sb_ptr = new SliceBinning( "../mybins_tki.txt" );
+  auto* sb_ptr = new SliceBinning( "../mybins_all.txt" );
   auto& sb = *sb_ptr;
 
   // Get the factors needed to convert to cross-section units
@@ -798,9 +813,6 @@ void test_unfolding() {
     slice_unf->hist_->GetYaxis()->SetRangeUser( 0., ymax*1.07 );
     slice_unf->hist_->Draw( "e same" );
 
-    // Normalization error band
-    slice_unf->norm_and_mixed_errors_->Draw( "hist same" );
-
     TLegend* lg = new TLegend( 0.15, 0.6, 0.5, 0.88 );
     for ( const auto& pair : slice_gen_map ) {
       const auto& name = pair.first;
@@ -833,9 +845,8 @@ void test_unfolding() {
       const auto* slice_hist = pair.second;
       bool include_x_coords = ( hist_name == "UnfData" );
       bool include_y_error = include_x_coords;
-      bool include_error_decomp = include_x_coords;
       dump_slice_histogram( hist_name, *slice_hist, slice, slice_hist_table,
-        include_y_error, include_x_coords, include_error_decomp );
+        include_y_error, include_x_coords );
     }
 
     dump_slice_plot_limits( *slice_unf, *slice_cv, slice, slice_params_table );
