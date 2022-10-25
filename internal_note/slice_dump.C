@@ -26,7 +26,7 @@ void slice_dump() {
   //fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
   auto* syst_ptr = new MCC9SystematicsCalculator(
-    "/uboone/data/users/gardiner/tki-new-bin.root",
+    "/uboone/data/users/gardiner/myuniverses-all.root",
     //"../systcalc_unfold_fd.conf" );
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
@@ -55,7 +55,7 @@ void slice_dump() {
   auto* matrix_map_ptr = syst.get_covariances().release();
   auto& matrix_map = *matrix_map_ptr;
 
-  auto* sb_ptr = new SliceBinning( "../mybins_tki.txt" );
+  auto* sb_ptr = new SliceBinning( "../mybins_all.txt" );
   auto& sb = *sb_ptr;
 
   for ( size_t sl_idx = 0u; sl_idx < sb.slices_.size(); ++sl_idx ) {

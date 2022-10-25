@@ -13,7 +13,7 @@ void make_config_mcc8() {
     { "p3_mu.CosTheta()", { -1.0, -0.82, -0.66, -0.39, -0.16, 0.05, 0.25, 0.43,
       0.59, 0.73, 0.83, 0.91, 1.0 } },
 
-    { "thMuP", { 0.0, 0.8, 1.2, 1.57, 1.94, 2.34, M_PI } },
+    { "theta_mu_p", { 0.0, 0.8, 1.2, 1.57, 1.94, 2.34, M_PI } },
 
     { "p3_lead_p.Mag()", { 0.3, 0.41, 0.495, 0.56, 0.62, 0.68, 0.74, 0.8, 0.87,
       0.93, 1.2 } },
@@ -23,18 +23,13 @@ void make_config_mcc8() {
     { "p3_lead_p.CosTheta()", { -1.0, -0.5, 0.0, 0.27, 0.45, 0.62, 0.76, 0.86,
       0.94, 1.0 } },
 
-  // Opening angle
-  // "TMath::ACos( (p3_mu.X()*p3_lead_p.X() + "
-  // "p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) / p3_mu.Mag()"
-  //"/ p3_lead_p.Mag() )"
-
   };
 
   // Used for converting from the variable names given in the bin edge
   // map to the ones used by the SliceBinning object
   std::map< std::string, std::string > var_name_map = {
     { "p3_mu.CosTheta()", "reco cos#theta_{#mu}" },
-    { "thMuP", "reco #theta_{#mup}" },
+    { "theta_mu_p", "reco #theta_{#mup}" },
     { "p3_lead_p.Mag()", "reco p_{p}" },
     { "p3_mu.Mag()", "reco p_{#mu}" },
     { "p3_lead_p.CosTheta()", "reco cos#theta_{p}" },
@@ -50,7 +45,7 @@ void make_config_mcc8() {
 
     { "p3_lead_p.CosTheta()", { false, false } },
 
-    { "thMuP", { false, false } },
+    { "theta_mu_p", { false, false } },
 
     // Restricted by the signal definition to lie within the proton momentum
     // bins
@@ -76,11 +71,14 @@ void make_config_mcc8() {
     { "reco bin number", "", "reco bin number", "" }
   };
 
-  // Adjust for the higher proton threshold used in the signal definition
-  // of the MCC8 CCNp0pi analysis. We will ignore the tiny difference
-  // between the pionless and mesonless signal definitions (a ~0.06% effect).
-  std::string selection = "sel_CCNp0pi && p3_lead_p.Mag() >= 0.3";
-  std::string signal_def = "mc_is_signal && mc_p3_lead_p.Mag() >= 0.3";
+  // NOTE: this script assumes that the definitions for the selection flag
+  // (sel_CCNp0pi) and signal flag (mc_is_signal) have been suitably changed to
+  // match the MCC8 analysis. The user is responsible for using ntuples that
+  // have been post-processed consistently. Strictly speaking, this includes
+  // the tiny difference between the pionless and mesonless signal definitions
+  // (a ~0.06% effect).
+  std::string selection = "sel_CCNp0pi";
+  std::string signal_def = "mc_is_signal";
 
   // By construction, MC event categories 5-11 contain all beam-correlated
   // backgrounds. This list is therefore comprehensive apart from cosmic
@@ -88,7 +86,6 @@ void make_config_mcc8() {
   // NOTE: We add an extra background bin for events that the MCC9 analysis
   // considers signal and the MCC8 analysis considers background.
   std::vector< std::string > background_defs = {
-    "mc_is_signal && mc_p3_lead_p.Mag() < 0.3",
     "category == 5", "category == 6", "category == 7", "category == 8",
     "category == 9", "category == 10", "category == 11"
   };
@@ -111,25 +108,6 @@ void make_config_mcc8() {
     // block.
     const std::string& act_var_name = var_name_map.at( reco_branchexpr );
     int act_var_idx = find_slice_var_index( act_var_name, sb.slice_vars_ );
-
-    // I didn't yet make a separate branch for the opening angle between
-    // the muon and proton, so fix the branch expressions for that case
-    // with this ugly hack
-    if ( reco_branchexpr == "thMuP" ) {
-
-      reco_branchexpr = "TMath::ACos( (p3_mu.X()*p3_lead_p.X()"
-        " + p3_mu.Y()*p3_lead_p.Y() + p3_mu.Z()*p3_lead_p.Z()) /"
-        " p3_mu.Mag() / p3_lead_p.Mag() )";
-
-      true_branchexpr = "TMath::ACos( (mc_p3_mu.X()*mc_p3_lead_p.X()"
-        " + mc_p3_mu.Y()*mc_p3_lead_p.Y() + mc_p3_mu.Z()*mc_p3_lead_p.Z()) /"
-        " mc_p3_mu.Mag() / mc_p3_lead_p.Mag() )";
-
-      // Add to the under/overflow map as well so we don't break the lookups
-      // below
-      mcc8_under_overflow_map[ reco_branchexpr ]
-        = mcc8_under_overflow_map.at( "thMuP" );
-    }
 
     const auto flag_pair = mcc8_under_overflow_map.at( reco_branchexpr );
     bool needs_underflow_bin = flag_pair.first;
