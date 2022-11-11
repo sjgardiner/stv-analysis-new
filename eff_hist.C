@@ -1,12 +1,23 @@
 // Efficiency histogram plotter
 
-const std::string signal_cuts = "mc_is_signal";
+//const std::string signal_cuts = "mc_is_signal";
  // " || ( category == 6 && @mc_p3_p_vec.size() > 0 )";
-const std::string selection_cuts = "sel_CCNp0pi";
+//const std::string selection_cuts = "sel_CCNp0pi";
 //const std::string selection_cuts = "sel_nu_mu_cc"
 //" && sel_no_reco_showers && sel_muon_above_threshold"
 //" && sel_has_p_candidate && sel_passed_proton_pid_cut"
 //" && sel_protons_contained ";
+
+const std::string signal_cuts = "mc_vertex_in_FV && mc_neutrino_is_numu"
+  " && mc_no_fs_mesons && Sum$( mc_pdg == 13 ) == 1"
+  " && Sum$( mc_pdg == 2212 ) > 0";
+  //" && mc_muon_in_mom_range && mc_lead_p_in_mom_range"
+
+const std::string selection_cuts = "sel_nu_mu_cc && sel_muon_contained"
+  " && sel_muon_quality_ok"
+  //" && sel_muon_passed_mom_cuts && sel_lead_p_passed_mom_cuts"
+  " && sel_no_reco_showers && sel_has_p_candidate && sel_protons_contained "
+  " && sel_passed_proton_pid_cut";
 
 void plot_eff_hist( TTree& stv_tree, const std::string& branch,
   const std::string& variable_name, const std::string& hist_name,
@@ -86,13 +97,13 @@ void plot_eff_hist( TTree& stv_tree, const std::string& branch,
 void eff_hist() {
 
   TChain stv_ch( "stv_tree" );
-  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-200MeVthresh/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root" );
-  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-200MeVthresh/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
-  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv-200MeVthresh/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root" );
+  stv_ch.Add( "/uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root" );
 
-  //plot_eff_hist( stv_ch, "mc_p3_mu.Mag()", "p_{#mu}^{true}", "pmutrue", "GeV", 80, 0., 2.);
+ plot_eff_hist( stv_ch, "mc_p3_mu.Mag()", "p_{#mu}^{true}", "pmutrue", "GeV", 80, 0., 2.);
 
-  plot_eff_hist( stv_ch, "mc_p3_lead_p.Mag()", "p_{p}^{true}", "pptrue", "GeV", 80, 0., 1.2 );
+ //plot_eff_hist( stv_ch, "mc_p3_lead_p.Mag()", "p_{p}^{true}", "pptrue", "GeV", 80, 0., 1.2 );
 
   //plot_eff_hist( stv_ch, "mc_p3_mu.CosTheta()", "cos#theta_{#mu}^{true}", "cthmutrue", "", 25, -1., 1.);
   //plot_eff_hist( stv_ch, "mc_p3_mu.Phi()", "#phi_{#mu}^{true}", "phimutrue", "rad", 25, 0., M_PI);

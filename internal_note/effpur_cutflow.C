@@ -223,20 +223,22 @@ void effpur_cutflow() {
   "sel_reco_vertex_in_FV",
   "sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV",
   "sel_nu_mu_cc",
-  "sel_nu_mu_cc && sel_muon_passed_mom_cuts",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_passed_mom_cuts",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_passed_mom_cuts"
-    " && sel_muon_contained",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_passed_mom_cuts"
-    " && sel_muon_contained && sel_muon_quality_ok",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_passed_mom_cuts"
-    " && sel_muon_contained && sel_muon_quality_ok && sel_has_p_candidate",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_passed_mom_cuts"
-    " && sel_muon_contained && sel_muon_quality_ok && sel_has_p_candidate"
-    " && sel_protons_contained ",
-  "sel_nu_mu_cc && sel_no_reco_showers && sel_muon_passed_mom_cuts"
-    " && sel_muon_contained && sel_muon_quality_ok && sel_has_p_candidate"
-    " && sel_protons_contained && sel_passed_proton_pid_cut",
+  "sel_nu_mu_cc && sel_muon_contained",
+  "sel_nu_mu_cc && sel_muon_contained && sel_muon_quality_ok",
+  "sel_nu_mu_cc && sel_muon_contained && sel_muon_quality_ok"
+    " && sel_muon_passed_mom_cuts",
+  "sel_nu_mu_cc && sel_muon_contained && sel_muon_quality_ok"
+    " && sel_muon_passed_mom_cuts && sel_no_reco_showers",
+  "sel_nu_mu_cc && sel_muon_contained && sel_muon_quality_ok"
+    " && sel_muon_passed_mom_cuts && sel_no_reco_showers"
+    " && sel_has_p_candidate",
+  "sel_nu_mu_cc && sel_muon_contained && sel_muon_quality_ok"
+    " && sel_muon_passed_mom_cuts && sel_no_reco_showers"
+    " && sel_has_p_candidate && sel_protons_contained ",
+  "sel_nu_mu_cc && sel_muon_contained && sel_muon_quality_ok"
+    " && sel_muon_passed_mom_cuts && sel_no_reco_showers"
+    " && sel_has_p_candidate && sel_protons_contained "
+    " && sel_passed_proton_pid_cut",
   "sel_CCNp0pi" };
 
   size_t num_points = selection_defs.size();
@@ -271,9 +273,9 @@ void effpur_cutflow() {
   } // selection definitions
 
   const std::vector< std::string > bin_labels = { "no cuts",
-  "in FV", "starts contained", "CCincl",
-  "#mu momentum limits", "no showers", "#mu contained", "#mu quality",
-  "has p candidate", "p contained", "proton PID", "p momentum limits" };
+  "in FV", "starts contained", "CCincl", "#mu contained", "#mu quality",
+  "#mu momentum limits", "no showers", "has p candidate", "p contained",
+  "p PID", "p momentum limits" };
 
   TCanvas* c1 = new TCanvas;
   c1->SetBottomMargin(0.21);

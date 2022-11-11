@@ -505,9 +505,10 @@ void pfparticle_plots() {
     -1., 1., 80, "llr_pid_score_muon", "LLR PID score",
     "PFParticles", "Runs 1-3" );
 
-  std::string selection5 = "sel_nu_mu_cc && sel_has_p_candidate"
-    " && sel_protons_contained && sel_no_reco_showers"
-    " && pfp_generation_v == 2";
+  std::string selection5 = "sel_nu_mu_cc && sel_muon_contained"
+    " && sel_muon_quality_ok && sel_muon_passed_mom_cuts"
+    " && sel_no_reco_showers && sel_has_p_candidate"
+    " && sel_protons_contained && pfp_generation_v == 2";
 
   make_pfp_plots( "trk_llr_pid_score_v", selection5, run_set,
     -1., 1., 80, "llr_pid_score_proton", "LLR PID score",
