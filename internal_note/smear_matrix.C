@@ -1,3 +1,6 @@
+// Standard library includes
+#include <set>
+
 // ROOT includes
 #include "TFile.h"
 
@@ -39,13 +42,22 @@ void dump_pgfplots_smearing_histogram( const std::string& output_table_file,
 
 void smear_matrix() {
 
-  const std::string input_respmat_file_name( "/uboone/data/users/gardiner/"
-    "ntuples-stv-MCC9InternalNote-NewVol/respmat-files/"
-    "RespMat-myconfig_mcc9_2D_proton.root" );
+  const std::string input_respmat_file_name( "/uboone/data/users/"
+    "gardiner/myuniverses-all.root" );
 
   auto* syst_ptr = new MCC9SystematicsCalculator( input_respmat_file_name,
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
+
+  // Build a set of integer block indices for the reco bins
+  const auto& true_bins = syst.true_bins_;
+  const auto& reco_bins = syst.reco_bins_;
+
+  std::set< int > reco_blocks;
+  size_t num_reco_bins = reco_bins.size();
+  for ( const auto& rb : reco_bins ) {
+    reco_blocks.insert( rb.block_index_ );
+  }
 
   // Create a new TH2D to store the smearing matrix. Use the 2D event counts
   // (in true and reco bins) from the CV universe to start.
@@ -54,7 +66,6 @@ void smear_matrix() {
     ->Clone("smear_hist") );
 
   // Get the bin index for the first true bin that represents background events
-  const auto& true_bins = syst.true_bins_;
   size_t num_true_bins = true_bins.size();
   size_t first_bkgd_bin_idx = num_true_bins;
   for ( size_t t = 0u; t < num_true_bins; ++t ) {
@@ -73,41 +84,53 @@ void smear_matrix() {
   expected_signal_hist->GetYaxis()->SetTitle( "expected signal events" );
   expected_signal_hist->Draw( "hist e" );
 
-  // Normalize the smearing matrix elements so that a sum over all reco bins
-  // (including the under/overflow bins) yields a value of one. This means that
-  // every selected signal event must end up somewhere in reco space.
-  int num_bins_x = smear_hist->GetXaxis()->GetNbins();
-  int num_bins_y = smear_hist->GetYaxis()->GetNbins();
+  // Normalize each block of the smearing matrix elements so that a sum over
+  // all reco bins that belong to the same block (including the under/overflow
+  // bins) yields a value of one. This means that every selected signal event
+  // must end up somewhere in reco space in each block.
+  for ( const int cur_block_idx : reco_blocks ) {
 
-  // Loop over the true (x) bins. Include the underflow (index zero) and
-  // overflow (index num_bins_x + 1) bins.
-  for ( int bx = 0; bx <= num_bins_x + 1; ++bx ) {
+    // Loop over all true bins
+    for ( size_t bt = 0; bt < num_true_bins; ++bt ) {
 
-    // For the current true (x) bin, compute the sum of all reco (y) bins.
-    double y_sum = 0.;
-    for ( int by = 0; by <= num_bins_y + 1; ++by ) {
-      y_sum += smear_hist->GetBinContent( bx, by );
-    }
+      // Skip true bins that do not belong to the current block
+      const auto& tb = true_bins.at( bt );
+      if ( tb.block_index_ != cur_block_idx ) continue;
 
-    // Normalize each of the reco (y) bins so that the sum over y is unity.
-    for ( int by = 0; by <= num_bins_y + 1; ++by ) {
-
-      // To avoid dividing by zero, set the bin content to zero if the sum of
-      // the reco (y) bins is not positive.
-      if ( y_sum <= 0. ) {
-        smear_hist->SetBinContent( bx, by, 0. );
+      // For the current true (x) bin, compute the sum of all reco (y) bins
+      // that belong to the current block
+      double y_sum = 0.;
+      for ( size_t br = 0; br < num_reco_bins; ++br ) {
+        const auto& rb = reco_bins.at( br );
+        if ( tb.block_index_ != rb.block_index_ ) continue;
+        y_sum += smear_hist->GetBinContent( bt + 1, br + 1 );
       }
-      else {
-        // Otherwise, normalize in the usual way
-        double bc = smear_hist->GetBinContent( bx, by );
 
-        double content = std::max( bc / y_sum, 0. );
+      // Normalize each of the reco (y) bins in the current block so that the
+      // sum over y is unity.
+      for ( size_t br = 0; br < num_reco_bins; ++br ) {
 
-        smear_hist->SetBinContent( bx, by, content );
-      }
-    } // loop over reco (y) bins
+        const auto& rb = reco_bins.at( br );
+        if ( tb.block_index_ != rb.block_index_ ) continue;
 
-  } // loop over true (x) bins
+        // To avoid dividing by zero, set the bin content to zero if the sum of
+        // the reco (y) bins is not positive.
+        if ( y_sum <= 0. ) {
+          smear_hist->SetBinContent( bt + 1, br + 1, 0. );
+        }
+        else {
+          // Otherwise, normalize in the usual way
+          double bc = smear_hist->GetBinContent( bt + 1, br + 1 );
+
+          double content = std::max( bc / y_sum, 0. );
+
+          smear_hist->SetBinContent( bt + 1, br + 1, content );
+        }
+      } // loop over reco (y) bins
+
+    } // loop over true (x) bins
+
+  } // loop over blocks
 
   // Smearing matrix histogram style options
   smear_hist->GetXaxis()->SetTitleFont( FONT_STYLE);
@@ -133,8 +156,8 @@ void smear_matrix() {
 
   smear_hist->Draw( "colz" );
 
-  dump_pgfplots_smearing_histogram( "proton2D_respmat_table.txt",
-    "proton2D_respmat_params.txt", smear_hist, first_bkgd_bin_idx );
+  dump_pgfplots_smearing_histogram( "all_migmat_table.txt",
+    "all_migmat_params.txt", smear_hist, first_bkgd_bin_idx );
 
   // Dump a table of bin occupancies
   std::ofstream occup_table_file( "occupancy_table.txt" );
