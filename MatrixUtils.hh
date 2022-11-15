@@ -10,8 +10,11 @@
 #include "TDecompQRH.h"
 #include "TMatrixD.h"
 
-std::unique_ptr< TMatrixD > invert_matrix( const TMatrixD& mat ) {
+constexpr double DEFAULT_MATRIX_INVERSION_TOLERANCE = 1e-4;
 
+std::unique_ptr< TMatrixD > invert_matrix( const TMatrixD& mat,
+  const double inversion_tolerance = DEFAULT_MATRIX_INVERSION_TOLERANCE )
+{
   // Pre-scale before inversion to avoid numerical problems. Here we choose a
   // scaling factor such that the smallest nonzero entry in the original matrix
   // has an absolute value of unity. Note the use of the zero-based element
@@ -54,15 +57,15 @@ std::unique_ptr< TMatrixD > invert_matrix( const TMatrixD& mat ) {
   // Double-check that we get a unit matrix by multiplying the
   // original by its inverse
   TMatrixD unit_mat( mat, TMatrixD::kMult, *inverse_matrix );
-  constexpr double INVERSION_TOLERANCE = 1e-4;
   for ( int a = 0; a < num_bins; ++a ) {
     for ( int b = 0; b < num_bins; ++b ) {
       double element = unit_mat( a, b );
       double expected_element = 0.;
       if ( a == b ) expected_element = 1.;
       double abs_diff = std::abs( element - expected_element );
-      if ( abs_diff > INVERSION_TOLERANCE ) throw std::runtime_error(
-        "Matrix inversion failed" );
+      if ( abs_diff > inversion_tolerance ) {
+        throw std::runtime_error( "Matrix inversion failed" );
+      }
     }
   }
 

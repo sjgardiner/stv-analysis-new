@@ -58,7 +58,8 @@ class SliceHistogram {
       double p_value_;
     };
 
-    Chi2Result get_chi2( const SliceHistogram& other ) const;
+    Chi2Result get_chi2( const SliceHistogram& other,
+      const double inversion_tol = DEFAULT_MATRIX_INVERSION_TOLERANCE ) const;
 
     std::unique_ptr< TH1 > hist_;
     CovMatrix cmat_;
@@ -333,7 +334,7 @@ SliceHistogram* SliceHistogram::make_slice_efficiency_histogram(
 }
 
 SliceHistogram::Chi2Result SliceHistogram::get_chi2(
-  const SliceHistogram& other ) const
+  const SliceHistogram& other, const double inversion_tol ) const
 {
   int num_bins = hist_->GetNbinsX();
   if ( other.hist_->GetNbinsX() != num_bins ) {
@@ -374,7 +375,7 @@ SliceHistogram::Chi2Result SliceHistogram::get_chi2(
   auto cov_matrix = cov_mat.get_matrix();
 
   // Invert the covariance matrix
-  auto inverse_cov_matrix = invert_matrix( *cov_matrix );
+  auto inverse_cov_matrix = invert_matrix( *cov_matrix, inversion_tol );
 
   // Create a 1D vector containing the difference between the two slice
   // histograms in each bin
