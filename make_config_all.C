@@ -81,6 +81,20 @@ std::vector< double > cos_theta_mu_1D_edges = { -1., -0.85, -0.775, -0.7,
    0.125, 0.2, 0.275, 0.35, 0.425, 0.5, 0.575, 0.65, 0.725, 0.8, 0.85,
    0.875, 0.9, 0.925, 0.950, 0.975, 1. };
 
+// cos_theta_p in 1D
+std::vector< double > cos_theta_p_1D_edges = { -1., -0.9, -0.75, -0.6,
+  -0.45, -0.3, -0.15, 0.0, 0.15, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9,
+  0.925, 0.95, 0.975, 1.0 };
+
+// p_p in 1D
+std::vector< double > pp_1D_edges = { 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55,
+  0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0 };
+
+// p_mu in 1D
+std::vector< double > pmu_1D_edges = { 0.1, 0.15, 0.175, 0.2, 0.225, 0.25,
+  0.275, 0.3, 0.325, 0.35, 0.375, 0.4, 0.425, 0.45, 0.475, 0.5, 0.55, 0.6,
+  0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1.0, 1.1, 1.2 };
+
 void make_config_all() {
 
   // Set up an initially empty container to hold the slice definitions. We'll
@@ -1084,6 +1098,167 @@ void make_config_all() {
     reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_index );
 
   } // loop over 1D cos_theta_mu bins
+
+//// 1D cos_theta_p block
+
+  // Increment the block index for the current set of bin edges
+  ++block_index;
+
+  // Get the index of the first analysis bin in this block
+  first_block_bin_idx = reco_bins.size();
+
+  // Get the index for the cos_theta_p variable definition. We will use
+  // it to make a new slice while also defining the 1D bins.
+  int cosp_var_idx = find_slice_var_index( "cos#theta_{p}",
+    sb.slice_vars_ );
+
+  size_t num_cosp_1D_edges = cos_theta_p_1D_edges.size();
+  size_t num_cosp_1D_bins = 0u;
+  if ( num_cosp_1D_edges >= 2u ) num_cosp_1D_bins
+    = num_cosp_1D_edges - 1u;
+
+  // Before defining each bin, make a new Slice object and set up the
+  // corresponding ROOT histogram within it
+  auto& cosp_slice = add_slice( sb, cos_theta_p_1D_edges, cosp_var_idx );
+
+  for ( size_t b = 0u; b < num_cosp_1D_bins; ++b ) {
+
+    double cosp_low = cos_theta_p_1D_edges.at( b );
+    double cosp_high = cos_theta_p_1D_edges.at( b + 1 );
+
+    std::stringstream true_ss;
+    true_ss << signal_def << " && mc_p3_lead_p.CosTheta() >= " << cosp_low
+     << " && mc_p3_lead_p.CosTheta() < " << cosp_high;
+
+    std::string true_bin_def = true_ss.str();
+
+    true_bins.emplace_back( true_bin_def, kSignalTrueBin, block_index );
+
+    std::stringstream reco_ss;
+    reco_ss << selection << " && p3_lead_p.CosTheta() >= " << cosp_low
+     << " && p3_lead_p.CosTheta() < " << cosp_high;
+
+    std::string reco_bin_def = reco_ss.str();
+
+    // Here we use a trick: the current analysis bin index is equal
+    // to the size of the reco_bins vector before we add the new element.
+    size_t ana_bin_idx = reco_bins.size();
+    // Here's another trick: the call to operator[]() below will create
+    // a new map entry if needed. We then insert the current analysis
+    // bin index into the map entry.
+    cosp_slice.bin_map_[ b + 1 ].insert( ana_bin_idx );
+
+    // Define the new bin and add it to the vector of reco bins
+    reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_index );
+
+  } // loop over 1D cos_theta_p bins
+
+//// 1D p_p block
+
+  // Increment the block index for the current set of bin edges
+  ++block_index;
+
+  // Get the index of the first analysis bin in this block
+  first_block_bin_idx = reco_bins.size();
+
+  // Get the index for the p_p variable definition. We will use
+  // it to make a new slice while also defining the 1D bins.
+  int pp_var_idx = find_slice_var_index( "p_{p}", sb.slice_vars_ );
+
+  size_t num_pp_1D_edges = pp_1D_edges.size();
+  size_t num_pp_1D_bins = 0u;
+  if ( num_pp_1D_edges >= 2u ) num_pp_1D_bins
+    = num_pp_1D_edges - 1u;
+
+  // Before defining each bin, make a new Slice object and set up the
+  // corresponding ROOT histogram within it
+  auto& pp_slice = add_slice( sb, pp_1D_edges, pp_var_idx );
+
+  for ( size_t b = 0u; b < num_pp_1D_bins; ++b ) {
+
+    double pp_low = pp_1D_edges.at( b );
+    double pp_high = pp_1D_edges.at( b + 1 );
+
+    std::stringstream true_ss;
+    true_ss << signal_def << " && mc_p3_lead_p.Mag() >= " << pp_low
+     << " && mc_p3_lead_p.Mag() < " << pp_high;
+
+    std::string true_bin_def = true_ss.str();
+
+    true_bins.emplace_back( true_bin_def, kSignalTrueBin, block_index );
+
+    std::stringstream reco_ss;
+    reco_ss << selection << " && p3_lead_p.Mag() >= " << pp_low
+     << " && p3_lead_p.Mag() < " << pp_high;
+
+    std::string reco_bin_def = reco_ss.str();
+
+    // Here we use a trick: the current analysis bin index is equal
+    // to the size of the reco_bins vector before we add the new element.
+    size_t ana_bin_idx = reco_bins.size();
+    // Here's another trick: the call to operator[]() below will create
+    // a new map entry if needed. We then insert the current analysis
+    // bin index into the map entry.
+    pp_slice.bin_map_[ b + 1 ].insert( ana_bin_idx );
+
+    // Define the new bin and add it to the vector of reco bins
+    reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_index );
+
+  } // loop over 1D p_p bins
+
+
+//// 1D p_mu block
+
+  // Increment the block index for the current set of bin edges
+  ++block_index;
+
+  // Get the index of the first analysis bin in this block
+  first_block_bin_idx = reco_bins.size();
+
+  // Get the index for the p_mu variable definition. We will use
+  // it to make a new slice while also defining the 1D bins.
+  int pmu_var_idx = find_slice_var_index( "p_{#mu}", sb.slice_vars_ );
+
+  size_t num_pmu_1D_edges = pmu_1D_edges.size();
+  size_t num_pmu_1D_bins = 0u;
+  if ( num_pmu_1D_edges >= 2u ) num_pmu_1D_bins
+    = num_pmu_1D_edges - 1u;
+
+  // Before defining each bin, make a new Slice object and set up the
+  // corresponding ROOT histogram within it
+  auto& pmu_slice = add_slice( sb, pmu_1D_edges, pmu_var_idx );
+
+  for ( size_t b = 0u; b < num_pmu_1D_bins; ++b ) {
+
+    double pmu_low = pmu_1D_edges.at( b );
+    double pmu_high = pmu_1D_edges.at( b + 1 );
+
+    std::stringstream true_ss;
+    true_ss << signal_def << " && mc_p3_mu.Mag() >= " << pmu_low
+     << " && mc_p3_mu.Mag() < " << pmu_high;
+
+    std::string true_bin_def = true_ss.str();
+
+    true_bins.emplace_back( true_bin_def, kSignalTrueBin, block_index );
+
+    std::stringstream reco_ss;
+    reco_ss << selection << " && p3_mu.Mag() >= " << pmu_low
+     << " && p3_mu.Mag() < " << pmu_high;
+
+    std::string reco_bin_def = reco_ss.str();
+
+    // Here we use a trick: the current analysis bin index is equal
+    // to the size of the reco_bins vector before we add the new element.
+    size_t ana_bin_idx = reco_bins.size();
+    // Here's another trick: the call to operator[]() below will create
+    // a new map entry if needed. We then insert the current analysis
+    // bin index into the map entry.
+    pmu_slice.bin_map_[ b + 1 ].insert( ana_bin_idx );
+
+    // Define the new bin and add it to the vector of reco bins
+    reco_bins.emplace_back( reco_bin_def, kOrdinaryRecoBin, block_index );
+
+  } // loop over 1D p_mu bins
 
 //// Final definitions
 
