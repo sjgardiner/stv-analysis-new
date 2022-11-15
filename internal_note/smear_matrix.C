@@ -12,32 +12,89 @@
 // ROOT integer code for Arial font
 constexpr int FONT_STYLE = 62; // Arial
 
-void dump_pgfplots_smearing_histogram( const std::string& output_table_file,
-  const std::string& output_params_file, const TH2D* smear_hist,
-  size_t first_bkgd_true_bin_idx )
+void dump_pgfplots_smearing_histogram( const std::string& output_table_stem,
+  const TH2D* smear_hist, const std::set< int >& reco_blocks,
+  const SystematicsCalculator& syst )
 {
   // Don't do anything if you get a nullptr for the histogram
   if ( !smear_hist ) return;
 
-  std::ofstream out_table_file( output_table_file );
-  out_table_file << "xbin  ybin  z\n";
-  int num_x_bins = smear_hist->GetXaxis()->GetNbins();
-  int num_y_bins = smear_hist->GetYaxis()->GetNbins();
-  for ( int xb = 1; xb <= num_x_bins; ++xb ) {
-    for ( int yb = 1; yb <= num_y_bins; ++yb ) {
-      double z = smear_hist->GetBinContent( xb, yb );
-      // Use zero-based bin indices in the dump
-      out_table_file << xb - 1 << "  " <<  yb - 1 << "  " << z << '\n';
-    }
-  }
+  for ( const int cur_block : reco_blocks ) {
 
-  // Store the bin counts along each axis in the parameters file as well
-  // as the first background bin index along the true (x) axis. This will
-  // facilitate easy plotting by PGFPlots.
-  std::ofstream out_params_file( output_params_file );
-  out_params_file << "numXbins  numYbins  firstBkgdTrueBinIdx\n";
-  out_params_file << num_x_bins << "  " << num_y_bins << "  "
-    << first_bkgd_true_bin_idx;
+    int num_x_bins_in_block = 0;
+    size_t first_x_bin_idx_in_block = UINT_MAX;
+    size_t last_x_bin_idx_in_block = 0u;
+    for ( size_t tb = 0u; tb < syst.true_bins_.size(); ++tb ) {
+      const auto& tbin = syst.true_bins_.at( tb );
+      if ( tbin.block_index_ == cur_block ) {
+        ++num_x_bins_in_block;
+        if ( tb < first_x_bin_idx_in_block ) {
+          first_x_bin_idx_in_block = tb;
+        }
+        if ( tb > last_x_bin_idx_in_block ) {
+          last_x_bin_idx_in_block = tb;
+        }
+      }
+    }
+
+    int num_y_bins_in_block = 0;
+    size_t first_y_bin_idx_in_block = UINT_MAX;
+    size_t last_y_bin_idx_in_block = 0;
+    for ( size_t rb = 0u; rb < syst.reco_bins_.size(); ++rb ) {
+      const auto& rbin = syst.reco_bins_.at( rb );
+      if ( rbin.block_index_ == cur_block ) {
+        ++num_y_bins_in_block;
+        if ( rb < first_y_bin_idx_in_block ) {
+          first_y_bin_idx_in_block = rb;
+        }
+        if ( rb > last_y_bin_idx_in_block ) {
+          last_y_bin_idx_in_block = rb;
+        }
+      }
+    }
+
+    std::string out_file_name = output_table_stem + "_";
+
+    // Use at least three digits for numbering the output files
+    if ( cur_block < 10 ) out_file_name += '0';
+    if ( cur_block < 100 ) out_file_name += '0';
+    out_file_name += std::to_string( cur_block );
+
+    std::ofstream out_table_file( out_file_name + "_hist.txt" );
+
+    out_table_file << "xbin  ybin  z\n";
+    int num_x_bins = smear_hist->GetXaxis()->GetNbins();
+    int num_y_bins = smear_hist->GetYaxis()->GetNbins();
+    for ( int xb = 1; xb <= num_x_bins; ++xb ) {
+      for ( int yb = 1; yb <= num_y_bins; ++yb ) {
+
+        int true_block = syst.true_bins_.at( xb - 1 ).block_index_;
+        if ( true_block != cur_block ) continue;
+
+        int reco_block = syst.reco_bins_.at( yb - 1 ).block_index_;
+        if ( reco_block != cur_block ) continue;
+
+        double z = smear_hist->GetBinContent( xb, yb );
+
+        // Use zero-based bin indices in the dump
+        out_table_file << xb - 1 << "  " <<  yb - 1 << "  " << z << '\n';
+
+      } // loop over reco (y) bins
+    } // loop over true (x) bins
+
+    // Store the bin counts along each axis in the parameters file. This will
+    // facilitate easy plotting by PGFPlots.
+    std::ofstream out_params_file( out_file_name + "_params.txt" );
+    out_params_file << "numXbins  numYbins  firstXbin  lastXbin";
+    out_params_file << "  firstYbin  lastYbin\n";
+    out_params_file << num_x_bins_in_block << "  " << num_y_bins_in_block;
+    out_params_file << "  " << first_x_bin_idx_in_block << "  "
+      << last_x_bin_idx_in_block;
+    out_params_file << "  " << first_y_bin_idx_in_block << "  "
+      << last_y_bin_idx_in_block;
+
+  } // loop over blocks
+
 }
 
 void smear_matrix() {
@@ -156,8 +213,8 @@ void smear_matrix() {
 
   smear_hist->Draw( "colz" );
 
-  dump_pgfplots_smearing_histogram( "all_migmat_table.txt",
-    "all_migmat_params.txt", smear_hist, first_bkgd_bin_idx );
+  dump_pgfplots_smearing_histogram( "all_migmat_table", smear_hist,
+    reco_blocks, syst );
 
   // Dump a table of bin occupancies
   std::ofstream occup_table_file( "occupancy_table.txt" );
