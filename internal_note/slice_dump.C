@@ -26,7 +26,7 @@ void slice_dump() {
   //fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
   auto* syst_ptr = new MCC9SystematicsCalculator(
-    "/uboone/data/users/gardiner/myuniverses-all.root",
+    "/uboone/data/users/gardiner/myuniverses-all-new.root",
     //"../systcalc_unfold_fd.conf" );
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
@@ -279,29 +279,6 @@ void slice_dump() {
 
     std::cout << "Total frac error in bin #1 = "
       << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";
-
-////// NEW CODE
-//    const TH1D* hist_true = syst.cv_universe().hist_true_.get();
-//    const TH2D* hist_2d = syst.cv_universe().hist_2d_.get();
-//    auto* slice_eff = SliceHistogram::make_slice_efficiency_histogram(
-//      *hist_true, *hist_2d, slice );
-//
-//    TCanvas* c3 = new TCanvas;
-//    slice_eff->hist_->SetLineWidth( 3 );
-//    slice_eff->hist_->Draw( "hist e" );
-//
-//    dump_slice_histogram( "efficiency", *slice_eff, slice,
-//      pgfplots_hist_table, true, false );
-//
-//    std::ofstream out_eff_table_file( "eff_slice_table_"
-//      + std::to_string(sl_idx) + ".txt" );
-//    for ( int b = 1; b <= slice_eff->hist_->GetNbinsX(); ++b ) {
-//      out_eff_table_file << b - 1 << " & "
-//        << slice_eff->hist_->GetBinContent( b ) << '\n';
-//    }
-//
-//    c3->SaveAs( ("eff_slice_" + std::to_string(sl_idx) + ".pdf").c_str() );
-////// END NEW CODE
 
     // Before moving on to the next slice, dump information about the
     // current one to new pgfplots files that can be used for offline plotting
