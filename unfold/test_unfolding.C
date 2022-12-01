@@ -316,7 +316,7 @@ void test_unfolding() {
   const auto& sample_info = sample_info_map.at( SAMPLE_NAME );
   //const auto& respmat_file_name = sample_info.respmat_file_;
 
-  const std::string respmat_file_name( "/uboone/data/users/gardiner/myuniverses-all.root" );
+  const std::string respmat_file_name( "/uboone/data/users/gardiner/myuniverses-all-new-rebin.root" );
 
   // Do the systematics calculations in preparation for unfolding
   //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );

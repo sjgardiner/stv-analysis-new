@@ -100,7 +100,7 @@ void dump_pgfplots_smearing_histogram( const std::string& output_table_stem,
 void smear_matrix() {
 
   const std::string input_respmat_file_name( "/uboone/data/users/"
-    "gardiner/myuniverses-all-new.root" );
+    "gardiner/myuniverses-all-new-rebin.root" );
 
   auto* syst_ptr = new MCC9SystematicsCalculator( input_respmat_file_name,
     "../systcalc.conf" );
