@@ -1,3 +1,4 @@
 *.root
+!unf_input_dump.root
 univmake
 analyzer
