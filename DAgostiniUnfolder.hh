@@ -131,8 +131,9 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
       // contents (just in case). Use the same matrix element indexing scheme
       // as the smearceptance matrix (i.e., rows are ordinary reco bins,
       // columns are true signal bins).
-      auto& mat_ref = err_prop_mc_vec.emplace_back( num_ordinary_reco_bins,
+      err_prop_mc_vec.emplace_back( num_ordinary_reco_bins,
         num_true_signal_bins );
+      auto& mat_ref = err_prop_mc_vec.back();
 
       mat_ref.Zero();
     }
