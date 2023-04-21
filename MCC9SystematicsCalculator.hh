@@ -7,13 +7,17 @@
 #include "SystematicsCalculator.hh"
 
 // Calculates covariance matrices describing the uncertainty on the reco-space
-// event counts. Uses a "recipe" appropriate for unfolding via the Wiener-SVD
-// or D'Agostini methods (e.g., cross-section systematic uncertainties are
-// evaluated fully on backgrounds but enter only via the response matrix for
-// signal events).
+// event counts. Uses a default "recipe" (represented by the default enum value
+// MCC9SystematicsCalculator::SystMode::ForXSec) appropriate for unfolding
+// via the Wiener-SVD or D'Agostini methods (e.g., cross-section systematic
+// uncertainties are evaluated fully on backgrounds but enter only via the
+// response matrix for signal events).
 class MCC9SystematicsCalculator : public SystematicsCalculator {
 
   public:
+
+    enum SystMode { ForXSec, VaryOnlyBackground, VaryOnlySignalResponse,
+      VaryOnlySignal, VaryBackgroundAndSignalDirectly };
 
     MCC9SystematicsCalculator( const std::string& input_respmat_file_name,
       const std::string& syst_cfg_file_name = "",
@@ -28,6 +32,15 @@ class MCC9SystematicsCalculator : public SystematicsCalculator {
     virtual double evaluate_data_stat_covariance( int reco_bin_a,
       int reco_bin_b, bool use_ext ) const override;
 
+    inline void set_syst_mode( SystMode mode )
+      { syst_mode_ = mode; }
+
+  protected:
+
+    // Default to using the standard recipe of calculating covariance matrix
+    // elements for a cross-section measurement
+    SystMode syst_mode_ = SystMode::ForXSec;
+
 };
 
 MCC9SystematicsCalculator::MCC9SystematicsCalculator(
@@ -40,11 +53,12 @@ MCC9SystematicsCalculator::MCC9SystematicsCalculator(
 
 }
 
-double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ, int reco_bin,
-  int flux_universe_index ) const
+double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ,
+  int reco_bin, int flux_universe_index ) const
 {
-  // For the MCC9SystematicsCalculator class, the observable of interest is the total number
-  // of events (signal + background) in the current bin in reco space
+  // For the MCC9SystematicsCalculator class, the observable of interest is the
+  // total number of events (signal + background) in the current bin in reco
+  // space
   double reco_bin_events = 0.;
 
   // Look up the requested reco bin so that we can determine its block index.
@@ -87,6 +101,11 @@ double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ, int
       // Get the CV event count for the current true bin
       double denom_CV = cv_univ->hist_true_->GetBinContent( tb + 1 );
 
+      // Get the CV expectation for the number of signal events from the
+      // current true bin that fall into the current reco bin
+      double numer_CV = cv_univ->hist_2d_->GetBinContent( tb + 1,
+        reco_bin + 1 );
+
       // For the systematic variation universes, we want to assess
       // uncertainties on the signal only through the smearceptance
       // matrix. We therefore compute the smearceptance matrix element
@@ -115,10 +134,32 @@ double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ, int
       double smearcept = 0.;
       if ( denom > 0. ) smearcept = numer / denom;
 
-      // Compute the expected signal events in this universe
-      // by multiplying the varied smearceptance matrix element
-      // by the unaltered CV prediction in the current true bin.
-      double expected_signal = smearcept * denom_CV;
+      double expected_signal = 0.;
+
+      if ( syst_mode_ == SystMode::ForXSec
+        || syst_mode_ == SystMode::VaryOnlySignalResponse )
+      {
+        // Compute the expected signal events in this universe
+        // by multiplying the varied smearceptance matrix element
+        // by the unaltered CV prediction in the current true bin.
+        expected_signal = smearcept * denom_CV;
+      }
+      else if ( syst_mode_ == SystMode::VaryOnlySignal
+             || syst_mode_ == SystMode::VaryBackgroundAndSignalDirectly )
+      {
+        // Use the current universe's expectation for the number of
+        // reconstructed signal events from the current true bin that fall into
+        // the current reco bin
+        expected_signal = numer;
+      }
+      else if ( syst_mode_ == SystMode::VaryOnlyBackground ) {
+        // Use the CV expectation for the number of reconstructed signal events
+        // from the current true bin that fall into the current reco bin,
+        // ignoring any systematic variation
+        expected_signal = numer_CV;
+      }
+      else throw std::runtime_error( "Unrecognized SystMode enum value"
+        " in MCC9SystematicsCalculator::evaluate_observable()" );
 
       // Compute the expected signal events in the current reco bin
       // with the varied smearceptance matrix (and, for flux universes,
@@ -126,10 +167,29 @@ double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ, int
       reco_bin_events += expected_signal;
     }
     else if ( tbin.type_ == kBackgroundTrueBin ) {
-      // For background events, we can use the same procedure regardless
-      // of whether we're in the CV universe or not
-      double background = univ.hist_2d_->GetBinContent( tb + 1, reco_bin + 1 );
-      reco_bin_events += background;
+
+      double bkg = univ.hist_2d_->GetBinContent( tb + 1, reco_bin + 1 );
+      double bkg_CV = cv_univ->hist_2d_->GetBinContent( tb + 1, reco_bin + 1 );
+
+      if ( syst_mode_ == SystMode::ForXSec
+        || syst_mode_ == SystMode::VaryOnlyBackground
+        || syst_mode_ == SystMode::VaryBackgroundAndSignalDirectly )
+      {
+        // Use the current universe's expectation for the number of
+        // background events from the current true bin that fall into
+        // the current reco bin
+        reco_bin_events += bkg;
+      }
+      else if ( syst_mode_ == SystMode::VaryOnlySignal
+        || syst_mode_ == SystMode::VaryOnlySignalResponse )
+      {
+        // Use the CV universe's expectation for the number of
+        // background events from the current true bin that fall into
+        // the current reco bin, ignoring any systematic variation
+        reco_bin_events += bkg_CV;
+      }
+      else throw std::runtime_error( "Unrecognized SystMode enum value"
+        " in MCC9SystematicsCalculator::evaluate_observable()" );
     }
   } // true bins
 
