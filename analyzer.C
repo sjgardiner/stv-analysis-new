@@ -1,7 +1,7 @@
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
-// Updated 9 August 2022
+// Updated 22 April 2023
 // Steven Gardiner <gardiner@fnal.gov>
 
 // Standard library includes
@@ -1522,6 +1522,51 @@ void AnalysisEvent::compute_observables() {
 
   // First compute the MC truth observables (if this is a signal MC event)
   this->compute_mc_truth_observables();
+
+  // In cases where we failed to find a muon candidate, check whether there are
+  // at least two generation == 2 PFParticles. If there are, then compute the
+  // usual observables using the longest track as the muon candidate and the
+  // second-longest track as the leading proton candidate. This will enable
+  // sideband studies of NC backgrounds in the STV phase space.
+  if ( !sel_has_muon_candidate_ ) {
+
+    float max_trk_len = LOW_FLOAT;
+    int max_trk_idx = BOGUS_INDEX;
+
+    float next_to_max_trk_len = LOW_FLOAT;
+    int next_to_max_trk_idx = BOGUS_INDEX;
+
+    for ( int p = 0; p < num_pf_particles_; ++p ) {
+
+      // Only include direct neutrino daughters (generation == 2)
+      unsigned int generation = pfp_generation_->at( p );
+      if ( generation != 2u ) continue;
+
+      float trk_len = track_length_->at( p );
+
+      if ( trk_len > next_to_max_trk_len ) {
+
+        next_to_max_trk_len = trk_len;
+        next_to_max_trk_idx = p;
+
+        if ( next_to_max_trk_len > max_trk_len ) {
+
+          next_to_max_trk_len = max_trk_len;
+          next_to_max_trk_idx = max_trk_idx;
+
+          max_trk_len = trk_len;
+          max_trk_idx = p;
+        }
+      }
+    }
+
+    // If we found at least two usable PFParticles, then assign the indices to
+    // be used below
+    if ( max_trk_idx != BOGUS_INDEX && next_to_max_trk_idx != BOGUS_INDEX ) {
+      muon_candidate_idx_ = max_trk_idx;
+      lead_p_candidate_idx_ = next_to_max_trk_idx;
+    }
+  }
 
   // Abbreviate some of the calculations below by using these handy
   // references to the muon and leading proton 3-momenta
