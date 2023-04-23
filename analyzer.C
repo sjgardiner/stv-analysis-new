@@ -1567,13 +1567,18 @@ void AnalysisEvent::compute_observables() {
   // Reset the vector of reconstructed proton candidate 3-momenta
   p3_p_vec_->clear();
 
-  // Set the reco 3-momenta of all proton candidates (i.e., all tracks except
-  // the muon candidate) assuming we found both a muon candidate and at least
-  // one proton candidate.
+  // Set the reco 3-momenta of all proton candidates (i.e., all generation == 2
+  // tracks except the muon candidate) assuming we found both a muon candidate
+  // and at least one proton candidate.
   if ( muon && lead_p ) {
     for ( int p = 0; p < num_pf_particles_; ++p ) {
       // Skip the muon candidate
       if ( p == muon_candidate_idx_ ) continue;
+
+      // Only include direct neutrino daughters (generation == 2)
+      unsigned int generation = pfp_generation_->at( p );
+      if ( generation != 2u ) continue;
+
       float p_dirx = track_dirx_->at( p );
       float p_diry = track_diry_->at( p );
       float p_dirz = track_dirz_->at( p );
