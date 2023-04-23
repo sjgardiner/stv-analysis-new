@@ -3,6 +3,37 @@
 #include "ResponseMatrixMaker.hh"
 #include "SliceBinning.hh"
 
+// Placeholder value for the block index for bins in which it is irrelevant
+constexpr int DUMMY_BLOCK_INDEX = -1;
+
+// Sideband selection cuts
+const std::string sel_dirt =
+  " !sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV"
+  " && sel_topo_cut_passed && sel_has_muon_candidate"
+  " && sel_muon_contained && sel_muon_quality_ok"
+  " && sel_muon_passed_mom_cuts && sel_no_reco_showers"
+  " && sel_has_p_candidate && sel_protons_contained"
+  " && sel_passed_proton_pid_cut && sel_lead_p_passed_mom_cuts";
+
+const std::string sel_NC =
+  " sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV && sel_topo_cut_passed"
+  " && !sel_has_muon_candidate && muon_candidate_idx != -1"
+  " && sel_no_reco_showers && sel_has_p_candidate"
+  " && sel_protons_contained && sel_passed_proton_pid_cut"
+  " && sel_lead_p_passed_mom_cuts";
+
+const std::string sel_CCNpi =
+  " sel_reco_vertex_in_FV && sel_pfp_starts_in_PCV"
+  " && sel_topo_cut_passed && sel_has_muon_candidate"
+  " && sel_muon_contained && sel_muon_quality_ok"
+  " && sel_muon_passed_mom_cuts && sel_no_reco_showers"
+  " && sel_has_p_candidate && sel_protons_contained"
+  " && Sum$( pfp_generation_v == 2 && trk_llr_pid_score_v > 0.2 ) > 1"
+  " && sel_lead_p_passed_mom_cuts";
+
+const std::string sel_combined =
+  "((" + sel_dirt + ") || (" + sel_NC + ") || (" + sel_CCNpi + "))";
+
 struct EdgeDef {
 
   EdgeDef( std::map< double, std::vector<double> >* edges, bool use_overflow,
@@ -1260,11 +1291,45 @@ void make_config_all() {
 
   } // loop over 1D p_mu bins
 
+//// Slice showing all blocks of ordinary reco bins / signal true bins
+
+  //// Create a slice showing all blocks together as a function of bin number
+  //int num_ord_bins = reco_bins.size();
+
+  //auto& ord_bin_num_slice = add_slice( sb, num_ord_bins, 0, num_ord_bins,
+  //  bin_number_var_idx );
+  //for ( int ab = 0; ab < num_ord_bins; ++ab ) {
+  //  // The ROOT histogram bins are one-based, so we correct for this here
+  //  ord_bin_num_slice.bin_map_[ ab + 1 ].insert( ab );
+  //}
+
+//// Sideband reco bins
+
+  //// Clone each of the ordinary reco bins and apply the sideband selection
+  //for ( int ob = 0; ob < num_ord_bins; ++ob ) {
+  //  const auto& rbin = reco_bins.at( ob );
+
+  //  // Strip out the initial selection flag ("sel_CCNp0pi") and replace
+  //  // it in the selection cuts with the sideband selection
+  //  size_t drop_pos = rbin.selection_cuts_.find( "&&" );
+  //  std::string sel_new = sel_combined + ' '
+  //    + rbin.selection_cuts_.substr( drop_pos );
+  //  reco_bins.emplace_back( sel_new, kSidebandRecoBin, DUMMY_BLOCK_INDEX );
+  //}
+
 //// Final definitions
 
-  // Create a slice showing all blocks together as a function of bin number
   int num_bins = reco_bins.size();
 
+  //// Create a slice showing just the sideband bins as a function of bin number
+  //auto& sideband_slice = add_slice( sb, num_ord_bins, num_ord_bins, num_bins,
+  //  bin_number_var_idx );
+  //for ( int ab = num_ord_bins; ab < num_bins; ++ab ) {
+  //  // The ROOT histogram bins are one-based, so we correct for this here
+  //  sideband_slice.bin_map_[ ab + 1 ].insert( ab );
+  //}
+
+  // Create a slice showing all results together as a function of bin number
   auto& bin_num_slice = add_slice( sb, num_bins, 0, num_bins,
     bin_number_var_idx );
   for ( int ab = 0; ab < num_bins; ++ab ) {
@@ -1274,7 +1339,6 @@ void make_config_all() {
 
   // Add true bins for the background categories of interest. We'll use a
   // dummy block index now since it's only important for signal bins.
-  constexpr int DUMMY_BLOCK_INDEX = -1;
   for ( const auto& bdef : background_defs ) {
     true_bins.emplace_back( bdef, kBackgroundTrueBin, DUMMY_BLOCK_INDEX );
   }
