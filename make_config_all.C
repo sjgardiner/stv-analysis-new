@@ -1008,7 +1008,7 @@ void make_config_all() {
         << theta_mu_p_low << " && " << reco_theta_mu_p_deg << " < "
         << theta_mu_p_high << " && pn >= " << pn_low;
 
-      if ( pn_high != DBL_MAX ) true_ss << " && pn < " << pn_high;
+      if ( pn_high != DBL_MAX ) reco_ss << " && pn < " << pn_high;
 
       std::string reco_bin_def = reco_ss.str();
 
