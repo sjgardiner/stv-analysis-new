@@ -30,7 +30,6 @@
 /uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run1_reco2_reco2.root 1 numuMC
 /uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run2_reco2_D1D2_reco2.root 2 numuMC
 /uboone/data/users/gardiner/ntuples-stv/stv-prodgenie_bnb_nu_uboone_overlay_mcc9.1_v08_00_00_26_filter_run3_reco2_G_reco2.root 3 numuMC
-#
 # detVar MC samples
 /uboone/data/users/gardiner/ntuples-stv/stv-high_stat_prodgenie_bnb_nu_overlay_DetVar_Run3_CVextra_reco2_reco2.root 3 detVarCVExtra
 /uboone/data/users/gardiner/ntuples-stv/stv-high_stat_prodgenie_bnb_nu_overlay_DetVar_Run3_CV_reco2_reco2.root 3 detVarCV
