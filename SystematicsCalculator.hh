@@ -890,7 +890,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
             0, num_true_bins, num_reco_bins );
 
           // Temporary pointer that will allow us to treat the single-file
-          // detector variation samples as the multi-file alternate CV samples
+          // detector variation samples and the multi-file alternate CV samples
           // on the same footing below
           Universe* temp_univ_ptr = nullptr;
 
