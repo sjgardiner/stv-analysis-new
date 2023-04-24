@@ -316,7 +316,7 @@ void test_unfolding() {
   const auto& sample_info = sample_info_map.at( SAMPLE_NAME );
   //const auto& respmat_file_name = sample_info.respmat_file_;
 
-  const std::string respmat_file_name( "/uboone/data/users/gardiner/myuniverses-all-new-rebin.root" );
+  const std::string respmat_file_name( "/uboone/data/users/gardiner/all_fixed.root" );
 
   // Do the systematics calculations in preparation for unfolding
   //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );
@@ -380,6 +380,31 @@ void test_unfolding() {
   );
 
   UnfoldedMeasurement result = unfolder->unfold( syst );
+
+  // For real data only, add some new covariance matrices in which only the
+  // signal response or the background is varied. We could calculate these
+  // for the fake data, but it seems unnecessary at this point.
+  if ( !using_fake_data ) {
+    syst.set_syst_mode( MCC9SystematicsCalculator
+      ::SystMode::VaryOnlyBackground );
+    auto* bkgd_matrix_map_ptr = syst.get_covariances().release();
+    auto& bkgd_matrix_map = *bkgd_matrix_map_ptr;
+
+    syst.set_syst_mode( MCC9SystematicsCalculator
+      ::SystMode::VaryOnlySignalResponse );
+    auto* sigresp_matrix_map_ptr = syst.get_covariances().release();
+    auto& sigresp_matrix_map = *sigresp_matrix_map_ptr;
+
+    for ( const auto& m_pair : bkgd_matrix_map ) {
+      auto& my_temp_cov_mat = matrix_map[ "bkgd_only_" + m_pair.first ];
+      my_temp_cov_mat += m_pair.second;
+    }
+
+    for ( const auto& m_pair : sigresp_matrix_map ) {
+      auto& my_temp_cov_mat = matrix_map[ "sigresp_only_" + m_pair.first ];
+      my_temp_cov_mat += m_pair.second;
+    }
+  }
 
   // Propagate all defined covariance matrices through the unfolding procedure
   const TMatrixD& err_prop = *result.err_prop_matrix_;
