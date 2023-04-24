@@ -37,9 +37,6 @@ void slice_dump() {
   TH1D* reco_bnb_hist = syst.data_hists_.at( NFT::kOnBNB ).get();
   TH1D* reco_ext_hist = syst.data_hists_.at( NFT::kExtBNB ).get();
 
-  // Add the EXT to the "data" when working with fake data
-  //reco_bnb_hist->Add( reco_ext_hist );
-
   TH2D* category_hist = syst.cv_universe().hist_categ_.get();
 
   // Total MC+EXT prediction in reco bin space. Start by getting EXT.
