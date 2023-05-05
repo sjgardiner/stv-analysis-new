@@ -1,7 +1,9 @@
 // Standard library includes
+#include <climits>
 #include <set>
 
 // ROOT includes
+#include "TCanvas.h"
 #include "TFile.h"
 
 // STV analysis includes
@@ -120,6 +122,9 @@ void smear_matrix() {
   // Create a new TH2D to store the smearing matrix. Use the 2D event counts
   // (in true and reco bins) from the CV universe to start.
   const auto& cv_univ = syst.cv_universe();
+  // Use alternate CV universe (currently NuWro) instead
+  //const auto& cv_univ = *syst.alt_cv_universes_.at(
+  //  NtupleFileType::kAltCVMC );
   TH2D* smear_hist = dynamic_cast< TH2D* >( cv_univ.hist_2d_
     ->Clone("smear_hist") );
 
@@ -275,4 +280,9 @@ void smear_matrix() {
   efficiency_hist->SetStats( false );
   efficiency_hist->GetYaxis()->SetTitle( "efficiency" );
   efficiency_hist->Draw( "hist e" );
+}
+
+int main() {
+  smear_matrix();
+  return 0;
 }
