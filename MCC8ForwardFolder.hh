@@ -1,6 +1,7 @@
 #pragma once
 
 // STV analysis includes
+#include "FiducialVolume.hh"
 #include "IntegratedFluxUniverseManager.hh"
 #include "SystematicsCalculator.hh"
 
@@ -70,7 +71,7 @@ double MCC8ForwardFolder::effective_efficiency(
 
   // Correct for the one-based reco bin index here. Access the reco bin
   // so that we can check its block index.
-  const auto& rbin = reco_bins.at( reco_bin - 1 );
+  const auto& rbin = reco_bins_.at( reco_bin - 1 );
   int reco_block_index = rbin.block_index_;
 
   double numerator = 0.;
@@ -160,9 +161,9 @@ double MCC8ForwardFolder::xsec_scale_factor( int reco_bin,
   // to make this code aware of the physics units on the x-axis.
   double reco_bin_width = cv_univ.hist_reco_->GetBinWidth( reco_bin );
 
-  constexpr double NUM_TARGETS_ACTIVE_VOL = 1.0068e30;
+  double num_Ar_targets = num_Ar_targets_in_FV();
 
-  double factor = 1. / ( numu_flux * NUM_TARGETS_ACTIVE_VOL * reco_bin_width );
+  double factor = 1. / ( numu_flux * num_Ar_targets * reco_bin_width );
   return factor;
 }
 
@@ -201,7 +202,7 @@ double MCC8ForwardFolder::evaluate_mc_stat_covariance( const Universe& univ,
   double eff_a = this->effective_efficiency( univ, rb_a );
   double scaling_a = this->xsec_scale_factor( rb_a );
 
-  if ( eff <= 0. ) err2_a = 0.;
+  if ( eff_a <= 0. ) err2_a = 0.;
   else {
     err2_a *= std::pow( scaling_a / eff_a, 2 );
   }
