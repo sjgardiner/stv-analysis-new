@@ -1,5 +1,5 @@
 #include "ConfigMakerUtils.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 void make_config_mcc9_2D_muon() {
 
@@ -268,14 +268,14 @@ void make_config_mcc9_2D_muon() {
   double last_pmu_edge_value = last_edge->first;
   sb_file << "1 0 " << last_pmu_edge_value
     << ' ' << last_pmu_edge_value << '\n';
-  // A single ResponseMatrixMaker reco bin contributes to the sole ROOT bin
+  // A single UniverseMaker reco bin contributes to the sole ROOT bin
   // in this histogram
   sb_file << "1\n" << cur_reco_bin << " 1 1";
 
   // Make a final slice with everything expressed in terms of reco bin number
   sb_file << "\"events\"\n"; // y-axis label
   sb_file << "1 2 ";
-  // Acount for the zero-based ResponseMatrixMaker bin indices
+  // Acount for the zero-based UniverseMaker bin indices
   size_t num_reco_bins = cur_reco_bin + 1;
   // There is one more edge than the number of bins
   sb_file << num_reco_bins + 1;
@@ -286,7 +286,7 @@ void make_config_mcc9_2D_muon() {
   // For the "overall slice," there is no other variable apart from reco bin
   // number
   sb_file << "0\n";
-  // Loop over each ResponseMatrixMaker bin and assign it to the matching
+  // Loop over each UniverseMaker bin and assign it to the matching
   // ROOT histogram bin
   sb_file << num_reco_bins << '\n';
   for ( size_t b = 0u; b < num_reco_bins; ++b ) {
@@ -364,7 +364,7 @@ void make_config_mcc9_2D_muon() {
   // For the "sideband slice," there is no other variable apart from reco bin
   // number
   sb_file << "0\n";
-  // Loop over each ResponseMatrixMaker sideband bin and assign it to the
+  // Loop over each UniverseMaker sideband bin and assign it to the
   // matching ROOT histogram bin
   sb_file << num_sideband_reco_bins << '\n';
   for ( size_t b = 0u; b < num_sideband_reco_bins; ++b ) {

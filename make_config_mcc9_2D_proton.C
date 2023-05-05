@@ -1,5 +1,5 @@
 #include "ConfigMakerUtils.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 void make_config_mcc9_2D_proton() {
 
@@ -262,7 +262,7 @@ void make_config_mcc9_2D_proton() {
   // For the "overall slice," there is no other variable apart from reco bin
   // number
   sb_file << "0\n";
-  // Loop over each ResponseMatrixMaker bin and assign it to the matching
+  // Loop over each UniverseMaker bin and assign it to the matching
   // ROOT histogram bin
   sb_file << num_reco_bins << '\n';
   for ( size_t b = 0u; b < num_reco_bins; ++b ) {
@@ -357,7 +357,7 @@ void make_config_mcc9_2D_proton() {
   // For the "sideband slice," there is no other variable apart from reco bin
   // number
   sb_file << "0\n";
-  // Loop over each ResponseMatrixMaker sideband bin and assign it to the
+  // Loop over each UniverseMaker sideband bin and assign it to the
   // matching ROOT histogram bin
   sb_file << num_sideband_reco_bins << '\n';
   for ( size_t b = 0u; b < num_sideband_reco_bins; ++b ) {

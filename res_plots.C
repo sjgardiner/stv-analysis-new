@@ -1,6 +1,6 @@
 #include "FilePropertiesManager.hh"
 #include "HistUtils.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 
 // Script intended to help with choosing binning for kinematic variables
@@ -287,9 +287,9 @@ void make_res_plots( const std::string& rmm_config_file_name,
 {
   const std::string variable_title = "bin";
 
-  // Create a ResponseMatrixMaker object that will handle the actual
+  // Create a UniverseMaker object that will handle the actual
   // calculation of the smearing matrix
-  ResponseMatrixMaker rmm( rmm_config_file_name );
+  UniverseMaker rmm( rmm_config_file_name );
 
   // Get access to the singleton utility class that manages the processed
   // ntuple files
@@ -298,7 +298,7 @@ void make_res_plots( const std::string& rmm_config_file_name,
   // TODO: Reduce code duplication for the POT tallying
 
   // Add the appropriate CV numu ntuples from the requested run(s) to the
-  // TChain owned by the ResponseMatrixMaker object. For the resolution
+  // TChain owned by the UniverseMaker object. For the resolution
   // studies, this is all we really need. Also tally the total simulated POT
   // for later scaling purposes.
   double total_simulated_POT = 0.;
@@ -321,7 +321,7 @@ void make_res_plots( const std::string& rmm_config_file_name,
   // Look up the MC event weights from the input files and construct the
   // response matrices in the usual way. For speed, restrict the calculation to
   // just the universe branch requested by the user (typically the CV branch).
-  rmm.build_response_matrices( { universe_branch_name } );
+  rmm.build_universes( { universe_branch_name } );
 
   // For all but the "unweighted" universe, the key used to look up
   // the map entry is "weight_" prepended to the original ntuple branch name.

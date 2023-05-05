@@ -16,7 +16,7 @@
 #include "CovMatUtils.hh"
 #include "FilePropertiesManager.hh"
 #include "PlotUtils.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 using NFT = NtupleFileType;
 
@@ -133,7 +133,7 @@ const std::map< std::string, SystInfo > SYSTEMATICS_TO_USE {
 };
 
 CovMatResults make_cov_mat( const std::string& cov_mat_name,
-  TDirectoryFile& main_dir_file, const ResponseMatrixMaker& resp_mat,
+  TDirectoryFile& main_dir_file, const UniverseMaker& resp_mat,
   const DirNamecycle& cv_spec,
   const std::vector< DirNamecycle >& universe_spec, bool fractional,
   bool average_over_universes, bool is_flux_variation )
@@ -386,7 +386,7 @@ CovMatResults make_cov_mat( const std::string& cov_mat_name,
 
 // Overloaded version that takes settings from a SystInfo object
 CovMatResults make_cov_mat( const std::string& cov_mat_name,
-  TDirectoryFile& main_dir_file, const ResponseMatrixMaker& resp_mat,
+  TDirectoryFile& main_dir_file, const UniverseMaker& resp_mat,
   const DirNamecycle& cv_spec, const SystInfo& info )
 {
   std::vector< DirNamecycle > universe_spec;
@@ -416,7 +416,7 @@ void covMat( const std::string& input_respmat_file_name,
   // TODO: consider refactoring this to have a "read-only" version. Also, be
   // careful. With the current approach, if you use the wrong configuration
   // file here, all of your covariance matrices could be invalid.
-  ResponseMatrixMaker rmm( config_file_name );
+  UniverseMaker rmm( config_file_name );
 
   // Get access to the TDirectoryFile within the input ROOT file that holds the
   // response matrix histograms for the various analysis ntuples
@@ -627,7 +627,7 @@ void covMat( const std::string& input_respmat_file_name,
   // However, separating this task probably makes the code more readable.
 
   // Keys are STV ntuple file names, values are beam exposures (POT)
-  // TODO: consider changing the ResponseMatrixMaker class so that the
+  // TODO: consider changing the UniverseMaker class so that the
   // POT information is saved together with the response matrices themselves.
   std::map< std::string, float > pot_map;
   for ( const auto& pair : matrix_map ) {

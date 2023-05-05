@@ -1,5 +1,5 @@
 #include "ConfigMakerUtils.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 #include "SliceBinning.hh"
 
 constexpr int DUMMY_BLOCK_INDEX = -1;

@@ -1,16 +1,16 @@
 #pragma once
 
 // Needed for the weight range limits used in DEFAULT_MC_EVENT_WEIGHT. We pull
-// them from the ResponseMatrixMaker header file to ensure consistency
+// them from the UniverseMaker header file to ensure consistency
 // with the safe_weight() function.
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 // **** Helper code to facilitate making histograms ****
 
 // By default, weight the MC events using the MicroBooNE CV tune. The
 // TTree::Draw() expression below includes some workarounds for problematic
 // weights. They are equivalent to the safe_weight() function defined in
-// ResponseMatrixMaker.hh.
+// UniverseMaker.hh.
 const std::string DEFAULT_MC_EVENT_WEIGHT = "(std::isfinite(spline_weight*"
   "tuned_cv_weight) && spline_weight*tuned_cv_weight >= "
   + std::to_string( MIN_WEIGHT ) + " && spline_weight*"

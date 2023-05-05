@@ -1,4 +1,4 @@
-// Executable for generating response matrix files for later analysis. It
+// Executable for generating systematic universe files for later analysis. It
 // has been adapted from a similar ROOT macro.
 
 // Standard library includes
@@ -13,12 +13,12 @@
 // STV analysis includes
 #include "FilePropertiesManager.hh"
 #include "MCC9SystematicsCalculator.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 // Helper function that checks whether a given ROOT file represents an ntuple
 // from a reweightable MC sample. This is done by checking for the presence of
 // a branch whose name matches the TUNE_WEIGHT_NAME string defined in
-// ResponseMatrixMaker.hh. Central-value GENIE MC samples are expected to have
+// UniverseMaker.hh. Central-value GENIE MC samples are expected to have
 // this branch. Real data, detector variation systematics samples and MC
 // samples prepared using alternative generators (e.g., NuWro) are not expected
 // to have this branch.
@@ -47,11 +47,11 @@ int main( int argc, char* argv[] ) {
   std::string univmake_config_file_name( argv[2] );
   std::string output_file_name( argv[3] );
 
-  // If the user specified an (optional) non-default configuration
-  // file for the FilePropertiesManager on the command line, then
-  // load it here. Note that the only place where the FilePropertiesManager
-  // configuration is relevant is in the use of MCC9SystematicsCalculator to compute
-  // total event count histograms (see below).
+  // If the user specified an (optional) non-default configuration file for the
+  // FilePropertiesManager on the command line, then load it here. Note that the
+  // only place where the FilePropertiesManager configuration is relevant is in
+  // the use of MCC9SystematicsCalculator to compute total event count
+  // histograms (see below).
   auto& fpm = FilePropertiesManager::Instance();
   if ( argc == 5 ) {
     fpm.load_file_properties( argv[4] );
@@ -83,49 +83,49 @@ int main( int argc, char* argv[] ) {
     input_files.push_back( file_name );
   }
 
-  std::cout << "Processing response matrices for a total of "
+  std::cout << "Processing systematic universes for a total of "
     << input_files.size() << " input ntuple files\n";
 
   ROOT::EnableImplicitMT();
 
-  // Store the name of the root TDirectoryFile created by the
-  // ResponseMatrixMaker objects below. We will use it to ensure that
-  // the MCC9SystematicsCalculator object used to calculate the total event counts
-  // will always be working with the correct sets of universes.
+  // Store the name of the root TDirectoryFile created by the UniverseMaker
+  // objects below. We will use it to ensure that the MCC9SystematicsCalculator
+  // object used to calculate the total event counts will always be working with
+  // the correct sets of universes.
   std::string tdirfile_name;
   bool set_tdirfile_name = false;
 
   for ( const auto& input_file_name : input_files ) {
 
-    std::cout << "Calculating response matrices for ntuple input file "
+    std::cout << "Calculating systematic universes for ntuple input file "
       << input_file_name << '\n';
-    std::cout << "Loading ResponseMatrixMaker configuration from "
+    std::cout << "Loading UniverseMaker configuration from "
       << univmake_config_file_name << '\n';
 
-    ResponseMatrixMaker resp_mat( univmake_config_file_name );
+    UniverseMaker univ_maker( univmake_config_file_name );
 
-    resp_mat.add_input_file( input_file_name.c_str() );
+    univ_maker.add_input_file( input_file_name.c_str() );
 
     bool has_event_weights = is_reweightable_mc_ntuple( input_file_name );
 
     if ( has_event_weights ) {
       // If the check above was successful, then run all of the histogram
       // calculations in the usual way
-      resp_mat.build_response_matrices();
+      univ_maker.build_universes();
     }
     else {
       // Passing in the fake list of explicit branch names below instructs
-      // the ResponseMatrixMaker class to ignore all event weights while
+      // the UniverseMaker class to ignore all event weights while
       // processing the current ntuple
-      resp_mat.build_response_matrices( { "FAKE_BRANCH_NAME" } );
+      univ_maker.build_universes( { "FAKE_BRANCH_NAME" } );
     }
 
-    resp_mat.save_histograms( output_file_name, input_file_name );
+    univ_maker.save_histograms( output_file_name, input_file_name );
 
     // The root TDirectoryFile name is the same across all iterations of this
     // loop, so just set it once on the first iteration
     if ( !set_tdirfile_name ) {
-      tdirfile_name = resp_mat.dir_name();
+      tdirfile_name = univ_maker.dir_name();
       set_tdirfile_name = true;
     }
 

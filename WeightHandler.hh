@@ -13,7 +13,7 @@
 #include "TreeUtils.hh"
 
 // Class that provides temporary storage for event weights being processed by a
-// ResponseMatrixMaker object
+// UniverseMaker object
 class WeightHandler {
   public:
 

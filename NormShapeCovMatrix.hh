@@ -7,7 +7,7 @@
 #include "TMatrixD.h"
 
 // STV analysis includes
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 // Splits the contributions from an ordinary covariance matrix into
 // normalization, shape, and mixed pieces. See

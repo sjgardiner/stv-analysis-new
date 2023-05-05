@@ -448,7 +448,7 @@ SliceHistogram* make_slice_histogram( TH1D& reco_bin_histogram,
 
     double slice_bin_content = 0.;
     for ( const auto& rb_idx : reco_bin_set ) {
-      // The ResponseMatrixMaker reco bin indices are zero-based, so I correct
+      // The UniverseMaker reco bin indices are zero-based, so I correct
       // for this here when pulling values from the one-based input ROOT
       // histogram
       slice_bin_content += reco_bin_histogram.GetBinContent( rb_idx + 1 );
@@ -492,7 +492,7 @@ SliceHistogram* make_slice_histogram( TH1D& reco_bin_histogram,
         for ( const auto& rb_m : rb_set_a ) {
           for ( const auto& rb_n : rb_set_b ) {
             // The covariance matrix TH2D uses one-based indices even though
-            // the ResponseMatrixMaker numbering scheme is zero-based. I
+            // the UniverseMaker numbering scheme is zero-based. I
             // correct for this here.
             cov += cmat->GetBinContent( rb_m + 1, rb_n + 1 );
           } // reco bin index m

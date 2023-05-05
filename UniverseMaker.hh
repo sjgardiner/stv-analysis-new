@@ -325,13 +325,13 @@ class Universe {
     std::unique_ptr< TH2D > hist_reco2d_;
 };
 
-class ResponseMatrixMaker {
+class UniverseMaker {
 
   public:
 
-    // Initialize the ResponseMatrixMaker with true and reco bin definitions
+    // Initialize the UniverseMaker with true and reco bin definitions
     // stored in a configuration file
-    ResponseMatrixMaker( const std::string& config_file_name );
+    UniverseMaker( const std::string& config_file_name );
 
     // Add an ntuple input file to the owned TChain
     void add_input_file( const std::string& input_file_name );
@@ -348,14 +348,14 @@ class ResponseMatrixMaker {
     // of branch names that will be used to retrieve systematic universe
     // weights. If it is omitted, all available ones will be auto-detected and
     // used.
-    void build_response_matrices(
+    void build_universes(
       const std::vector<std::string>* universe_branch_names = nullptr );
 
     // Overloaded version of the function that takes a reference the
     // vector of universe branch names (for convenience). The behavior
     // is the same as the original, but in this case the explicit vector of
     // branch names definitely exists.
-    void build_response_matrices(
+    void build_universes(
       const std::vector<std::string>& universe_branch_names );
 
     // Writes the response matrix histograms to an output ROOT file
@@ -422,7 +422,7 @@ class ResponseMatrixMaker {
     std::string output_directory_name_;
 };
 
-ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
+UniverseMaker::UniverseMaker( const std::string& config_file_name )
 {
   std::ifstream in_file( config_file_name );
 
@@ -468,7 +468,7 @@ ResponseMatrixMaker::ResponseMatrixMaker( const std::string& config_file_name )
 
 }
 
-void ResponseMatrixMaker::add_input_file( const std::string& input_file_name )
+void UniverseMaker::add_input_file( const std::string& input_file_name )
 {
   // Check to make sure that the input file contains the expected ntuple
   TFile temp_file( input_file_name.c_str(), "read" );
@@ -486,7 +486,7 @@ void ResponseMatrixMaker::add_input_file( const std::string& input_file_name )
   input_chain_.AddFile( input_file_name.c_str() );
 }
 
-void ResponseMatrixMaker::prepare_formulas() {
+void UniverseMaker::prepare_formulas() {
 
   // Remove any pre-existing TTreeFormula objects from the owned vectors
   true_bin_formulas_.clear();
@@ -546,18 +546,18 @@ void ResponseMatrixMaker::prepare_formulas() {
 
 }
 
-void ResponseMatrixMaker::build_response_matrices(
+void UniverseMaker::build_universes(
   const std::vector<std::string>& universe_branch_names )
 {
-  return this->build_response_matrices( &universe_branch_names );
+  return this->build_universes( &universe_branch_names );
 }
 
-void ResponseMatrixMaker::build_response_matrices(
+void UniverseMaker::build_universes(
   const std::vector<std::string>* universe_branch_names )
 {
   int num_input_files = input_chain_.GetListOfFiles()->GetEntries();
   if ( num_input_files < 1 ) {
-    std::cout << "ERROR: The ResponseMatrixMaker object has not been"
+    std::cout << "ERROR: The UniverseMaker object has not been"
       " initialized with any input files yet.\n";
     return;
   }
@@ -734,7 +734,7 @@ void ResponseMatrixMaker::build_response_matrices(
   input_chain_.ResetBranchAddresses();
 }
 
-void ResponseMatrixMaker::prepare_universes( const WeightHandler& wh ) {
+void UniverseMaker::prepare_universes( const WeightHandler& wh ) {
 
   size_t num_true_bins = true_bins_.size();
   size_t num_reco_bins = reco_bins_.size();
@@ -759,7 +759,7 @@ void ResponseMatrixMaker::prepare_universes( const WeightHandler& wh ) {
 
 }
 
-void ResponseMatrixMaker::save_histograms(
+void UniverseMaker::save_histograms(
   const std::string& output_file_name,
   const std::string& subdirectory_name,
   bool update_file )

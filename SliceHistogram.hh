@@ -93,7 +93,7 @@ SliceHistogram* SliceHistogram::make_slice_histogram( TH1D& reco_bin_histogram,
 
     double slice_bin_content = 0.;
     for ( const auto& rb_idx : reco_bin_set ) {
-      // The ResponseMatrixMaker reco bin indices are zero-based, so I correct
+      // The UniverseMaker reco bin indices are zero-based, so I correct
       // for this here when pulling values from the one-based input ROOT
       // histogram
       slice_bin_content += reco_bin_histogram.GetBinContent( rb_idx + 1 );
@@ -137,7 +137,7 @@ SliceHistogram* SliceHistogram::make_slice_histogram( TH1D& reco_bin_histogram,
         for ( const auto& rb_m : rb_set_a ) {
           for ( const auto& rb_n : rb_set_b ) {
             // The covariance matrix TH2D uses one-based indices even though
-            // the ResponseMatrixMaker numbering scheme is zero-based. I
+            // the UniverseMaker numbering scheme is zero-based. I
             // correct for this here.
             cov += cmat->GetBinContent( rb_m + 1, rb_n + 1 );
           } // reco bin index m
@@ -201,7 +201,7 @@ SliceHistogram* SliceHistogram::make_slice_histogram(
 
     double slice_bin_content = 0.;
     for ( const auto& rb_idx : reco_bin_set ) {
-      // The ResponseMatrixMaker reco bin indices are zero-based like the
+      // The UniverseMaker reco bin indices are zero-based like the
       // TMatrixD element indices
       slice_bin_content += reco_bin_counts( rb_idx, 0 );
     }
@@ -278,7 +278,7 @@ SliceHistogram* SliceHistogram::make_slice_histogram(
 
 // TODO: revisit this rough draft. Right now, an assumption is made that the
 // true and reco bins are defined in the same way with the same indices. This
-// isn't enforced by the ResponseMatrixMaker configuration itself, although
+// isn't enforced by the UniverseMaker configuration itself, although
 // it is currently consistent with what you've done so far.
 SliceHistogram* SliceHistogram::make_slice_efficiency_histogram(
   const TH1D& true_bin_histogram, const TH2D& hist_2d, const Slice& slice )
@@ -303,7 +303,7 @@ SliceHistogram* SliceHistogram::make_slice_efficiency_histogram(
     double selected_signal_evts = 0.;
     double all_signal_evts = 0.;
     for ( const auto& rb_idx : reco_bin_set ) {
-      // The ResponseMatrixMaker reco bin indices are zero-based, so I correct
+      // The UniverseMaker reco bin indices are zero-based, so I correct
       // for this here when pulling values from the one-based input ROOT
       // histogram.
       all_signal_evts += true_bin_histogram.GetBinContent( rb_idx + 1 );

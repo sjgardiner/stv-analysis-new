@@ -59,7 +59,7 @@ struct Slice {
 
   // Keys are global bin numbers in hist_ (one-based). Values are the
   // contributing reco bin index (zero-based) as defined in the relevant
-  // ResponseMatrixMaker configuration
+  // UniverseMaker configuration
   std::map< int, std::set< size_t > > bin_map_;
 
   // Indices in the slice_vars_ vector for the "active" SliceVariable
@@ -286,7 +286,7 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
     }
 
     // We're ready to build the ROOT histogram owned by the current slice, so
-    // do it now before matching ROOT bins with ResponseMatrixMaker bins. Start
+    // do it now before matching ROOT bins with UniverseMaker bins. Start
     // by building the plot title using the bin limits for the "other"
     // variables.
     std::string slice_title = "slice " + std::to_string( slices_.size() );
@@ -360,7 +360,7 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
     cur_slice.hist_->SetStats( false );
 
     // Now that we have the histogram made, read in the information needed to
-    // map from each ResponseMatrixMaker reco bin that contributes to this
+    // map from each UniverseMaker reco bin that contributes to this
     // slice to a TH1 global bin number (conveniently converted from x, y, ...
     // bin indices by the new histogram)
     int num_rmm_bins;
@@ -370,12 +370,12 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
 
     for ( int cb = 0; cb < num_rmm_bins; ++cb ) {
 
-      // Index of the appropriate reco bin owned by a ResponseMatrixMaker
+      // Index of the appropriate reco bin owned by a UniverseMaker
       // object. This index is zero-based.
       size_t rmm_reco_bin_idx;
 
       // Number of TH1 bins in the current slice to which the
-      // current ResponseMatrixMaker bin contributes
+      // current UniverseMaker bin contributes
       size_t num_root_bins;
 
       in_file >> rmm_reco_bin_idx >> num_root_bins;
@@ -399,7 +399,7 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
         }
 
         // We're ready. Look up the global bin index in the slice histogram
-        // that should be associated with the current ResponseMatrixMaker
+        // that should be associated with the current UniverseMaker
         // reco bin
         int root_bin_idx = cur_slice.hist_->GetBin(
           av_bin_indices.front(), av_bin_indices.at(1), av_bin_indices.at(2) );
@@ -418,7 +418,7 @@ SliceBinning::SliceBinning( const std::string& config_file_name ) {
 
       } // ROOT bins
 
-    } // ResponseMatrixMaker bins
+    } // UniverseMaker bins
 
     // Move the completed Slice object into the vector of slices
     slices_.emplace_back( std::move(cur_slice) );

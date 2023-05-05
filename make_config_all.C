@@ -1,6 +1,6 @@
 #include "ConfigMakerUtils.hh"
 #include "HistUtils.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 #include "SliceBinning.hh"
 
 // Placeholder value for the block index for bins in which it is irrelevant

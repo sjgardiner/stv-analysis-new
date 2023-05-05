@@ -13,7 +13,7 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
-#include "ResponseMatrixMaker.hh"
+#include "UniverseMaker.hh"
 
 // Helper function template that retrieves an object from a TDirectoryFile
 // and loads a pointer to it into a std::unique_ptr of the correct type
@@ -384,7 +384,7 @@ SystematicsCalculator::SystematicsCalculator(
   // avoid TDirectoryFile path problems.
   std::string fpm_config_file = fpm.config_file_name();
   // Do the '/' replacement here in the same way as is done for
-  // TDirectoryFile subfolders by the ResponseMatrixMaker class
+  // TDirectoryFile subfolders by the UniverseMaker class
   fpm_config_file = ntuple_subfolder_from_file_name( fpm_config_file );
 
   std::string total_subfolder_name = TOTAL_SUBFOLDER_NAME_PREFIX
@@ -820,7 +820,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         auto temp_2d_hist = get_object_unique_ptr< TH2D >(
           "unweighted_0_2d", *subdir );
 
-        // NOTE: the convention of the ResponseMatrixMaker class is to use
+        // NOTE: the convention of the UniverseMaker class is to use
         // x as the true axis and y as the reco axis.
         int num_true_bins = temp_2d_hist->GetXaxis()->GetNbins();
         int num_reco_bins = temp_2d_hist->GetYaxis()->GetNbins();

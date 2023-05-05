@@ -83,7 +83,7 @@ ConstrainedCalculator::ConstrainedCalculator(
   for ( const auto& rbin : reco_bins_ ) {
     if ( rbin.type_ == kOrdinaryRecoBin ) {
       if ( found_first_sideband_bin ) throw std::runtime_error( "Ordinary"
-        " reco bins must precede sideband ones in the ResponseMatrixMaker"
+        " reco bins must precede sideband ones in the UniverseMaker"
         " configuration file." );
     }
     else if ( rbin.type_ == kSidebandRecoBin ) {
