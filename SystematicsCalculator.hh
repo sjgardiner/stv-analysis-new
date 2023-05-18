@@ -239,6 +239,9 @@ class SystematicsCalculator {
     inline std::unique_ptr< TMatrixD > get_cv_ordinary_reco_signal() const
       { return this->get_cv_ordinary_reco_helper( false ); }
 
+    inline size_t get_num_signal_true_bins() const
+      { return num_signal_true_bins_; }
+
   //protected:
 
     // Implements both get_cv_ordinary_reco_bkgd() and
@@ -320,10 +323,10 @@ class SystematicsCalculator {
     // interaction modeling
     std::map< NFT, std::unique_ptr<Universe> > alt_cv_universes_;
 
-    // True bin configuration that was used to compute the response matrices
+    // True bin configuration that was used to compute the universes
     std::vector< TrueBin > true_bins_;
 
-    // Reco bin configuration that was used to compute the response matrices
+    // Reco bin configuration that was used to compute the universes
     std::vector< RecoBin > reco_bins_;
 
     // Total POT exposure for the analyzed BNB data
@@ -406,7 +409,7 @@ SystematicsCalculator::SystematicsCalculator(
     // Create a new TDirectoryFile as a subfolder to hold the POT-summed
     // universe histograms
     total_subdir = new TDirectoryFile( total_subfolder_name.c_str(),
-      "response matrices", "", root_tdir );
+      "universes", "", root_tdir );
 
     // Write the universes to the new subfolder for faster loading
     // later
@@ -419,7 +422,7 @@ SystematicsCalculator::SystematicsCalculator(
   }
 
   // Also load the configuration of true and reco bins used to create the
-  // response matrices
+  // universes
   std::string* true_bin_spec = nullptr;
   std::string* reco_bin_spec = nullptr;
 
@@ -687,8 +690,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
       for ( const std::string& file_name : file_set ) {
 
-        std::cout << "PROCESSING response matrices for "
-          << file_name << '\n';
+        std::cout << "PROCESSING universes for " << file_name << '\n';
 
         // Default to assuming that the current ntuple file is not a fake data
         // sample. If it is a data sample (i.e., if is_mc == false), then the
