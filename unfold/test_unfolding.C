@@ -1,4 +1,5 @@
 // Standard library includes
+#include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -10,6 +11,7 @@
 // STV analysis includes
 #include "../DAgostiniUnfolder.hh"
 #include "../FiducialVolume.hh"
+#include "../MatrixUtils.hh"
 #include "../MCC9SystematicsCalculator.hh"
 #include "../NormShapeCovMatrix.hh"
 #include "../PGFPlotsDumpUtils.hh"
@@ -306,6 +308,84 @@ void dump_slice_errors( const std::string& hist_col_prefix,
 
 }
 
+// Helper function that dumps a lot of the results to simple text files.
+// The events_to_xsec_factor is a constant that converts expected true event
+// counts to a total cross section (10^{-38} cm^2 / Ar) via multiplication.
+void dump_overall_results( const UnfoldedMeasurement& result,
+  const std::map< std::string, std::unique_ptr<TMatrixD> >& unf_cov_matrix_map,
+  double events_to_xsec_factor, const TMatrixD& genie_cv_true_events,
+  const TMatrixD& fake_data_true_events,
+  const std::map< std::string, TMatrixD* >& generator_truth_map,
+  bool using_fake_data )
+{
+  // Dump the unfolded flux-averaged total cross sections (by converting
+  // the units on the unfolded signal event counts)
+  TMatrixD unf_signal = *result.unfolded_signal_;
+  unf_signal *= events_to_xsec_factor;
+  dump_text_column_vector( "dump/vec_table_unfolded_signal.txt", unf_signal );
+
+  // Dump similar tables for each of the theoretical predictions (and the fake
+  // data truth if applicable). Note that this function expects that the
+  // additional smearing matrix A_C has not been applied to these predictions.
+  TMatrixD temp_genie_cv = genie_cv_true_events;
+  temp_genie_cv *= events_to_xsec_factor;
+  dump_text_column_vector( "dump/vec_table_uBTune.txt", temp_genie_cv );
+
+  if ( using_fake_data ) {
+    TMatrixD temp_fake_truth = fake_data_true_events;
+    temp_fake_truth *= events_to_xsec_factor;
+    dump_text_column_vector( "dump/vec_table_FakeData.txt", temp_fake_truth );
+  }
+
+  for ( const auto& gen_pair : generator_truth_map ) {
+    std::string gen_short_name = samples_to_hist_names.at( gen_pair.first );
+    TMatrixD temp_gen = *gen_pair.second;
+    temp_gen *= events_to_xsec_factor;
+    dump_text_column_vector( "dump/vec_table_" + gen_short_name + ".txt",
+      temp_gen );
+  }
+
+  // No unit conversions are necessary for the unfolding, error propagation,
+  // and additional smearing matrices since they are dimensionless
+  dump_text_matrix( "dump/mat_table_unfolding.txt", *result.unfolding_matrix_ );
+  dump_text_matrix( "dump/mat_table_err_prop.txt", *result.err_prop_matrix_ );
+  dump_text_matrix( "dump/mat_table_add_smear.txt", *result.add_smear_matrix_ );
+
+  // Convert units on the covariance matrices one-by-one and dump them
+  for ( const auto& cov_pair : unf_cov_matrix_map ) {
+    const auto& name = cov_pair.first;
+    TMatrixD temp_cov_matrix = *cov_pair.second;
+    // Note that we need to square the unit conversion factor for the
+    // covariance matrix elements
+    temp_cov_matrix *= std::pow( events_to_xsec_factor, 2 );
+    dump_text_matrix( "dump/mat_table_cov_" + name + ".txt", temp_cov_matrix );
+  }
+
+  // Finally, dump a summary table of the flux-averaged total cross section
+  // measurements and their statistical and total uncertainties
+  TMatrixD temp_stat_cov = *unf_cov_matrix_map.at( "DataStats" );
+  TMatrixD temp_total_cov = *unf_cov_matrix_map.at( "total" );
+  temp_stat_cov *= std::pow( events_to_xsec_factor, 2 );
+  temp_total_cov *= std::pow( events_to_xsec_factor, 2 );
+
+  // Open the output file and set up the output stream so that full numerical
+  // precision is preserved in the ascii text representation
+  std::ofstream out_summary_file( "dump/xsec_summary_table.txt" );
+  out_summary_file << std::scientific
+    << std::setprecision( std::numeric_limits<double>::max_digits10 );
+
+  int num_bins = unf_signal.GetNrows();
+  out_summary_file << "numXbins " << num_bins;
+
+  for ( int bin = 0; bin < num_bins; ++bin ) {
+    double xsec = unf_signal( bin, 0 );
+    double stat_err = std::sqrt( std::max(0., temp_stat_cov(bin, bin)) );
+    double total_err = std::sqrt( std::max(0., temp_total_cov(bin, bin)) );
+    out_summary_file << '\n' << bin << "  " << xsec << "  " << stat_err
+      << "  " << total_err;
+  }
+}
+
 void test_unfolding() {
 
   //// Initialize the FilePropertiesManager and tell it to treat the NuWro
@@ -543,8 +623,26 @@ void test_unfolding() {
   unfolded_events->SetLineWidth( 3 );
   unfolded_events->GetXaxis()->SetRangeUser( 0, num_true_signal_bins );
 
-  // Multiply the truth-level GENIE prediction by the additional smearing
-  // matrix
+  // Save the fake data truth (before A_C multiplication) using a column vector
+  // of event counts
+  TMatrixD fake_data_truth( num_true_signal_bins, 1 );
+  if ( using_fake_data ) {
+    for ( int b = 0; b < num_true_signal_bins; ++b ) {
+      double true_evts = fake_data_truth_hist->GetBinContent( b + 1 );
+      fake_data_truth( b, 0 ) = true_evts;
+    }
+  }
+
+  // Save the GENIE CV model (before A_C multiplication) using a column vector
+  // of event counts
+  TMatrixD genie_cv_truth_vec( num_true_signal_bins, 1 );
+  for ( int b = 0; b < num_true_signal_bins; ++b ) {
+    double true_evts = genie_cv_truth->GetBinContent( b + 1 );
+    genie_cv_truth_vec( b, 0 ) = true_evts;
+  }
+
+  // Multiply the truth-level GENIE prediction histogram by the additional
+  // smearing matrix
   TMatrixD* A_C = result.add_smear_matrix_.get();
   multiply_1d_hist_by_matrix( A_C, genie_cv_truth );
 
@@ -558,7 +656,7 @@ void test_unfolding() {
 
   if ( using_fake_data ) {
 
-    // Multiply the fake data truth by the additional smearing matrix
+    // Multiply the fake data truth histogram by the additional smearing matrix
     multiply_1d_hist_by_matrix( A_C, fake_data_truth_hist );
 
     fake_data_truth_hist->SetStats( false );
@@ -586,27 +684,21 @@ void test_unfolding() {
   double integ_flux = integrated_numu_flux_in_FV( total_pot );
   double num_Ar = num_Ar_targets_in_FV();
 
+  std::cout << "INTEGRATED numu FLUX = " << integ_flux << '\n';
+  std::cout << "NUM Ar atoms in fiducial volume = " << num_Ar << '\n';
+
   // Retrieve the true-space expected event counts from NUISANCE output files
   // for each available generator model
   double conv_factor = num_Ar * integ_flux;
   auto generator_truth_map = get_true_events_nuisance( sample_info,
     conv_factor );
 
-  // Add the fake data truth using a column vector of event counts
-  TMatrixD fake_data_truth( num_true_signal_bins, 1 );
-  if ( using_fake_data ) {
-    for ( int b = 0; b < num_true_signal_bins; ++b ) {
-      double true_evts = fake_data_truth_hist->GetBinContent( b + 1 );
-      fake_data_truth( b, 0 ) = true_evts;
-    }
-  }
-
-  // Add the GENIE CV model using a column vector of event counts
-  TMatrixD genie_cv_truth_vec( num_true_signal_bins, 1 );
-  for ( int b = 0; b < num_true_signal_bins; ++b ) {
-    double true_evts = genie_cv_truth->GetBinContent( b + 1 );
-    genie_cv_truth_vec( b, 0 ) = true_evts;
-  }
+  // Dump overall results to text files. Total cross section units (10^{-38}
+  // cm^2 / Ar) will be used throughout. Do this before adjusting the
+  // truth-level prediction TMatrixD objects via multiplication by A_C
+  dump_overall_results( result, unfolded_cov_matrix_map, 1e38 / conv_factor,
+    genie_cv_truth_vec, fake_data_truth, generator_truth_map,
+    using_fake_data );
 
   if ( USE_ADD_SMEAR ) {
 

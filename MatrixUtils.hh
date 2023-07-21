@@ -3,6 +3,8 @@
 // Standard library includes
 #include <cfloat>
 #include <cmath>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <memory>
 
@@ -70,4 +72,60 @@ std::unique_ptr< TMatrixD > invert_matrix( const TMatrixD& mat,
   }
 
   return inverse_matrix;
+}
+
+void dump_text_matrix( const std::string& output_file_name,
+  const TMatrixD& matrix )
+{
+  // Open the output file and set up the output stream so that full numerical
+  // precision is preserved in the ascii text representation
+  std::ofstream out_file( output_file_name );
+  out_file << std::scientific
+    << std::setprecision( std::numeric_limits<double>::max_digits10 );
+
+  int num_x_bins = matrix.GetNrows();
+  int num_y_bins = matrix.GetNcols();
+
+  out_file << "numXbins " << num_x_bins << '\n';
+  out_file << "numYbins " << num_y_bins << '\n';
+  out_file << "xbin  ybin  z\n";
+
+  for ( int xb = 0; xb < num_x_bins; ++xb ) {
+    for ( int yb = 0; yb < num_y_bins; ++yb ) {
+
+      double z = matrix( xb, yb );
+
+      // Use zero-based bin indices in the dump
+      out_file << xb << "  " <<  yb << "  " << z << '\n';
+
+    } // loop over columns (y bins)
+  } // loop over rows (x bins)
+}
+
+void dump_text_column_vector( const std::string& output_file_name,
+  const TMatrixD& matrix )
+{
+  // Open the output file and set up the output stream so that full numerical
+  // precision is preserved in the ascii text representation
+  std::ofstream out_file( output_file_name );
+  out_file << std::scientific
+    << std::setprecision( std::numeric_limits<double>::max_digits10 );
+
+  int num_x_bins = matrix.GetNrows();
+  int num_y_bins = matrix.GetNcols();
+
+  if ( num_y_bins != 1 ) {
+    throw std::runtime_error( "Input matrix is not a column vector" );
+  }
+
+  out_file << "numXbins " << num_x_bins;
+
+  for ( int xb = 0; xb < num_x_bins; ++xb ) {
+
+      double z = matrix( xb, 0 );
+
+      // Use zero-based bin indices in the dump
+      out_file << '\n' << xb << "  " << z;
+
+  } // loop over rows (x bins)
 }
