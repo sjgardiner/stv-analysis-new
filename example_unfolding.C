@@ -35,7 +35,7 @@ void example_unfolding() {
 
   // Perform the unfolding
   UnfoldedMeasurement result = unfolder.unfold( *data_signal, *data_covmat,
-    *smearcept, *prior_true_signal );
+    *smearcept, *prior_true_signal, "blocks.txt" );
 
   // Output is struct with these data members
   //std::unique_ptr< TMatrixD > unfolded_signal_;
