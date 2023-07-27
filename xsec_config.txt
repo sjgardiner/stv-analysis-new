@@ -1,0 +1,13 @@
+UnivFile /uboone/data/users/gardiner/all_fixed.root
+#SystFile systcalc.conf
+#FPFile nuwro_file_properties.txt
+Unfold DAgostini fm 0.025
+Prediction uBTune "MicroBooNE Tune" univ CV
+#Prediction truth "Fake data" univ FakeData
+Prediction gv2 "GENIE 2.12.10" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv2.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
+Prediction gv3 "GENIE 3.0.6" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
+Prediction g1802a "GENIE 3.2.0 G18_02a" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g1802a.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
+Prediction g2111a "GENIE 3.2.0 G21_11a" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111a.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
+Prediction g2111b "GENIE 3.2.0 G21_11b" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111b.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
+Prediction neut "NEUT 5.4.0.1" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-neut.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
+Prediction nuwro "NuWro 19.02.1" file /uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-nuwro.root MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC
