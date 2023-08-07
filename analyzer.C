@@ -1651,6 +1651,9 @@ void AnalysisEvent::compute_observables() {
 
     theta_mu_p_ = std::acos( p3mu.Dot(p3p) / p3mu.Mag() / p3p.Mag() );
   }
+
+  // TODO: Add some branches with missing energy variables
+
 }
 
 void AnalysisEvent::compute_mc_truth_observables() {
