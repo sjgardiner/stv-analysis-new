@@ -371,9 +371,11 @@ SystematicsCalculator::SystematicsCalculator(
   // If we haven't been handed a root TDirectoryFile name explicitly, then
   // just grab the first key from the input TFile and assume it's the right
   // one to use.
+  // CT: this breaks if there is anything else in the file
   std::string tdf_name = respmat_tdirectoryfile_name;
   if ( tdf_name.empty() ) {
-    tdf_name = in_tfile.GetListOfKeys()->At( 0 )->GetName();
+    //tdf_name = in_tfile.GetListOfKeys()->At( 0 )->GetName();
+    tdf_name = in_tfile.GetListOfKeys()->Last()->GetName();
   }
 
   in_tfile.GetObject( tdf_name.c_str(), root_tdir );
@@ -398,14 +400,14 @@ SystematicsCalculator::SystematicsCalculator(
   // signalled by a TDirectoryFile with a name matching the string
   // total_subfolder_name.
   TDirectoryFile* total_subdir = nullptr;
+  
   root_tdir->GetObject( total_subfolder_name.c_str(), total_subdir );
 
   if ( !total_subdir ) {
-
     // We couldn't find the pre-computed POT-summed universe histograms,
     // so make them "on the fly" and store them in this object
+    // CT: For some reason this is still assuming the structure of the old file
     this->build_universes( *root_tdir );
-
     // Create a new TDirectoryFile as a subfolder to hold the POT-summed
     // universe histograms
     total_subdir = new TDirectoryFile( total_subfolder_name.c_str(),
@@ -633,7 +635,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
   const auto& data_norm_map = fpm.data_norm_map();
   for ( const auto& run_and_type_pair : fpm.ntuple_file_map() ) {
     int run = run_and_type_pair.first;
-    const auto& type_map = run_and_type_pair.second;
+   const auto& type_map = run_and_type_pair.second;
 
     const auto& bnb_file_set = type_map.at( NFT::kOnBNB );
     for ( const std::string& bnb_file : bnb_file_set ) {
@@ -674,8 +676,9 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
   // Loop through the ntuple files for the various run / ntuple file type
   // pairs considered in the analysis. We will react differently in a run-
   // and type-dependent way.
+  
   for ( const auto& run_and_type_pair : fpm.ntuple_file_map() ) {
-
+   
     int run = run_and_type_pair.first;
     const auto& type_map = run_and_type_pair.second;
 

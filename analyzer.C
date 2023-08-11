@@ -109,6 +109,18 @@ constexpr float MUON_PID_CUT = 0.2;
 
 constexpr float TRACK_SCORE_CUT = 0.5;
 
+// CT: Adding detection thresholds for various particles
+const float mass_neutron = 0.9396;
+const float mass_proton = 0.9383;
+const float mass_pion = 0.1396;
+const float mass_muon = 0.1057;
+const float proton_p_thresh = 0.3;
+const float pion_p_thresh = 0.1;
+const float muon_p_thresh = 0.1;
+const float proton_E_thresh = sqrt(mass_proton*mass_proton+proton_p_thresh*proton_p_thresh);
+const float pion_E_thresh = sqrt(mass_pion*mass_pion+pion_p_thresh*pion_p_thresh);
+const float muon_E_thresh = sqrt(mass_muon*mass_muon+muon_p_thresh*muon_p_thresh);
+
 // Function that defines the track-length-dependent proton PID cut
 double proton_pid_cut( double track_length ) {
 
@@ -291,6 +303,14 @@ class AnalysisEvent {
     MyPointer< std::vector<float> > mc_nu_daughter_px_;
     MyPointer< std::vector<float> > mc_nu_daughter_py_;
     MyPointer< std::vector<float> > mc_nu_daughter_pz_;
+    
+
+    // CT: Adding missing energy truth variables
+    float missing_e_;
+    float total_e_;
+    float muon_e_;
+    float muon_costheta_;
+    float had_e_;
 
     // General systematic weights
     MyPointer< std::map< std::string, std::vector<double> > > mc_weights_map_;
@@ -999,6 +1019,16 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_object_output_branch_address< std::vector<float> >( out_tree, "mc_pz",
     ev.mc_nu_daughter_pz_, create );
 
+  set_output_branch_address( out_tree, "delta_pT",
+    &ev.delta_pT_, create, "delta_pT/F" );
+
+  // CT: Adding missing energy truth variables
+  set_output_branch_address( out_tree, "missing_e", &ev.missing_e_, create, "missing_e/F"); 
+  set_output_branch_address( out_tree, "total_e", &ev.total_e_, create, "total_e/F"); 
+  set_output_branch_address( out_tree, "muon_e", &ev.muon_e_, create, "muon_e/F"); 
+  set_output_branch_address( out_tree, "muon_costheta", &ev.muon_costheta_, create, "muon_costheta/F"); 
+  set_output_branch_address( out_tree, "had_e", &ev.had_e_, create, "had_e/F"); 
+
 }
 
 void analyze(const std::vector<std::string>& in_file_names,
@@ -1050,7 +1080,7 @@ void analyze(const std::vector<std::string>& in_file_names,
     if ( events_entry % 1000 == 0 ) {
       std::cout << "Processing event #" << events_entry << '\n';
     }
-
+  
     // Create a new AnalysisEvent object. This will reset all analysis
     // variables for the current event.
     AnalysisEvent cur_event;
@@ -1736,6 +1766,40 @@ void AnalysisEvent::compute_mc_truth_observables() {
     mc_theta_mu_p_ = std::acos( mc_p3_mu_->Dot(*mc_p3_lead_p_)
       / mc_p3_mu_->Mag() / mc_p3_lead_p_->Mag() );
   }
+
+  // CT: Computing the missing energy variables
+  // TODO: Calculate microboone's detection thresholds for different particles in terms of total energy
+
+  missing_e_ = 0;
+  //std::cout << "missing_e_ = " << missing_e_ << std::endl; 
+  for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
+    if(mc_nu_daughter_pdg_->at(i_mc) == 2112) missing_e_ += mc_nu_daughter_energy_->at(i_mc) - mass_neutron + 0.0086; // nucleons add the KE
+    if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 211 && mc_nu_daughter_energy_->at(i_mc) < pion_E_thresh) missing_e_ += mc_nu_daughter_energy_->at(i_mc);
+    if(mc_nu_daughter_pdg_->at(i_mc) == 111) missing_e_ += mc_nu_daughter_energy_->at(i_mc); // muons and pions add the total energy
+  }
+  //std::cout << "missing_e_ = " << missing_e_ << std::endl; 
+
+  total_e_ = 0;
+  for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
+    if(mc_nu_daughter_pdg_->at(i_mc) == 2212 || mc_nu_daughter_pdg_->at(i_mc) == 2112) total_e_ += mc_nu_daughter_energy_->at(i_mc) - mass_proton + 0.0086; // nucleons add the KE
+    if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 13 || abs(mc_nu_daughter_pdg_->at(i_mc)) == 211 || mc_nu_daughter_pdg_->at(i_mc) == 111) total_e_ += mc_nu_daughter_energy_->at(i_mc); // muons and pions add the total energy
+  }
+ 
+  for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
+    if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 13){
+      muon_e_ = mc_nu_daughter_energy_->at(i_mc);
+      muon_costheta_ = cos(TVector3(mc_nu_daughter_px_->at(i_mc),mc_nu_daughter_py_->at(i_mc),mc_nu_daughter_pz_->at(i_mc)).Theta());
+    }
+  } 
+
+  had_e_ = 0.0;
+  for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
+    if(mc_nu_daughter_pdg_->at(i_mc) == 2212 && mc_nu_daughter_energy_->at(i_mc) > proton_E_thresh)
+      had_e_ += mc_nu_daughter_energy_->at(i_mc) - mass_proton + 0.0086;
+    if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 211 && mc_nu_daughter_energy_->at(i_mc) > pion_E_thresh)
+      had_e_ += mc_nu_daughter_energy_->at(i_mc);
+  }
+
 }
 
 void analyzer(const std::string& in_file_name,
