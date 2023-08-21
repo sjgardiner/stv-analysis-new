@@ -142,12 +142,12 @@ std::map< std::string, TruthFileInfo > truth_file_map = {
     {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111a.root", kBlack, 2} },
   { "GENIE 3.2.0 G21_11b",
     {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111b.root", kBlack, 2} },
-  { "NEUT 5.4.0.1",
+  { "NEUT 5.6.0",
     {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-neut.root", kRed, 9} },
-  { "NuWro 19.02.1",
+  { "NuWro 19.02.2",
     {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-nuwro.root", kViolet, 7} },
-// { "GiBUU 2021",
-//    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/nuisance/build/myout.root", kGreen, 10} },
+ { "GiBUU 2021.1",
+    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/mygibuu2.root", kGreen, 10} },
 };
 
 std::map< std::string, std::string > samples_to_hist_names {
@@ -159,9 +159,9 @@ std::map< std::string, std::string > samples_to_hist_names {
   { "GENIE 3.2.0 G18_02a", "g1802a" },
   { "GENIE 3.2.0 G21_11a", "g2111a" },
   { "GENIE 3.2.0 G21_11b", "g2111b" },
-  { "NEUT 5.4.0.1", "neut" },
-  { "NuWro 19.02.1", "nuwro" },
-  { "GiBUU 2021", "gibuu" },
+  { "NEUT 5.6.0", "neut" },
+  { "NuWro 19.02.2", "nuwro" },
+  { "GiBUU 2021.1", "gibuu" },
 };
 
 struct SampleInfo {
