@@ -26,7 +26,7 @@ using WSVD_RMT = WienerSVDUnfolder::RegularizationMatrixType;
 using MCC9SystMode = MCC9SystematicsCalculator::SystMode;
 
 constexpr double BIG_DOUBLE = 1e300;
-constexpr bool USE_ADD_SMEAR = true;
+//constexpr bool USE_ADD_SMEAR = true;
 constexpr bool INCLUDE_BKGD_ONLY_ERRORS = false;
 constexpr bool INCLUDE_SIGRESP_ONLY_ERRORS = false;
 
@@ -81,7 +81,7 @@ class UniverseTrueEvents : public PredictedTrueEvents {
 };
 
 // Predicted true signal event counts from a ROOT histogram of binwise total
-// cross sections (cm^2 / Ar) stored in a file
+// cross sections (10^{-38} cm^2 / Ar) stored in a file
 class FileTrueEvents : public PredictedTrueEvents {
   public:
 
@@ -163,6 +163,12 @@ class CrossSectionExtractor {
     // Apply background subtraction and the unfolding procedure to obtain
     // a measurement together with full uncertainties
     CrossSectionResult get_unfolded_events();
+
+    // Get the beam exposure for the data
+    double get_data_pot() const {  return syst_->total_bnb_data_pot_; }
+
+    const std::map< std::string, std::unique_ptr< PredictedTrueEvents > >&
+      get_prediction_map() const { return pred_map_; }
 
   protected:
 
@@ -373,21 +379,21 @@ CrossSectionResult CrossSectionExtractor::get_unfolded_events() {
   UnfoldedMeasurement result = unfolder_->unfold( *syst_ );
   CrossSectionResult xsec( result );
 
-  if ( USE_ADD_SMEAR ) {
+  //if ( USE_ADD_SMEAR ) {
 
-    // Get access to the additional smearing matrix
-    const TMatrixD& A_C = *xsec.result_.add_smear_matrix_;
+  //  // Get access to the additional smearing matrix
+  //  const TMatrixD& A_C = *xsec.result_.add_smear_matrix_;
 
-    // Update each of the owned predictions by multiplying them by the
-    // additional smearing matrix
-    for ( auto& pair : pred_map_ ) {
-      //const auto& model_description = pair.first;
-      TMatrixD& truth_pred = pair.second->get_prediction();
+  //  // Update each of the owned predictions by multiplying them by the
+  //  // additional smearing matrix
+  //  for ( auto& pair : pred_map_ ) {
+  //    //const auto& model_description = pair.first;
+  //    TMatrixD& truth_pred = pair.second->get_prediction();
 
-      TMatrixD ac_temp( A_C, TMatrixD::kMult, truth_pred );
-      truth_pred = ac_temp;
-    }
-  }
+  //    TMatrixD ac_temp( A_C, TMatrixD::kMult, truth_pred );
+  //    truth_pred = ac_temp;
+  //  }
+  //}
 
   // Propagate all defined covariance matrices through the unfolding procedure
   // using the "error propagation matrix" and its transpose
@@ -430,7 +436,7 @@ double CrossSectionExtractor::conversion_factor() const {
   double integ_flux = integrated_numu_flux_in_FV( total_pot );
   double num_Ar = num_Ar_targets_in_FV();
 
-  double conv_factor = num_Ar * integ_flux;
+  double conv_factor = num_Ar * integ_flux / 1e38;
   return conv_factor;
 }
 
