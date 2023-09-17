@@ -147,7 +147,7 @@ std::map< std::string, TruthFileInfo > truth_file_map = {
   { "NuWro 19.02.2",
     {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-nuwro.root", kViolet, 7} },
  { "GiBUU 2021.1",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/mygibuu2.root", kGreen, 10} },
+    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/mygibuu3.root", kGreen, 10} },
 };
 
 std::map< std::string, std::string > samples_to_hist_names {
@@ -205,10 +205,10 @@ std::map< std::string, SampleInfo > sample_info_map = {
 };
 
 // Multiplying by the conversion factor conv_factor should change a total cross
-// section value (in cm^2 / Ar) into an expected number of true event counts.
-// The value of the factor can be obtained by multiplying the number of Ar
-// targets in the fiducial volume by the integrated numu flux (for the measured
-// POT exposure) in the fiducial volume.
+// section value (in 10^{-38} cm^2 / Ar) into an expected number of true event
+// counts. The value of the factor can be obtained by multiplying the number of
+// Ar targets in the fiducial volume by the integrated numu flux (for the
+// measured POT exposure) in the fiducial volume.
 //
 // This function returns a map in which the keys are legend labels for each
 // generator model. The values are TMatrixD column vectors containing the
@@ -396,7 +396,8 @@ void test_unfolding() {
   const auto& sample_info = sample_info_map.at( SAMPLE_NAME );
   //const auto& respmat_file_name = sample_info.respmat_file_;
 
-  const std::string respmat_file_name( "/uboone/data/users/gardiner/all_fixed.root" );
+  const std::string respmat_file_name(
+    "/uboone/data/users/gardiner/23-sept10-all-universes.root" );
 
   // Do the systematics calculations in preparation for unfolding
   //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );
@@ -689,14 +690,14 @@ void test_unfolding() {
 
   // Retrieve the true-space expected event counts from NUISANCE output files
   // for each available generator model
-  double conv_factor = num_Ar * integ_flux;
+  double conv_factor = ( num_Ar * integ_flux ) / 1e38;
   auto generator_truth_map = get_true_events_nuisance( sample_info,
     conv_factor );
 
   // Dump overall results to text files. Total cross section units (10^{-38}
   // cm^2 / Ar) will be used throughout. Do this before adjusting the
   // truth-level prediction TMatrixD objects via multiplication by A_C
-  dump_overall_results( result, unfolded_cov_matrix_map, 1e38 / conv_factor,
+  dump_overall_results( result, unfolded_cov_matrix_map, 1.0 / conv_factor,
     genie_cv_truth_vec, fake_data_truth, generator_truth_map,
     using_fake_data );
 

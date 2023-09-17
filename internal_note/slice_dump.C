@@ -26,7 +26,7 @@ void slice_dump() {
   //fpm.load_file_properties( "../nuwro_file_properties.txt" );
 
   auto* syst_ptr = new MCC9SystematicsCalculator(
-    "/uboone/data/users/gardiner/all_fixed.root",
+    "/uboone/data/users/gardiner/23-sept10-all-universes.root",
     //"../systcalc_unfold_fd.conf" );
     "../systcalc.conf" );
   auto& syst = *syst_ptr;
