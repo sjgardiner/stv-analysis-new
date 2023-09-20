@@ -1,27 +1,77 @@
 #/bin/bash
 
-#############################################################################
-
-label=testing
-ntuple_list=ntuple_lists/ntuples.list
-file_config=file_configs/nuwro_file_properties.txt
-bin_config=bin_config_test.txt
-slice_config=slice_config_test.txt
-cleanup=true
+# Script for running the univmake stage of the unfolding over multiple
+# CPUs. Works by running splitting the input list of ntuples into several
+# pieces, and hadding the results
+# 
+# Author: C Thorpe (U of Manchester)
 
 #############################################################################
 
+# Setup:
+
+# Just to distinguish between different output files
+label=LowStats_NeutrinoEnergy_MuonAngle_1D
+
+# The ntuples list you need to process
+ntuple_list=ntuple_lists/ntuples_lowstats.list
+
+# The file config - holds trigger/pot info
+file_config=file_configs/lowstats_nuwro_file_properties.txt
+
+# The bin config to use
+bin_config=bin_configs/bin_config_1D_NeutrinoEnergy_MuonAngle.txt 
+
+# the accompanying slice config - required if you have dounfold enabled
+slice_config=slice_configs/slice_config_1D_NeutrinoEnergy_MuonAngle.txt
+
+# Number of CPUs to run on
+nthreads=4
+
+# Whether to run the tutorial unfolding at the end
+dounfold=true
+
+# Delete various logs/temp output files
+cleanup=false
+
+#############################################################################
+
+# Check the various input files exist
+
+if [ ! -f "$ntuple_list" ]; then
+    echo "$ntuple_list does not exist."
+    exit 1
+fi
+
+if [ ! -f "$file_config" ]; then
+    echo "$file_config does not exist."
+    exit 1
+fi
+
+if [ ! -f "$bin_config" ]; then
+    echo "$bin_config does not exist."
+    exit 1
+fi
+
+if [ $dounfold == true ] && [ ! -f "$slice_config" ]; then
+    echo "$slice_config does not exist."
+    exit 1
+fi
+
+time=$(date "+%H:%M:%S" | sed 's/://g')
 stdir=$PWD
-nthreads=3
 
-mkdir -p work_${label}
-cd work_${label}
+mkdir -p work_${label}_${time}
+cd work_${label}_${time}
 wkdir=$PWD
 cp ${stdir}/systcalc.conf .
+cp ${stdir}/systcalc_statonly.conf .
 cp $stdir/$ntuple_list ntuples.list
 cp $stdir/$file_config file_config.txt
 cp $stdir/$bin_config bin_config.txt
-cp $stdir/$slice_config slice_config.txt
+if [ $dounfold == true ]; then
+    cp $stdir/$slice_config slice_config.txt
+fi
 
 nfiles=$(cat $stdir/$ntuple_list | wc -l)
 
@@ -50,6 +100,7 @@ while [ $thread -le $nthreads ]; do
     #echo $thread
     nohup $STV_ANALYSIS_DIR/univmake ntuples_list_${thread}.list bin_config.txt histograms_${thread}.root file_config_${thread}.txt >& Univmake_${thread}.out & 
     pids+=($!)
+    echo ${pids[-1]} > pid_${thread}.txt
     thread=$(($thread+1))
     sleep 20s
 done
@@ -66,11 +117,11 @@ while [ $running == true ]; do
             running=true
             active_pids+=(${pids[$i]})
         fi
-        sleep 2s
+        sleep 20s
     done
-
     pids=( "${active_pids[@]}" )
     active_pids=()
+    echo "${#pids[@]} threads active"
 done
 
 # hadd together the files
@@ -92,6 +143,23 @@ while [ $thread -le $nthreads ]; do
     rm file_config_${thread}.txt
     rm histograms_${thread}.root
     rm Univmake_${thread}.out
+    rm pid_${thread}.txt
     thread=$(($thread+1))
 done
+fi
+
+# Run the unfolding
+if [ $dounfold == true ]; then
+
+root -b <<EOF
+.L ../tutorial_unfolding.C 
+tutorial_unfolding("histograms_${label}.root")
+.q
+EOF
+
+root -b <<EOF
+.L ../tutorial_unfolding.C 
+tutorial_unfolding("histograms_${label}.root",true)
+EOF
+
 fi

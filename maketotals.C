@@ -1,8 +1,4 @@
-// TODO: This is a hacky way of reusing univmake to just
-// make the POT totaled histograms. Clean this up!
-
-// Executable for generating systematic universe files for later analysis. It
-// has been adapted from a similar ROOT macro.
+// Executable that adds the totals directory to a file filled with histograms
 
 // Standard library includes
 #include <stdexcept>
@@ -18,25 +14,6 @@
 #include "MCC9SystematicsCalculator.hh"
 #include "UniverseMaker.hh"
 
-// Helper function that checks whether a given ROOT file represents an ntuple
-// from a reweightable MC sample. This is done by checking for the presence of
-// a branch whose name matches the TUNE_WEIGHT_NAME string defined in
-// UniverseMaker.hh. Central-value GENIE MC samples are expected to have
-// this branch. Real data, detector variation systematics samples and MC
-// samples prepared using alternative generators (e.g., NuWro) are not expected
-// to have this branch.
-bool is_reweightable_mc_ntuple( const std::string& input_file_name ) {
-  TFile temp_file( input_file_name.c_str(), "read" );
-  TTree* stv_tree = nullptr;
-  temp_file.GetObject( "stv_tree", stv_tree );
-  if ( !stv_tree ) throw std::runtime_error( "Missing TTree \"stv_tree\" in"
-    " the input ROOT file " + input_file_name );
-
-  TBranch* cv_weight_br = stv_tree->GetBranch( TUNE_WEIGHT_NAME.c_str() );
-  bool has_cv_weights = ( cv_weight_br != nullptr );
-  return has_cv_weights;
-}
-
 int main( int argc, char* argv[] ) {
 
   if ( argc != 4 && argc != 5 ) {
@@ -49,10 +26,6 @@ int main( int argc, char* argv[] ) {
   std::string list_file_name( argv[1] );
   std::string univmake_config_file_name( argv[2] );
   std::string output_file_name( argv[3] );
-
-  std::cout << "list_file_name = " << list_file_name << std::endl;
-  std::cout << "univmake_config_file_name = " << univmake_config_file_name << std::endl;
-  std::cout << "output_file_name = " << output_file_name << std::endl;
 
   // If the user specified an (optional) non-default configuration file for the
   // FilePropertiesManager on the command line, then load it here. Note that the
@@ -88,69 +61,14 @@ int main( int argc, char* argv[] ) {
     temp_ss >> file_name;
 
     input_files.push_back( file_name );
+
   }
 
-  std::cout << "Processing systematic universes for a total of "
-    << input_files.size() << " input ntuple files\n";
-
-  ROOT::EnableImplicitMT();
-
-  // Store the name of the root TDirectoryFile created by the UniverseMaker
-  // objects below. We will use it to ensure that the MCC9SystematicsCalculator
-  // object used to calculate the total event counts will always be working with
-  // the correct sets of universes.
-  std::string tdirfile_name;
-  bool set_tdirfile_name = false;
-
-  int ctr = 1;
+  // Just use the first file in the config to get the name of the total dir
+  const auto& input_file_name = input_files.front();
+  UniverseMaker univ_maker( univmake_config_file_name );
+  univ_maker.add_input_file( input_file_name.c_str() );  
+  MCC9SystematicsCalculator unfolder( output_file_name, "", univ_maker.dir_name() );
   
-  for ( const auto& input_file_name : input_files ) {
-    std::cout << "Processing file " << ctr << "/" << input_files.size() << std::endl;
-    std::cout << "Calculating systematic universes for ntuple input file "
-      << input_file_name << '\n';
-    std::cout << "Loading UniverseMaker configuration from "
-      << univmake_config_file_name << '\n';
-
-    UniverseMaker univ_maker( univmake_config_file_name );
-
-    univ_maker.add_input_file( input_file_name.c_str() );
-
-    bool has_event_weights = is_reweightable_mc_ntuple( input_file_name );
-
-    // The root TDirectoryFile name is the same across all iterations of this
-    // loop, so just set it once on the first iteration
-    if ( !set_tdirfile_name ) {
-      tdirfile_name = univ_maker.dir_name();
-      set_tdirfile_name = true;
-    }
-    std::cout << "tdirfile_name=" << tdirfile_name << std::endl;
-    break;
-/*
-    if ( has_event_weights ) {
-      // If the check above was successful, then run all of the histogram
-      // calculations in the usual way
-      univ_maker.build_universes();
-    }
-    else {
-      // Passing in the fake list of explicit branch names below instructs
-      // the UniverseMaker class to ignore all event weights while
-      // processing the current ntuple
-      univ_maker.build_universes( { "FAKE_BRANCH_NAME" } );
-    }
-
-    //univ_maker.save_histograms( output_file_name, input_file_name );
-
-    ctr++;
-*/
-  } // loop over input files
-
-  // Use a temporary MCC9SystematicsCalculator object to automatically calculate the total
-  // event counts in each universe across all input files. Since the
-  // get_covariances() member function is never called, the specific
-  // systematics configuration file used doesn't matter. The empty string
-  // passed as the second argument to the constructor just instructs the
-  // MCC9SystematicsCalculator class to use the default systematics configuration file.
-  MCC9SystematicsCalculator unfolder( output_file_name, "", tdirfile_name );
-
   return 0;
 }

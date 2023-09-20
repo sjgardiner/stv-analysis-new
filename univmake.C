@@ -59,8 +59,8 @@ int main( int argc, char* argv[] ) {
   // Regardless of whether the default was used or not, retrieve the
   // name of the FilePropertiesManager configuration file that was
   // actually used
+  //fpm.load_file_properties(list_file_name);
   std::string fp_config_file_name = fpm.config_file_name();
-
   std::cout << "Loaded FilePropertiesManager configuration from "
     << fp_config_file_name << '\n';
 
@@ -95,7 +95,10 @@ int main( int argc, char* argv[] ) {
   std::string tdirfile_name;
   bool set_tdirfile_name = false;
 
+  int ctr = 1;
   for ( const auto& input_file_name : input_files ) {
+
+    std::cout << "Processing file " << ctr << "/" << input_files.size() << std::endl;
 
     std::cout << "Calculating systematic universes for ntuple input file "
       << input_file_name << '\n';
@@ -129,7 +132,11 @@ int main( int argc, char* argv[] ) {
       set_tdirfile_name = true;
     }
 
+    ctr++;
+
   } // loop over input files
+
+  // CT: This step is now handled by a separate executable (maketotals)
 
   // Use a temporary MCC9SystematicsCalculator object to automatically calculate the total
   // event counts in each universe across all input files. Since the
@@ -137,7 +144,7 @@ int main( int argc, char* argv[] ) {
   // systematics configuration file used doesn't matter. The empty string
   // passed as the second argument to the constructor just instructs the
   // MCC9SystematicsCalculator class to use the default systematics configuration file.
-  MCC9SystematicsCalculator unfolder( output_file_name, "", tdirfile_name );
+  //MCC9SystematicsCalculator unfolder( output_file_name, "", tdirfile_name );
 
   return 0;
 }

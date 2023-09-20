@@ -264,7 +264,7 @@ class AnalysisEvent {
 
     MyPointer< std::vector<float> > track_range_mom_mu_;
     MyPointer< std::vector<float> > track_mcs_mom_mu_;
-    MyPointer< std::vector<float> > track_chi2_proton_;
+      MyPointer< std::vector<float> > track_chi2_proton_;
 
     // Log-likelihood ratio particle ID information
 
@@ -279,6 +279,10 @@ class AnalysisEvent {
     // Rescaled overall PID score (all three planes) that lies
     // on the interval [-1, 1]
     MyPointer< std::vector<float> > track_llr_pid_score_;
+
+    // CT: Building the neutrino energy estimtor
+    float track_energy_tot_;
+    float reco_nu_energy_;
 
     // True neutrino PDG code
     int mc_nu_pdg_ = BOGUS_INT;
@@ -303,15 +307,30 @@ class AnalysisEvent {
     MyPointer< std::vector<float> > mc_nu_daughter_px_;
     MyPointer< std::vector<float> > mc_nu_daughter_py_;
     MyPointer< std::vector<float> > mc_nu_daughter_pz_;
-    
-
+ 
+   // TODO: Brute force way to remove 2+ proton events - num of protons above thresh
+   int n_prot_;
+   
     // CT: Adding missing energy truth variables
     float missing_e_;
     float total_e_;
     float muon_e_;
     float muon_costheta_;
     float had_e_;
-
+    float missing_e_neutron_;
+    float missing_e_proton_;
+    float missing_e_cpion_;
+    float missing_e_npion_;
+    float missing_e_other_;
+  
+    // Slightly different definitions of missing energy
+    float visible_e_;
+    float missing_e_2_;
+   
+    // invisible momentum
+    MyPointer< TVector3 > mc_p3_missing_;
+    float mc_pT_missing_; 
+ 
     // General systematic weights
     MyPointer< std::map< std::string, std::vector<double> > > mc_weights_map_;
     // Map of pointers used to set output branch addresses for the elements
@@ -411,6 +430,10 @@ class AnalysisEvent {
     float delta_pTx_ = BOGUS;
     float delta_pTy_ = BOGUS;
     float theta_mu_p_ = BOGUS;
+
+    // CT: Adding PeLEE definition of reco nu energy 
+    float trk_energy_tot_;
+    float reco_neutrino_energy_ = BOGUS;
 
     // ** MC truth observables **
     // These are loaded for signal events whenever we have MC information
@@ -582,6 +605,7 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
 
   set_object_input_branch_address( etree, "trk_llr_pid_score_v",
     ev.track_llr_pid_score_ );
+
 
   // MC truth information for the neutrino
   etree.SetBranchAddress( "nu_pdg", &ev.mc_nu_pdg_ );
@@ -806,6 +830,11 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "theta_mu_p",
     &ev.theta_mu_p_, create, "theta_mu_p/F" );
 
+   // CT: Adding reconstructed neutrino energy
+//  set_output_branch_address( out_tree, "reco_neutrino_energy",
+//    &ev.reco_neutrino_energy_, create, "reco_neutrino_energy/F" );
+
+
   // MC STVs (only filled for signal events)
   set_output_branch_address( out_tree, "mc_delta_pT",
     &ev.mc_delta_pT_, create, "mc_delta_pT/F" );
@@ -1023,11 +1052,29 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
     &ev.delta_pT_, create, "delta_pT/F" );
 
   // CT: Adding missing energy truth variables
+  set_output_branch_address( out_tree, "n_prot", &ev.n_prot_, create, "n_prot/I"); 
   set_output_branch_address( out_tree, "missing_e", &ev.missing_e_, create, "missing_e/F"); 
+  set_output_branch_address( out_tree, "missing_e_proton", &ev.missing_e_proton_, create, "missing_e_proton/F"); 
+  set_output_branch_address( out_tree, "missing_e_neutron", &ev.missing_e_neutron_, create, "missing_e_neutron/F"); 
+  set_output_branch_address( out_tree, "missing_e_cpion", &ev.missing_e_cpion_, create, "missing_e_cpion/F"); 
+  set_output_branch_address( out_tree, "missing_e_npion", &ev.missing_e_npion_, create, "missing_e_npion/F"); 
+  set_output_branch_address( out_tree, "missing_e_other", &ev.missing_e_other_, create, "missing_e_other/F"); 
   set_output_branch_address( out_tree, "total_e", &ev.total_e_, create, "total_e/F"); 
   set_output_branch_address( out_tree, "muon_e", &ev.muon_e_, create, "muon_e/F"); 
   set_output_branch_address( out_tree, "muon_costheta", &ev.muon_costheta_, create, "muon_costheta/F"); 
   set_output_branch_address( out_tree, "had_e", &ev.had_e_, create, "had_e/F"); 
+  set_output_branch_address( out_tree, "missing_e_2", &ev.missing_e_2_, create, "missing_e_2/F"); 
+  set_output_branch_address( out_tree, "visible_e", &ev.visible_e_, create, "visible_e/F"); 
+
+  // CT: Adding neutrino energy estimator
+  set_output_branch_address( out_tree, "track_energy_tot", &ev.track_energy_tot_, create, "track_energy_tot/F"); 
+  set_output_branch_address( out_tree, "reco_neutrino_energy", &ev.reco_neutrino_energy_, create, "reco_neutrino_energy/F"); 
+
+  // invisible 3 momentum 
+  set_object_output_branch_address< TVector3 >( out_tree,
+      "mc_p3_missing", ev.mc_p3_missing_, create );
+
+  set_output_branch_address( out_tree, "mc_pT_missing", &ev.mc_pT_missing_, create, "mc_pT_missing/F"); 
 
 }
 
@@ -1075,12 +1122,16 @@ void analyze(const std::vector<std::string>& in_file_names,
   // slow. I get around this by using a while loop instead of a for loop.
   bool created_output_branches = false;
   long events_entry = 0;
+  //std::cout << events_ch.GetEntries() << std::endl;
   while ( true ) {
 
     if ( events_entry % 1000 == 0 ) {
       std::cout << "Processing event #" << events_entry << '\n';
     }
-  
+
+   // CT: Stop after X events for testing
+   //if(events_entry > 1000) break;
+ 
     // Create a new AnalysisEvent object. This will reset all analysis
     // variables for the current event.
     AnalysisEvent cur_event;
@@ -1682,7 +1733,26 @@ void AnalysisEvent::compute_observables() {
     theta_mu_p_ = std::acos( p3mu.Dot(p3p) / p3mu.Mag() / p3p.Mag() );
   }
 
-  // TODO: Add some branches with missing energy variables
+  
+  // TODO: Add the neutrino energy calculation 
+  // df['neutrino_energy'] = df['trk_energy_tot'] + get_elm_from_vec_idx(muon_energy_correction_v,muon_idx)
+  track_energy_tot_ = 0.0;
+  for(size_t i_tr=0;i_tr<track_kinetic_energy_p_->size();i_tr++)
+    track_energy_tot_ += track_kinetic_energy_p_->at(i_tr);
+  //std::cout << "track_energy_tot_=" << track_energy_tot_ << std::endl;
+
+  // CT: I think this is the calculation used by the PeLEE analysis for numus
+  reco_neutrino_energy_ = BOGUS;
+  std::vector<float> muon_energy_correction_v;
+  for(size_t i_tr=0;i_tr<track_range_mom_mu_->size();i_tr++)
+    muon_energy_correction_v.push_back(sqrt(track_range_mom_mu_->at(i_tr)*track_range_mom_mu_->at(i_tr)+0.105*0.105) - track_kinetic_energy_p_->at(i_tr));
+  if(muon_candidate_idx_ != -1){
+    float muon_energy_correction = muon_energy_correction_v.at(muon_candidate_idx_); 
+    //std::cout << "muon_energy_correction=" << muon_energy_correction << std::endl;
+    reco_neutrino_energy_ = track_energy_tot_ + muon_energy_correction;
+  }
+  //std::cout << "reco_neutrino_energy_=" << reco_neutrino_energy_ << std::endl;
+  if(std::isinf(reco_neutrino_energy_) || std::isnan(reco_neutrino_energy_)) reco_neutrino_energy_ = BOGUS;
 
 }
 
@@ -1768,16 +1838,48 @@ void AnalysisEvent::compute_mc_truth_observables() {
   }
 
   // CT: Computing the missing energy variables
-  // TODO: Calculate microboone's detection thresholds for different particles in terms of total energy
+  // TODO: this woud benefit from being refactored - maybe just make a list of visible vs invisible particles an their energies 
+  n_prot_ = 0;
+  for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
+    if(mc_nu_daughter_pdg_->at(i_mc) == 2212 &&  mc_nu_daughter_energy_->at(i_mc) > proton_E_thresh)
+      n_prot_++;
+  }
 
   missing_e_ = 0;
-  //std::cout << "missing_e_ = " << missing_e_ << std::endl; 
+  missing_e_proton_ = 0;
+  missing_e_neutron_ = 0;
+  missing_e_cpion_ = 0;
+  missing_e_npion_ = 0;
+  missing_e_other_ = 0;
+  *mc_p3_missing_ = TVector3(0,0,0);
   for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
-    if(mc_nu_daughter_pdg_->at(i_mc) == 2112) missing_e_ += mc_nu_daughter_energy_->at(i_mc) - mass_neutron + 0.0086; // nucleons add the KE
-    if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 211 && mc_nu_daughter_energy_->at(i_mc) < pion_E_thresh) missing_e_ += mc_nu_daughter_energy_->at(i_mc);
-    if(mc_nu_daughter_pdg_->at(i_mc) == 111) missing_e_ += mc_nu_daughter_energy_->at(i_mc); // muons and pions add the total energy
+    if(mc_nu_daughter_pdg_->at(i_mc) == 2112 || (mc_nu_daughter_pdg_->at(i_mc) == 2212 && mc_nu_daughter_energy_->at(i_mc) < proton_E_thresh)){
+      missing_e_ += mc_nu_daughter_energy_->at(i_mc) - mass_neutron + 0.0086; // nucleons add the KE
+      if(mc_nu_daughter_pdg_->at(i_mc) == 2212) missing_e_proton_ += mc_nu_daughter_energy_->at(i_mc) - mass_neutron + 0.0086;
+      if(mc_nu_daughter_pdg_->at(i_mc) == 2112) missing_e_neutron_ += mc_nu_daughter_energy_->at(i_mc) - mass_neutron + 0.0086;
+      *mc_p3_missing_ += TVector3(mc_nu_daughter_px_->at(i_mc),mc_nu_daughter_py_->at(i_mc),mc_nu_daughter_pz_->at(i_mc));
+    }
+    else if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 211 && mc_nu_daughter_energy_->at(i_mc) < pion_E_thresh){
+      missing_e_ += mc_nu_daughter_energy_->at(i_mc);
+      missing_e_cpion_ += mc_nu_daughter_energy_->at(i_mc);
+      *mc_p3_missing_ += TVector3(mc_nu_daughter_px_->at(i_mc),mc_nu_daughter_py_->at(i_mc),mc_nu_daughter_pz_->at(i_mc));
+    } 
+    else if(mc_nu_daughter_pdg_->at(i_mc) == 111){
+      missing_e_ += mc_nu_daughter_energy_->at(i_mc); // muons and pions add the total energy
+      missing_e_npion_ += mc_nu_daughter_energy_->at(i_mc); // muons and pions add the total energy
+      *mc_p3_missing_ += TVector3(mc_nu_daughter_px_->at(i_mc),mc_nu_daughter_py_->at(i_mc),mc_nu_daughter_pz_->at(i_mc));
+    }
   }
   //std::cout << "missing_e_ = " << missing_e_ << std::endl; 
+  mc_pT_missing_ = mc_p3_missing_->Perp();
+  missing_e_other_ = missing_e_ - missing_e_proton_ - missing_e_neutron_ - missing_e_cpion_ - missing_e_npion_;
+ 
+  visible_e_ = 0.;
+  for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
+    if(mc_nu_daughter_pdg_->at(i_mc) == 2212 && mc_nu_daughter_energy_->at(i_mc) > proton_E_thresh) visible_e_ += mc_nu_daughter_energy_->at(i_mc) - mass_proton + 0.0086; // nucleons add the KE
+    if(abs(mc_nu_daughter_pdg_->at(i_mc)) == 13 && mc_nu_daughter_energy_->at(i_mc) > muon_E_thresh) visible_e_ += mc_nu_daughter_energy_->at(i_mc);
+  }
+  missing_e_2_ = mc_nu_energy_ - visible_e_;
 
   total_e_ = 0;
   for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++){
