@@ -49,10 +49,10 @@ void CalcMahalanobisDistance(string inputfile) {
 
   std::vector<std::string> reint = {"weight_reint_all","weight_flux_all"};
   
-  syst.prepare_mahalabonis_dist_calc(reint,detvar);
+  syst.prepare_mahalanobis_dist_calc(reint,detvar);
 
   std::unique_ptr<Universe> NuWro = syst.alt_cv_universes_.at(NFT::kAltCVMC)->clone();
-  std::pair<int,double> md2 = syst.get_mahalabonis_dist(NuWro);
+  std::pair<int,double> md2 = syst.get_mahalanobis_dist(NuWro);
   std::cout << "NuWro Alt CV: " << md2.first << "  " << md2.second << std::endl;
   std::vector<double> NuWro_X,NuWro_Y;
   NuWro_X = {md2.second/md2.first,md2.second/md2.first};
@@ -63,7 +63,7 @@ void CalcMahalanobisDistance(string inputfile) {
 
   for(size_t i_u=0;i_u<syst.rw_universes_.at("weight_All_UBGenie").size();i_u++){
     std::unique_ptr<Universe> Alt = syst.rw_universes_.at("weight_All_UBGenie").at(i_u)->clone(); 
-    md2 = syst.get_mahalabonis_dist(Alt);
+    md2 = syst.get_mahalanobis_dist(Alt);
     h_GENIE_vars->Fill(md2.second/md2.first);
     std::cout << "Genie Univ " << i_u << ": " << md2.first << "  " << md2.second << std::endl;
   }
