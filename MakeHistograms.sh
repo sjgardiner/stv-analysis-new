@@ -5,34 +5,35 @@
 # pieces, and hadding the results
 # 
 # Author: C Thorpe (U of Manchester)
+# Suggested useage: nohup sh MakeHistograms.sh >& Out.log &
 
 #############################################################################
 
 # Setup:
 
 # Just to distinguish between different output files
-label=LowStats_NeutrinoEnergy_MuonAngle_1D
+label=MuonAngle
 
 # The ntuples list you need to process
-ntuple_list=ntuple_lists/ntuples_lowstats.list
+ntuple_list=ntuples.list
 
 # The file config - holds trigger/pot info
-file_config=file_configs/lowstats_nuwro_file_properties.txt
+file_config=nuwro_file_properties.txt
 
 # The bin config to use
-bin_config=bin_configs/bin_config_1D_NeutrinoEnergy_MuonAngle.txt 
+bin_config=bin_configs/bin_config_1D_MuonAngle.txt 
 
 # the accompanying slice config - required if you have dounfold enabled
-slice_config=slice_configs/slice_config_1D_NeutrinoEnergy_MuonAngle.txt
+slice_config=slice_configs/slice_config_1D_MuonAngle.txt
 
 # Number of CPUs to run on
-nthreads=4
+nthreads=3
 
 # Whether to run the tutorial unfolding at the end
 dounfold=true
 
 # Delete various logs/temp output files
-cleanup=false
+cleanup=true
 
 #############################################################################
 
@@ -71,6 +72,7 @@ cp $stdir/$file_config file_config.txt
 cp $stdir/$bin_config bin_config.txt
 if [ $dounfold == true ]; then
     cp $stdir/$slice_config slice_config.txt
+    cp $STV_ANALYSIS_DIR/tutorial_unfolding.C .
 fi
 
 nfiles=$(cat $stdir/$ntuple_list | wc -l)
@@ -124,6 +126,8 @@ while [ $running == true ]; do
     echo "${#pids[@]} threads active"
 done
 
+echo "Univmake commands have finished, hadding together the files"
+
 # hadd together the files
 hadd_com="hadd histograms_${label}.root"
 thread=1
@@ -137,6 +141,7 @@ $STV_ANALYSIS_DIR/maketotals ntuples.list bin_config.txt histograms_${label}.roo
 
 # Clean up
 if [ $cleanup == true ]; then
+echo "Cleaning up"
 thread=1
 while [ $thread -le $nthreads ]; do 
     rm ntuples_list_${thread}.list
@@ -150,6 +155,8 @@ fi
 
 # Run the unfolding
 if [ $dounfold == true ]; then
+
+echo "Running tutorial unfolding scipt"
 
 root -b <<EOF
 .L ../tutorial_unfolding.C 
