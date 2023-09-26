@@ -112,7 +112,7 @@ constexpr double PI_PLUS_MASS = 0.13957000; // GeV
 // Various cuts and thresholds in total energy as well (in GeV)
 const float LEAD_P_MIN_E_CUT = sqrt(LEAD_P_MIN_MOM_CUT*LEAD_P_MIN_MOM_CUT + PROTON_MASS*PROTON_MASS);
 const float LEAD_P_MAX_E_CUT = sqrt(LEAD_P_MAX_MOM_CUT*LEAD_P_MAX_MOM_CUT + PROTON_MASS*PROTON_MASS);
-const float MUON_P_MIN_E_CUT = sqrt(MUON_P_MIN_E_CUT*MUON_P_MIN_E_CUT + MUON_MASS*MUON_MASS); 
+const float MUON_P_MIN_E_CUT = sqrt(MUON_P_MIN_MOM_CUT*MUON_P_MIN_MOM_CUT + MUON_MASS*MUON_MASS); 
 const float MUON_P_MAX_E_CUT = sqrt(MUON_P_MAX_MOM_CUT*MUON_P_MAX_MOM_CUT + MUON_MASS*MUON_MASS);
 const float CHARGED_PI_E_CUT = sqrt(CHARGED_PI_MOM_CUT*CHARGED_PI_MOM_CUT + PI_PLUS_MASS*PI_PLUS_MASS);
 
@@ -484,11 +484,13 @@ class AnalysisEvent {
     }
 
     float visible_energy( const MyPointer<std::vector<int>>& pdg_v, const MyPointer<std::vector<float>>& energy_v ) const {
+      float E = 0.0;
       for(size_t i=0;i<pdg_v->size();i++){
         if(!is_visible(pdg_v->at(i),energy_v->at(i))) continue;
-        if(abs(pdg_v->at(i)) == MUON || abs(pdg_v->at(i)) == PI_PLUS || pdg_v->at(i) == PI_ZERO) return energy_v->at(i);
-        else if(pdg_v->at(i) == PROTON) return energy_v->at(i) - PROTON_MASS + BINDING_ENERGY;
+        if(abs(pdg_v->at(i)) == MUON || abs(pdg_v->at(i)) == PI_PLUS || pdg_v->at(i) == PI_ZERO) E += energy_v->at(i);
+        else if(pdg_v->at(i) == PROTON) E += energy_v->at(i) - PROTON_MASS + BINDING_ENERGY;
       }
+        return E;
     }
 
 };
