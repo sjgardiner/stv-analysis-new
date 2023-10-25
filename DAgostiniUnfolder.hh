@@ -389,8 +389,11 @@ UnfoldedMeasurement DAgostiniUnfolder::unfold( const TMatrixD& data_signal,
   auto* add_smear = new TMatrixD( *unfold_mat,
     TMatrixD::EMatrixCreatorsOp2::kMult, smearcept );
 
+  // Copy the response matrix into the results
+  auto* resp_mat = dynamic_cast< TMatrixD* >( smearcept.Clone() );
+
   UnfoldedMeasurement result( true_signal, true_signal_covmat,
-    unfold_mat.release(), err_prop_mat, add_smear );
+    unfold_mat.release(), err_prop_mat, add_smear, resp_mat );
   return result;
 }
 

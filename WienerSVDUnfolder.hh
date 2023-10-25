@@ -226,11 +226,13 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   auto* unfolded_signal_covmat = new TMatrixD( *R_tot,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
 
+  auto* resp_mat = dynamic_cast< TMatrixD* >( smearcept.Clone() );
+
   // Note that the error propagation matrix in this case is just the unfolding
   // matrix (in contrast to, e.g., D'Agostini unfolding for multiple
   // iterations)
   UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat,
-    R_tot, R_tot_clone, A_C );
+    R_tot, R_tot_clone, A_C, resp_mat );
   return result;
 }
 
