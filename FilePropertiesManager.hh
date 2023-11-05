@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
@@ -199,11 +200,14 @@ class FilePropertiesManager {
       std::string in_file_name( input_table_file_name );
       if ( in_file_name.empty() ) {
         in_file_name = analysis_path_ + "/file_properties.txt";
+        //std::cout << "Using default file properties which is " << in_file_name << std::endl;
       }
 
       // Store the name of the configuration file that was used so that (if
       // needed) we can retrieve it later
       config_file_name_ = in_file_name;
+
+      //std::cout << "Loading configuration file " << config_file_name_ << std::endl;
 
       std::ifstream in_file( in_file_name );
 

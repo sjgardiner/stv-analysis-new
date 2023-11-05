@@ -446,8 +446,8 @@ UniverseMaker::UniverseMaker( const std::string& config_file_name )
     in_file >> temp_bin;
 
     // DEBUG
-    std::cout << "tb = " << tb << '\n';
-    std::cout << temp_bin << '\n';
+    //std::cout << "tb = " << tb << '\n';
+    //std::cout << temp_bin << '\n';
 
     true_bins_.push_back( temp_bin );
   }
@@ -460,8 +460,8 @@ UniverseMaker::UniverseMaker( const std::string& config_file_name )
     in_file >> temp_bin;
 
     // DEBUG
-    std::cout << "rb = " << rb << '\n';
-    std::cout << temp_bin << '\n';
+    //std::cout << "rb = " << rb << '\n';
+    //std::cout << temp_bin << '\n';
 
     reco_bins_.push_back( temp_bin );
   }
@@ -734,6 +734,12 @@ void UniverseMaker::build_universes(
   input_chain_.ResetBranchAddresses();
 }
 
+const bool check_binning(){
+
+
+  return false;
+}
+
 void UniverseMaker::prepare_universes( const WeightHandler& wh ) {
 
   size_t num_true_bins = true_bins_.size();
@@ -813,6 +819,7 @@ void UniverseMaker::save_histograms(
   std::string* saved_tb_spec = nullptr;
   std::string* saved_rb_spec = nullptr;
   root_tdir->GetObject( "ntuple_name", saved_tree_name );
+  std::cout << "TRUE_BIN_SPEC_NAME=" << TRUE_BIN_SPEC_NAME << std::endl; 
   root_tdir->GetObject( TRUE_BIN_SPEC_NAME.c_str(), saved_tb_spec );
   root_tdir->GetObject( RECO_BIN_SPEC_NAME.c_str(), saved_rb_spec );
 
@@ -828,6 +835,10 @@ void UniverseMaker::save_histograms(
 
   if ( saved_tb_spec ) {
     if ( true_bin_spec != *saved_tb_spec ) {
+      std::cout << "true_bin_spec:" << std::endl;
+      std::cout << true_bin_spec << std::endl;
+      std::cout << "saved_tb_spec:" << std::endl;
+      std::cout << *saved_tb_spec << std::endl;
       throw std::runtime_error( "Inconsistent true bin specification!" );
     }
   }

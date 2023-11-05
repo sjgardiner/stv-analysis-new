@@ -1,9 +1,12 @@
-all: analyzer univmake
+all: analyzer univmake maketotals
 
 univmake: univmake.C stv_root_dict.o
 	$(CXX) $(shell root-config --cflags --libs) -O3 -o $@ $^
 
 analyzer: analyzer.C stv_root_dict.o
+	$(CXX) $(shell root-config --cflags --libs) -O3 -o $@ $^
+
+maketotals: maketotals.C stv_root_dict.o
 	$(CXX) $(shell root-config --cflags --libs) -O3 -o $@ $^
 
 stv_root_dict.o:
@@ -18,4 +21,4 @@ stv_root_dict.o:
 .INTERMEDIATE: stv_root_dict.o
 
 clean:
-	$(RM) univmake analyzer stv_root_dict.o stv_root_dict_rdict.pcm
+	$(RM) univmake analyzer maketotals stv_root_dict.o stv_root_dict_rdict.pcm

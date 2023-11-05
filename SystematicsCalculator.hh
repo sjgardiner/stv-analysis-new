@@ -18,7 +18,7 @@
 // Helper function template that retrieves an object from a TDirectoryFile
 // and loads a pointer to it into a std::unique_ptr of the correct type
 template< typename T > std::unique_ptr< T > get_object_unique_ptr(
-  const std::string& namecycle, TDirectory& df )
+    const std::string& namecycle, TDirectory& df )
 {
   T* temp_ptr = nullptr;
   df.GetObject( namecycle.c_str(), temp_ptr );
@@ -58,8 +58,8 @@ void set_stats_and_dir( Universe& univ ) {
 bool has_ending( const std::string& fullString, const std::string& ending ) {
   if ( fullString.length() >= ending.length() ) {
     return ( 0 == fullString.compare(
-      fullString.length() - ending.length(), ending.length(), ending)
-    );
+          fullString.length() - ending.length(), ending.length(), ending)
+        );
   }
 
   return false;
@@ -75,10 +75,10 @@ struct CovMatrix {
   CovMatrix( const TMatrixD& matrix ) {
     int num_bins = matrix.GetNrows();
     if ( matrix.GetNcols() != num_bins ) throw std::runtime_error( "Non-square"
-      " TMatrixD passed to the constructor of CovMatrix" );
+        " TMatrixD passed to the constructor of CovMatrix" );
 
     TH2D* temp_hist = new TH2D( "temp_hist", "covariance; bin;"
-      " bin; covariance", num_bins, 0., num_bins, num_bins, 0., num_bins );
+        " bin; covariance", num_bins, 0., num_bins, num_bins, 0., num_bins );
     temp_hist->SetDirectory( nullptr );
     temp_hist->SetStats( false );
 
@@ -102,8 +102,8 @@ struct CovMatrix {
     if ( mine ) mine->Add( other );
     else {
       TH2D* temp_clone = dynamic_cast< TH2D* >(
-        other->Clone( "temp_clone" )
-      );
+          other->Clone( "temp_clone" )
+          );
       temp_clone->SetDirectory( nullptr );
       temp_clone->SetStats( false );
       mine.reset( temp_clone );
@@ -142,25 +142,25 @@ struct MeasuredEvents {
   MeasuredEvents() {}
 
   MeasuredEvents( TMatrixD* bkgd_subtracted_data, TMatrixD* bkgd,
-    TMatrixD* mc_plus_ext, TMatrixD* cov_mat )
+      TMatrixD* mc_plus_ext, TMatrixD* cov_mat )
     : reco_signal_( bkgd_subtracted_data ), reco_bkgd_( bkgd ),
     reco_mc_plus_ext_( mc_plus_ext ), cov_matrix_( cov_mat )
   {
     if ( bkgd_subtracted_data->GetNcols() != 1 ) throw std::runtime_error(
-      "Non-row-vector background-subtracted signal passed to MeasuredEvents" );
+        "Non-row-vector background-subtracted signal passed to MeasuredEvents" );
 
     if ( bkgd->GetNcols() != 1 ) throw std::runtime_error( "Non-row-vector"
-      " background prediction passed to MeasuredEvents" );
+        " background prediction passed to MeasuredEvents" );
 
     if ( mc_plus_ext->GetNcols() != 1 ) throw std::runtime_error(
-      "Non-row-vector MC+EXT prediction passed to MeasuredEvents" );
+        "Non-row-vector MC+EXT prediction passed to MeasuredEvents" );
 
     int num_ordinary_reco_bins = bkgd_subtracted_data->GetNrows();
     if ( cov_mat->GetNcols() != num_ordinary_reco_bins
-      || cov_mat->GetNrows() != num_ordinary_reco_bins )
+        || cov_mat->GetNrows() != num_ordinary_reco_bins )
     {
       throw std::runtime_error( "Bad covariance matrix dimensions passed to"
-        " MeasuredEvents" );
+          " MeasuredEvents" );
     }
   }
 
@@ -188,8 +188,8 @@ class SystematicsCalculator {
   public:
 
     SystematicsCalculator( const std::string& input_respmat_file_name,
-      const std::string& syst_cfg_file_name = "",
-      const std::string& respmat_tdirectoryfile_name = "" );
+        const std::string& syst_cfg_file_name = "",
+        const std::string& respmat_tdirectoryfile_name = "" );
 
     void load_universes( TDirectoryFile& total_subdir );
 
@@ -221,7 +221,7 @@ class SystematicsCalculator {
     }
 
     std::unique_ptr< TMatrixD > get_smearceptance_matrix(
-      const Universe& univ ) const;
+        const Universe& univ ) const;
 
     std::unique_ptr< TMatrixD > get_cv_true_signal() const;
 
@@ -231,25 +231,25 @@ class SystematicsCalculator {
     // NOTE: This function assumes that all "ordinary" reco bins are listed
     // before the sideband ones.
     inline std::unique_ptr< TMatrixD > get_cv_ordinary_reco_bkgd() const
-      { return this->get_cv_ordinary_reco_helper( true ); }
+    { return this->get_cv_ordinary_reco_helper( true ); }
 
     // Returns the expected signal event counts in each ordinary reco bin
     // NOTE: This function assumes that all "ordinary" reco bins are listed
     // before the sideband ones.
     inline std::unique_ptr< TMatrixD > get_cv_ordinary_reco_signal() const
-      { return this->get_cv_ordinary_reco_helper( false ); }
+    { return this->get_cv_ordinary_reco_helper( false ); }
 
     inline size_t get_num_signal_true_bins() const
-      { return num_signal_true_bins_; }
+    { return num_signal_true_bins_; }
 
-  //protected:
+    //protected:
 
     // Implements both get_cv_ordinary_reco_bkgd() and
     // get_cv_ordinary_reco_signal() in order to reduce code duplication. If
     // return_bkgd is false (true), then the background (signal) event counts
     // in each ordinary reco bin will be returned as a column vector.
     std::unique_ptr< TMatrixD > get_cv_ordinary_reco_helper(
-      bool return_bkgd ) const;
+        bool return_bkgd ) const;
 
     // Returns true if a given Universe represents a detector variation or
     // false otherwise
@@ -258,7 +258,7 @@ class SystematicsCalculator {
     // Overload for special cases in which the N*N covariance matrix does not
     // have dimension parameter N equal to the number of reco bins
     inline virtual size_t get_covariance_matrix_size() const
-      { return reco_bins_.size(); }
+    { return reco_bins_.size(); }
 
     CovMatrix make_covariance_matrix( const std::string& hist_name ) const;
 
@@ -266,7 +266,7 @@ class SystematicsCalculator {
     // a given universe and reco-space bin. NOTE: the reco bin index given
     // as an argument to this function is zero-based.
     virtual double evaluate_observable( const Universe& univ, int reco_bin,
-      int flux_universe_index = -1 ) const = 0;
+        int flux_universe_index = -1 ) const = 0;
 
     // Evaluate a covariance matrix element for the data statistical
     // uncertainty on the observable of interest for a given pair of reco bins.
@@ -276,7 +276,7 @@ class SystematicsCalculator {
     // (use_ext = true). NOTE: the reco bin indices consumed by this function
     // are zero-based.
     virtual double evaluate_data_stat_covariance( int reco_bin_a,
-      int reco_bin_b, bool use_ext ) const = 0;
+        int reco_bin_b, bool use_ext ) const = 0;
 
     // Evaluate a covariance matrix element for the MC statistical uncertainty
     // on the observable of interest (including contributions from both signal
@@ -287,7 +287,7 @@ class SystematicsCalculator {
     // the diagonal covariance matrix elements are non-vanishing. NOTE: the
     // reco bin indices consumed by this function are zero-based.
     virtual double evaluate_mc_stat_covariance( const Universe& univ,
-      int reco_bin_a, int reco_bin_b ) const = 0;
+        int reco_bin_a, int reco_bin_b ) const = 0;
 
     // Central value universe name
     const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
@@ -341,13 +341,31 @@ class SystematicsCalculator {
 
     // Number of entries in the true_bins_ vector that are "signal" bins
     size_t num_signal_true_bins_ = 0u;
+
+    // Calc Mahalanobis Distance between the CV response matrix and the response matrix for a given universe
+    // Used to quantify how consistent a response matrix is with the others. Employed to study the level o
+    // model dependence in various forward/un-folding procedures
+
+    // Prepare the covariance matrix for the MD calc, include the uncertainties from syst_rw and syst_detvar.
+    void prepare_mahalanobis_dist_calc( const std::vector<std::string>& syst_rw , const std::vector<NFT>& syst_detvar );
+
+    // Calculate the MD using the smearceptance matrix calculated using an alternative model universe 
+    std::pair<int,double> get_mahalanobis_dist( const std::unique_ptr<Universe>& alt ) const;  
+
+    std::unique_ptr<TMatrixD> mah_cov_tmatrix_;    
+    std::unique_ptr<TMatrixD> mah_cov_tmatrix_inv_;    
+
+    // vector listing which bins of the smearceptance matrix are filled
+    // 1st element of pair is reco bin num, 2nd is the true bin num 
+    std::vector<std::pair<int,int>> full_bins_2D_;
+
 };
 
 SystematicsCalculator::SystematicsCalculator(
-  const std::string& input_respmat_file_name,
-  const std::string& syst_cfg_file_name,
-  const std::string& respmat_tdirectoryfile_name )
-  : syst_config_file_name_( syst_cfg_file_name )
+    const std::string& input_respmat_file_name,
+    const std::string& syst_cfg_file_name,
+    const std::string& respmat_tdirectoryfile_name )
+: syst_config_file_name_( syst_cfg_file_name )
 {
   // Get access to the FilePropertiesManager singleton class
   const auto& fpm = FilePropertiesManager::Instance();
@@ -359,7 +377,6 @@ SystematicsCalculator::SystematicsCalculator(
     // FilePropertiesManager to get the directory name
     syst_config_file_name_ = fpm.analysis_path() + "/systcalc.conf";
   }
-
   // Open in "update" mode so that we can save POT-summed histograms
   // for the combination of all analysis ntuples. Otherwise, we won't
   // write to the file.
@@ -373,7 +390,8 @@ SystematicsCalculator::SystematicsCalculator(
   // one to use.
   std::string tdf_name = respmat_tdirectoryfile_name;
   if ( tdf_name.empty() ) {
-    tdf_name = in_tfile.GetListOfKeys()->At( 0 )->GetName();
+    //tdf_name = in_tfile.GetListOfKeys()->At( 0 )->GetName();
+    tdf_name = in_tfile.GetListOfKeys()->Last()->GetName();
   }
 
   in_tfile.GetObject( tdf_name.c_str(), root_tdir );
@@ -390,6 +408,7 @@ SystematicsCalculator::SystematicsCalculator(
   // TDirectoryFile subfolders by the UniverseMaker class
   fpm_config_file = ntuple_subfolder_from_file_name( fpm_config_file );
 
+
   std::string total_subfolder_name = TOTAL_SUBFOLDER_NAME_PREFIX
     + fpm_config_file;
 
@@ -398,18 +417,18 @@ SystematicsCalculator::SystematicsCalculator(
   // signalled by a TDirectoryFile with a name matching the string
   // total_subfolder_name.
   TDirectoryFile* total_subdir = nullptr;
+
   root_tdir->GetObject( total_subfolder_name.c_str(), total_subdir );
 
   if ( !total_subdir ) {
-
     // We couldn't find the pre-computed POT-summed universe histograms,
     // so make them "on the fly" and store them in this object
+    // CT: For some reason this is still assuming the structure of the old file
     this->build_universes( *root_tdir );
-
     // Create a new TDirectoryFile as a subfolder to hold the POT-summed
     // universe histograms
     total_subdir = new TDirectoryFile( total_subfolder_name.c_str(),
-      "universes", "", root_tdir );
+        "universes", "", root_tdir );
 
     // Write the universes to the new subfolder for faster loading
     // later
@@ -453,6 +472,7 @@ SystematicsCalculator::SystematicsCalculator(
     reco_bins_.push_back( temp_reco_bin );
   }
 
+
 }
 
 void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
@@ -469,6 +489,7 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
   // map (for reweightable systematic universes), the detvar_universes_
   // map (for detector systematic universes), or the alt_cv_universes_
   // map (for alternate CV model universes)
+
   for ( int k = 0; k < num_keys; ++k ) {
     // To avoid double-counting universes, search only for the 2D event
     // count histograms
@@ -503,32 +524,33 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
 
     if ( !hist_true || !hist_reco || !hist_2d || !hist_categ || !hist_reco2d ) {
       throw std::runtime_error( "Failed to retrieve histograms for the "
-        + key + " universe" );
+          + key + " universe" );
     }
 
     // Reconstruct the Universe object from the retrieved histograms
     auto temp_univ = std::make_unique< Universe >( univ_name, univ_index,
-      hist_true, hist_reco, hist_2d, hist_categ, hist_reco2d );
+        hist_true, hist_reco, hist_2d, hist_categ, hist_reco2d );
 
     // Determine whether the current universe represents a detector
     // variation or a reweightable variation. We'll use this information to
     // decide where it should be stored.
     NFT temp_type = fpm.string_to_ntuple_type( univ_name );
+
     if ( temp_type != NFT::kUnknown ) {
 
       bool is_detvar = ntuple_type_is_detVar( temp_type );
       bool is_altCV = ntuple_type_is_altCV( temp_type );
       if ( !is_detvar && !is_altCV ) throw std::runtime_error( "Universe name "
-        + univ_name + " matches a non-detVar and non-altCV file type."
-        + " Handling of this situation is currently unimplemented." );
+          + univ_name + " matches a non-detVar and non-altCV file type."
+          + " Handling of this situation is currently unimplemented." );
 
       if ( is_detvar && detvar_universes_.count(temp_type) ) {
         throw std::runtime_error( "detVar multisims are not currently"
-          " supported" );
+            " supported" );
       }
       else if ( is_altCV && alt_cv_universes_.count(temp_type) ) {
         throw std::runtime_error( "altCV multisims are not currently"
-          " supported" );
+            " supported" );
       }
 
       // Move the detector variation Universe object into the map
@@ -538,7 +560,8 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
       else { // is_altCV
         alt_cv_universes_[ temp_type ].reset( temp_univ.release() );
       }
-    }
+    } // if temp_type != NFT::kUnknown
+
     // If we're working with fake data, then a single universe with a specific
     // name stores all of the MC information for the "data." Save it in the
     // dedicated fake data Universe object.
@@ -575,13 +598,13 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
 
   } // TDirectoryFile keys (and 2D universe histograms)
 
+
   constexpr std::array< NFT, 2 > data_file_types = { NFT::kOnBNB,
     NFT::kExtBNB };
 
   for ( const auto& file_type : data_file_types ) {
     std::string data_name = fpm.ntuple_type_to_string( file_type );
     std::string hist_name = data_name + "_reco";
-
     std::string hist2d_name = data_name + "_reco2d";
 
     TH1D* hist = nullptr;
@@ -599,7 +622,7 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
 
     if ( data_hists_.count(file_type) || data_hists2d_.count(file_type) ) {
       throw std::runtime_error( "Duplicate data histogram for "
-        + data_name );
+          + data_name );
     }
 
     data_hists_[ file_type ].reset( hist );
@@ -674,6 +697,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
   // Loop through the ntuple files for the various run / ntuple file type
   // pairs considered in the analysis. We will react differently in a run-
   // and type-dependent way.
+
   for ( const auto& run_and_type_pair : fpm.ntuple_file_map() ) {
 
     int run = run_and_type_pair.first;
@@ -708,7 +732,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           TParameter<float>* temp_pot = nullptr;
           temp_mc_file.GetObject( "summed_pot", temp_pot );
           if ( !temp_pot ) throw std::runtime_error(
-            "Missing POT in MC file!" );
+              "Missing POT in MC file!" );
           file_pot = temp_pot->GetVal();
         }
         else {
@@ -719,22 +743,22 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         // Get the TDirectoryFile name used to store histograms for the
         // current ntuple file
         std::string subdir_name = ntuple_subfolder_from_file_name(
-          file_name );
+            file_name );
 
         TDirectoryFile* subdir = nullptr;
         root_tdir.GetObject( subdir_name.c_str(), subdir );
         if ( !subdir ) throw std::runtime_error(
-          "Missing TDirectoryFile " + subdir_name );
+            "Missing TDirectoryFile " + subdir_name );
 
         // For data, just add the reco-space event counts to the total,
         // scaling to the beam-on triggers in the case of EXT data
         if ( !is_mc ) {
 
           auto reco_hist = get_object_unique_ptr< TH1D >(
-            "unweighted_0_reco", *subdir );
+              "unweighted_0_reco", *subdir );
 
           auto reco_hist2d = get_object_unique_ptr< TH2D >(
-            "unweighted_0_reco2d", *subdir );
+              "unweighted_0_reco2d", *subdir );
 
           // If we're working with EXT data, scale it to the corresponding
           // number of triggers from the BNB data from the same run
@@ -750,8 +774,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // yet, just clone the existing histogram.
           if ( !data_hists_.count(type) ) {
             TH1D* temp_clone = dynamic_cast<TH1D*>(
-              reco_hist->Clone("temp_clone")
-            );
+                reco_hist->Clone("temp_clone")
+                );
             temp_clone->SetStats( false );
             temp_clone->SetDirectory( nullptr );
             // Note: here the map entry takes ownership of the histogram
@@ -765,8 +789,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
           if ( !data_hists2d_.count(type) ) {
             TH2D* temp_clone = dynamic_cast<TH2D*>(
-              reco_hist2d->Clone("temp_clone")
-            );
+                reco_hist2d->Clone("temp_clone")
+                );
             temp_clone->SetStats( false );
             temp_clone->SetDirectory( nullptr );
             // Note: here the map entry takes ownership of the histogram
@@ -790,7 +814,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // and reco bin). It will only be present for fake data ntuples.
 
           auto fd_check_2d_hist = get_object_unique_ptr< TH2D >(
-            "unweighted_0_2d", *subdir );
+              "unweighted_0_2d", *subdir );
 
           is_fake_data = ( fd_check_2d_hist.get() != nullptr );
 
@@ -800,7 +824,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           if ( began_checking_for_fake_data ) {
             if ( is_fake_data != using_fake_data ) {
               throw std::runtime_error( "Mixed real and fake data ntuple files"
-                " encountered in SystematicsCalculator::build_universes()" );
+                  " encountered in SystematicsCalculator::build_universes()" );
             }
           }
           else {
@@ -820,7 +844,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         // universe are always evaluated. Use this to determine the number
         // of true and reco bins easily.
         auto temp_2d_hist = get_object_unique_ptr< TH2D >(
-          "unweighted_0_2d", *subdir );
+            "unweighted_0_2d", *subdir );
 
         // NOTE: the convention of the UniverseMaker class is to use
         // x as the true axis and y as the reco axis.
@@ -836,7 +860,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           if ( !fake_data_universe_ ) {
 
             fake_data_universe_ = std::make_unique< Universe >( "FakeDataMC",
-              0, num_true_bins, num_reco_bins );
+                0, num_true_bins, num_reco_bins );
 
             set_stats_and_dir( *fake_data_universe_ );
 
@@ -857,19 +881,19 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           std::string hist_name_prefix = "unweighted_0";
 
           auto h_reco = get_object_unique_ptr< TH1D >(
-            (hist_name_prefix + "_reco"), *subdir );
+              (hist_name_prefix + "_reco"), *subdir );
 
           auto h_true = get_object_unique_ptr< TH1D >(
-            (hist_name_prefix + "_true"), *subdir );
+              (hist_name_prefix + "_true"), *subdir );
 
           auto h_2d = get_object_unique_ptr< TH2D >(
-            (hist_name_prefix + "_2d"), *subdir );
+              (hist_name_prefix + "_2d"), *subdir );
 
           auto h_categ = get_object_unique_ptr< TH2D >(
-            (hist_name_prefix + "_categ"), *subdir );
+              (hist_name_prefix + "_categ"), *subdir );
 
           auto h_reco2d = get_object_unique_ptr< TH2D >(
-            (hist_name_prefix + "_reco2d"), *subdir );
+              (hist_name_prefix + "_reco2d"), *subdir );
 
           // Add their contributions to the owned histograms for the
           // current Universe object
@@ -889,7 +913,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // Make a temporary new Universe object to store
           // (POT-scaled) detVar/altCV histograms (if needed)
           auto temp_univ = std::make_unique< Universe >( dv_univ_name,
-            0, num_true_bins, num_reco_bins );
+              0, num_true_bins, num_reco_bins );
 
           // Temporary pointer that will allow us to treat the single-file
           // detector variation samples and the multi-file alternate CV samples
@@ -921,19 +945,19 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // corresponding histograms.
           // TODO: revisit this assumption as appropriate
           auto hist_reco = get_object_unique_ptr< TH1D >(
-            "unweighted_0_reco", *subdir );
+              "unweighted_0_reco", *subdir );
 
           auto hist_true = get_object_unique_ptr< TH1D >(
-            "unweighted_0_true", *subdir );
+              "unweighted_0_true", *subdir );
 
           auto hist_2d = get_object_unique_ptr< TH2D >(
-            "unweighted_0_2d", *subdir );
+              "unweighted_0_2d", *subdir );
 
           auto hist_categ = get_object_unique_ptr< TH2D >(
-            "unweighted_0_categ", *subdir );
+              "unweighted_0_categ", *subdir );
 
           auto hist_reco2d = get_object_unique_ptr< TH2D >(
-            "unweighted_0_reco2d", *subdir );
+              "unweighted_0_reco2d", *subdir );
 
           double temp_scale_factor = 1.;
           if ( is_altCV ) {
@@ -1017,7 +1041,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               // We have what we need to create the new Universe object. Do
               // it! Note that its owned histograms are currently empty.
               auto temp_univ = std::make_unique<Universe>( univ_name,
-                univ_index, num_true_bins, num_reco_bins );
+                  univ_index, num_true_bins, num_reco_bins );
 
               set_stats_and_dir( *temp_univ );
 
@@ -1032,7 +1056,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               // sorting of keys in a ROOT TDirectoryFile ensures that the
               // universe ordering remains correct.
               rw_universes_.at( univ_name ).emplace_back(
-                std::move(temp_univ) );
+                  std::move(temp_univ) );
 
             } // TDirectoryFile keys
 
@@ -1061,7 +1085,7 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               // something went wrong with the key sorting imposed by the
               // input TDirectoryFile.
               if ( u_idx != universe.index_ ) throw std::runtime_error(
-                "Universe sorting went wrong!" );
+                  "Universe sorting went wrong!" );
 
               // Retrieve the histograms for the current universe from the
               // current TDirectoryFile
@@ -1069,19 +1093,19 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
                 + '_' + std::to_string( u_idx );
 
               auto h_reco = get_object_unique_ptr< TH1D >(
-                (hist_name_prefix + "_reco"), *subdir );
+                  (hist_name_prefix + "_reco"), *subdir );
 
               auto h_true = get_object_unique_ptr< TH1D >(
-                (hist_name_prefix + "_true"), *subdir );
+                  (hist_name_prefix + "_true"), *subdir );
 
               auto h_2d = get_object_unique_ptr< TH2D >(
-                (hist_name_prefix + "_2d"), *subdir );
+                  (hist_name_prefix + "_2d"), *subdir );
 
               auto h_categ = get_object_unique_ptr< TH2D >(
-                (hist_name_prefix + "_categ"), *subdir );
+                  (hist_name_prefix + "_categ"), *subdir );
 
               auto h_reco2d = get_object_unique_ptr< TH2D >(
-                (hist_name_prefix + "_reco2d"), *subdir );
+                  (hist_name_prefix + "_reco2d"), *subdir );
 
               // Scale these histograms to the appropriate BNB data POT for
               // the current run
@@ -1232,19 +1256,19 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
 
   // Save the total BNB data POT for easy retrieval later
   TParameter< double > temp_pot( "total_bnb_data_pot",
-    total_bnb_data_pot_ );
+      total_bnb_data_pot_ );
 
   temp_pot.Write();
 
 }
 
 CovMatrix SystematicsCalculator::make_covariance_matrix(
-  const std::string& hist_name ) const
+    const std::string& hist_name ) const
 {
   int num_cm_bins = this->get_covariance_matrix_size();
   TH2D* hist = new TH2D( hist_name.c_str(),
-    "covariance; reco bin; reco bin; covariance", num_cm_bins, 0.,
-    num_cm_bins, num_cm_bins, 0., num_cm_bins );
+      "covariance; reco bin; reco bin; covariance", num_cm_bins, 0.,
+      num_cm_bins, num_cm_bins, 0., num_cm_bins );
   hist->SetDirectory( nullptr );
   hist->SetStats( false );
 
@@ -1252,10 +1276,10 @@ CovMatrix SystematicsCalculator::make_covariance_matrix(
   return result;
 }
 
-template < class UniversePointerContainer >
-  void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
-  const Universe& cv_univ, const UniversePointerContainer& universes,
-  bool average_over_universes, bool is_flux_variation )
+  template < class UniversePointerContainer >
+void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
+    const Universe& cv_univ, const UniversePointerContainer& universes,
+    bool average_over_universes, bool is_flux_variation )
 {
   // Get the total number of true bins and the covariance matrix dimension for
   // later reference
@@ -1288,7 +1312,7 @@ template < class UniversePointerContainer >
 
     for ( size_t rb = 0u; rb < num_cm_bins; ++rb ) {
       univ_reco_obs.at( rb ) = sc.evaluate_observable( *univ,
-        rb, flux_u_idx );
+          rb, flux_u_idx );
     }
 
     // We have all the needed ingredients to get the contribution of this
@@ -1331,16 +1355,16 @@ template < class UniversePointerContainer >
 // Overloaded version that takes a single alternate universe wrapped in a
 // std::unique_ptr
 void make_cov_mat( const SystematicsCalculator& sc, CovMatrix& cov_mat,
-  const Universe& cv_univ,
-  const Universe& alt_univ, bool average_over_universes = false,
-  bool is_flux_variation = false )
+    const Universe& cv_univ,
+    const Universe& alt_univ, bool average_over_universes = false,
+    bool is_flux_variation = false )
 {
   std::vector< const Universe* > temp_univ_vec;
 
   temp_univ_vec.emplace_back( &alt_univ );
 
   make_cov_mat( sc, cov_mat, cv_univ, temp_univ_vec, average_over_universes,
-    is_flux_variation );
+      is_flux_variation );
 }
 
 std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
@@ -1352,6 +1376,7 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
   // Read in the definition of each covariance matrix and calculate it. Each
   // definition contains at least a name and a type specifier
   std::ifstream config_file( syst_config_file_name_ );
+
   std::string name, type;
   while ( config_file >> name >> type ) {
 
@@ -1383,7 +1408,7 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
           // Calculate the MC statistical covariance for the current pair of
           // reco bins for the observable of interest. Use the CV universe.
           double mc_cov = this->evaluate_mc_stat_covariance( cv_univ,
-            rb1, rb2 );
+              rb1, rb2 );
 
           // Note the one-based reco bin index used by ROOT histograms
           temp_cov_mat.cov_matrix_->SetBinContent( rb1 + 1, rb2 + 1, mc_cov );
@@ -1393,7 +1418,6 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
     } // MCstat type
 
     else if ( type == "BNBstat" || type == "EXTstat" ) {
-
       bool use_ext = false;
       if ( type == "EXTstat" ) use_ext = true;
 
@@ -1402,7 +1426,7 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       for ( size_t rb1 = 0u; rb1 < num_cm_bins; ++rb1 ) {
         for ( size_t rb2 = 0u; rb2 < num_cm_bins; ++rb2 ) {
           double stat_cov = this->evaluate_data_stat_covariance( rb1,
-            rb2, use_ext );
+              rb2, use_ext );
 
           // Note the one-based reco bin index used by ROOT histograms
           temp_cov_mat.cov_matrix_->SetBinContent( rb1 + 1, rb2 + 1, stat_cov );
@@ -1462,13 +1486,13 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
       // since they were generated with smaller MC statistics.
       // TODO: revisit this if your detVar samples change in the future
       if ( ntuple_type == NFT::kDetVarMCSCE
-        || ntuple_type == NFT::kDetVarMCRecomb2 )
+          || ntuple_type == NFT::kDetVarMCRecomb2 )
       {
         detVar_cv_u = detvar_universes_.at( NFT::kDetVarMCCVExtra ).get();
       }
 
       make_cov_mat( *this, temp_cov_mat, *detVar_cv_u,
-        *detVar_alt_u, false, false );
+          *detVar_alt_u, false, false );
     } // DV type
 
     else if ( type == "RW" || type == "FluxRW" ) {
@@ -1497,7 +1521,7 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
 
       const auto& cv_univ = this->cv_universe();
       make_cov_mat( *this, temp_cov_mat, cv_univ, alt_univ_vec,
-        avg_over_universes, is_flux_variation );
+          avg_over_universes, is_flux_variation );
 
     } // RW and FluxRW types
 
@@ -1511,19 +1535,19 @@ std::unique_ptr< CovMatrixMap > SystematicsCalculator::get_covariances() const
 
       const auto& cv_univ = this->cv_universe();
       make_cov_mat( *this, temp_cov_mat, cv_univ, alt_univ_vec,
-        true, false );
+          true, false );
     }
 
     // Complain if we don't know how to calculate the requested covariance
     // matrix
     else throw std::runtime_error( "Unrecognized covariance matrix type \""
-      + type + '\"' );
+        + type + '\"' );
 
     // Add the finished covariance matrix to the map. If an entry already
     // exists with the same name, throw an exception.
     if ( matrix_map.count(name) ) {
       throw std::runtime_error( "Duplicate covariance matrix definition for "
-        + name );
+          + name );
     }
     matrix_map[ name ] = std::move( temp_cov_mat );
 
@@ -1548,9 +1572,9 @@ bool SystematicsCalculator::is_detvar_universe( const Universe& univ ) const {
   const auto end = detvar_universes_.cend();
 
   const auto iter = std::find_if( begin, end,
-    [ &univ ]( const DetVarMapElement& my_pair )
+      [ &univ ]( const DetVarMapElement& my_pair )
       -> bool { return my_pair.second.get() == &univ; }
-  );
+      );
 
   bool found_detvar_universe = ( iter != end );
   return found_detvar_universe;
@@ -1561,14 +1585,14 @@ bool SystematicsCalculator::is_detvar_universe( const Universe& univ ) const {
 // the sideband ones and that all signal true bins are listed before the
 // background ones.
 std::unique_ptr< TMatrixD >
-  SystematicsCalculator::get_smearceptance_matrix( const Universe& univ ) const
+SystematicsCalculator::get_smearceptance_matrix( const Universe& univ ) const
 {
   // The smearceptance matrix definition used here uses the reco bin as the row
   // index and the true bin as the column index. This ensures that multiplying
   // a column vector of true event counts by the matrix will yield a column
   // vector of reco event counts.
   auto smearcept = std::make_unique< TMatrixD >( num_ordinary_reco_bins_,
-    num_signal_true_bins_ );
+      num_signal_true_bins_ );
 
   for ( size_t r = 0u; r < num_ordinary_reco_bins_; ++r ) {
     for ( size_t t = 0u; t < num_signal_true_bins_; ++t ) {
@@ -1615,7 +1639,7 @@ std::unique_ptr< TMatrixD > SystematicsCalculator::get_cv_true_signal() const
 // NOTE: This function assumes that all "ordinary" reco bins are listed before
 // the sideband ones.
 std::unique_ptr< TMatrixD >
-  SystematicsCalculator::get_cv_ordinary_reco_helper( bool return_bkgd ) const
+SystematicsCalculator::get_cv_ordinary_reco_helper( bool return_bkgd ) const
 {
   int num_true_bins = true_bins_.size();
   const auto& cv_univ = this->cv_universe();
@@ -1649,8 +1673,8 @@ std::unique_ptr< TMatrixD >
         temp_events_ptr = &signal_events;
       }
       else {
-         throw std::runtime_error( "Bad true bin type in"
-           " SystematicsCalculator::get_cv_ordinary_reco_helper()" );
+        throw std::runtime_error( "Bad true bin type in"
+            " SystematicsCalculator::get_cv_ordinary_reco_helper()" );
       }
 
       // Tally the contribution from this true bin. Note that we need one-based
@@ -1684,9 +1708,9 @@ MeasuredEvents SystematicsCalculator::get_measured_events() const
   // Extract just the covariance matrix block that describes the ordinary reco
   // bins
   TMatrixD* cov_mat = new TMatrixD(
-    temp_cov->GetSub( 0, num_ordinary_reco_bins_ - 1,
-      0, num_ordinary_reco_bins_ - 1 )
-  );
+      temp_cov->GetSub( 0, num_ordinary_reco_bins_ - 1,
+        0, num_ordinary_reco_bins_ - 1 )
+      );
 
   // Create the vector of measured event counts in the ordinary reco bins
   const TH1D* d_hist = data_hists_.at( NFT::kOnBNB ).get(); // BNB data
@@ -1701,13 +1725,135 @@ MeasuredEvents SystematicsCalculator::get_measured_events() const
   // Get the ordinary reco bin data column vector after subtracting the
   // central-value EXT+MC background prediction
   auto* reco_data_minus_bkgd = new TMatrixD( ordinary_data,
-    TMatrixD::EMatrixCreatorsOp2::kMinus, *ext_plus_mc_bkgd );
+      TMatrixD::EMatrixCreatorsOp2::kMinus, *ext_plus_mc_bkgd );
 
   // Also get the total central-value EXT+MC prediction in each reco bin
   auto* ext_plus_mc_total = new TMatrixD( *mc_signal,
-    TMatrixD::EMatrixCreatorsOp2::kPlus, *ext_plus_mc_bkgd );
+      TMatrixD::EMatrixCreatorsOp2::kPlus, *ext_plus_mc_bkgd );
 
   MeasuredEvents result( reco_data_minus_bkgd, ext_plus_mc_bkgd,
-    ext_plus_mc_total, cov_mat );
+      ext_plus_mc_total, cov_mat );
   return result;
 }
+
+const double _EPSILON_ = 1e-10;
+
+void SystematicsCalculator::prepare_mahalanobis_dist_calc( const std::vector<std::string>& syst_rw , const std::vector<NFT>& syst_detvar ) {
+
+  // get both CV universes
+  const auto& cv_univ = this->cv_universe();
+  std::unique_ptr<Universe> detvar_cv_univ = detvar_universes_.at(NFT::kDetVarMCCV)->clone();
+
+  // get the CV smearceptance matrices
+  std::unique_ptr<TMatrixD> cv_smearcept = get_cv_smearceptance_matrix();
+  std::unique_ptr<TMatrixD> detvar_cv_smearcept = get_smearceptance_matrix(*detvar_cv_univ);
+
+  // first make a list of the good bins in the response matrix - ignore any with no events
+  double cv_smear_integral = cv_univ.hist_2d_->Integral();
+  for(int i_reco=0;i_reco<num_ordinary_reco_bins_;i_reco++){
+    for(int j_true=0;j_true<num_signal_true_bins_;j_true++){
+      if(cv_univ.hist_2d_->GetBinContent(j_true+1,i_reco+1) > _EPSILON_*cv_smear_integral)
+        full_bins_2D_.push_back(std::make_pair(i_reco,j_true)); 
+    }
+  }
+
+  // Check the universes for the systematics are loaded - get the smearceptance matrix from each
+  std::vector<std::vector<std::unique_ptr<TMatrixD>>> rw_smear_to_use;
+  for(size_t i_d=0;i_d<syst_rw.size();i_d++){
+    if(rw_universes_.find(syst_rw.at(i_d)) == rw_universes_.end())
+      throw std::invalid_argument("Systematic dial " + syst_rw.at(i_d) + " not found");
+    rw_smear_to_use.push_back(std::vector<std::unique_ptr<TMatrixD>>());
+    for(size_t i_u=0;i_u<rw_universes_.at(syst_rw.at(i_d)).size();i_u++)
+      rw_smear_to_use.at(i_d).push_back(get_smearceptance_matrix(*rw_universes_.at(syst_rw.at(i_d)).at(i_u)));
+  }
+
+  // Similar for the detector variations
+  std::vector<std::unique_ptr<TMatrixD>> detvar_smear_to_use;
+  for(size_t i_d=0;i_d<syst_detvar.size();i_d++){
+    if(detvar_universes_.find(syst_detvar.at(i_d)) == detvar_universes_.end())
+      throw std::invalid_argument("Detvar universe not found"); // TODO: Make this more informative
+    detvar_smear_to_use.push_back(get_smearceptance_matrix(*detvar_universes_.at(syst_detvar.at(i_d))));
+  }
+
+  // Calculate the covariance between each of the elements of the smearceptance matrix
+  mah_cov_tmatrix_ = std::make_unique<TMatrixD>(full_bins_2D_.size(),full_bins_2D_.size());
+  mah_cov_tmatrix_inv_ = std::make_unique<TMatrixD>(full_bins_2D_.size(),full_bins_2D_.size());
+
+  for(size_t i_b=0;i_b<full_bins_2D_.size();i_b++){
+    for(size_t j_b=0;j_b<full_bins_2D_.size();j_b++){
+     
+      double value = 0.0;
+
+      int bin_i_reco = full_bins_2D_.at(i_b).first;
+      int bin_j_reco = full_bins_2D_.at(j_b).first;
+      int bin_i_true = full_bins_2D_.at(i_b).second;
+      int bin_j_true = full_bins_2D_.at(j_b).second;
+      
+      double CV_i = (*cv_smearcept)[bin_i_reco][bin_i_true];
+      double CV_j = (*cv_smearcept)[bin_j_reco][bin_j_true];
+
+      for(size_t i_rw=0;i_rw<syst_rw.size();i_rw++)
+        for(size_t i_u=0;i_u<rw_universes_.at(syst_rw.at(i_rw)).size();i_u++)
+          value += ((*rw_smear_to_use.at(i_rw).at(i_u))[bin_i_reco][bin_i_true] - CV_i)*
+                   ((*rw_smear_to_use.at(i_rw).at(i_u))[bin_j_reco][bin_j_true] - CV_j)
+                   /rw_universes_.at(syst_rw.at(i_rw)).size();
+
+      double detvar_CV_i = (*detvar_cv_smearcept)[bin_i_reco][bin_i_true];
+      double detvar_CV_j = (*detvar_cv_smearcept)[bin_j_reco][bin_j_true];
+
+      // TODO: Check the detvar CV exists
+      for(size_t i_detvar=0;i_detvar<syst_detvar.size();i_detvar++){
+        value += ((*detvar_smear_to_use.at(i_detvar))[bin_i_reco][bin_i_true]- detvar_CV_i)*
+                 ((*detvar_smear_to_use.at(i_detvar))[bin_j_reco][bin_j_true]- detvar_CV_j);
+      }
+  
+      // if on the diagonal of the covariance matrix, add the stat error
+      if(i_b == j_b)
+        value += pow(cv_univ.hist_2d_->GetBinError(bin_i_true+1,bin_i_reco+1)/cv_univ.hist_true_->GetBinContent(bin_i_true+1),2);
+
+      (*mah_cov_tmatrix_)[i_b][j_b] = value;
+      (*mah_cov_tmatrix_inv_)[i_b][j_b] = value;
+
+    }
+
+  }
+
+  mah_cov_tmatrix_inv_->Invert();
+
+}
+
+std::pair<int,double> SystematicsCalculator::get_mahalanobis_dist( const std::unique_ptr<Universe>& alt ) const {
+
+  TMatrixD mah_cov_tmp = *mah_cov_tmatrix_;
+
+  // make a const ptr to the cv universe
+  std::unique_ptr<TMatrixD> cv_smearcept = get_cv_smearceptance_matrix();
+  std::unique_ptr<TMatrixD> alt_smearcept = get_smearceptance_matrix(*alt);
+
+  // Add the stat error in the alt universe the covariance matrix
+  for(size_t i_b=0;i_b<full_bins_2D_.size();i_b++){
+      int bin_i_reco = full_bins_2D_.at(i_b).first;
+      int bin_i_true = full_bins_2D_.at(i_b).second;
+    mah_cov_tmp[i_b][i_b] += pow(alt->hist_2d_->GetBinError(bin_i_true+1,bin_i_reco+1)/alt->hist_true_->GetBinContent(bin_i_true+1),2);
+  } 
+
+  TMatrixD mah_cov_tmp_inv = mah_cov_tmp;
+  mah_cov_tmp_inv.Invert();
+
+  // calculate the test statistic  
+  double md2 = 0.0;
+  for(size_t i_b=0;i_b<full_bins_2D_.size();i_b++){
+    for(size_t j_b=0;j_b<full_bins_2D_.size();j_b++){
+      int bin_i_reco = full_bins_2D_.at(i_b).first;
+      int bin_j_reco = full_bins_2D_.at(j_b).first;
+      int bin_i_true = full_bins_2D_.at(i_b).second;
+      int bin_j_true = full_bins_2D_.at(j_b).second;
+      md2 += ((*alt_smearcept)[bin_i_reco][bin_i_true] - (*cv_smearcept)[bin_i_reco][bin_i_true])
+        *mah_cov_tmp_inv[i_b][j_b]*((*alt_smearcept)[bin_j_reco][bin_j_true] - (*cv_smearcept)[bin_j_reco][bin_j_true]);
+    }
+  }
+
+  return std::make_pair(full_bins_2D_.size(),md2);
+
+} 
+

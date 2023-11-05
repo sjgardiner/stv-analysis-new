@@ -29,7 +29,7 @@ void tutorial_slice_plots() {
   #endif
 
   auto* syst_ptr = new MCC9SystematicsCalculator(
-    "/uboone/data/users/gardiner/tutorial_univmake_output.root",
+    "tutorial_univmake_output.root",
     "systcalc.conf" );
   auto& syst = *syst_ptr;
 
@@ -133,10 +133,10 @@ void tutorial_slice_plots() {
 
     slice_bnb->hist_->Draw( "same e" );
 
-    //std::string out_pdf_name = "plot_slice_";
-    //if ( sl_idx < 10 ) out_pdf_name += "0";
-    //out_pdf_name += std::to_string( sl_idx ) + ".pdf";
-    //c1->SaveAs( out_pdf_name.c_str() );
+    std::string out_pdf_name = "plot_slice_";
+    if ( sl_idx < 10 ) out_pdf_name += "0";
+    out_pdf_name += std::to_string( sl_idx ) + ".pdf";
+    c1->SaveAs( ("Plots/" + out_pdf_name).c_str() );
 
     // Get the binning and axis labels for the current slice by cloning the
     // (empty) histogram owned by the Slice object
@@ -214,6 +214,7 @@ void tutorial_slice_plots() {
 
     lg2->AddEntry( total_frac_err_hist, "total", "l" );
 
+    int ctr2=0;
     for ( auto& pair : frac_uncertainty_hists ) {
       const auto& name = pair.first;
       TH1* hist = pair.second;
@@ -222,12 +223,14 @@ void tutorial_slice_plots() {
 
       lg2->AddEntry( hist, name.c_str(), "l" );
       hist->Draw( "same hist" );
+      ctr2++;
 
       std::cout << name << " frac err in bin #1 = "
         << hist->GetBinContent( 1 )*100. << "%\n";
     }
 
     lg2->Draw( "same" );
+    c2->Print(("Plots/test_sys_slice_" + std::to_string(sl_idx) + ".png").c_str());
 
     std::cout << "Total frac error in bin #1 = "
       << total_frac_err_hist->GetBinContent( 1 )*100. << "%\n";

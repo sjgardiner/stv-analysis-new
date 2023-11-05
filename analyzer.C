@@ -1,3 +1,5 @@
+//#define TEST_MODE
+
 // Analysis macro for use in the CCNp0pi single transverse variable analysis
 // Designed for use with the PeLEE group's "searchingfornues" ntuples
 //
@@ -89,6 +91,7 @@ constexpr int TAU_NEUTRINO = 16;
 constexpr int PROTON = 2212;
 constexpr int PI_ZERO = 111;
 constexpr int PI_PLUS = 211;
+constexpr int NEUTRON = 2112;
 
 // Values of parameters to use in analysis cuts
 constexpr float DEFAULT_PROTON_PID_CUT = 0.2;
@@ -98,6 +101,20 @@ constexpr float MUON_P_MIN_MOM_CUT = 0.100; // GeV/c
 constexpr float MUON_P_MAX_MOM_CUT = 1.200; // GeV/c
 constexpr float CHARGED_PI_MOM_CUT = 0.; // GeV/c
 constexpr float MUON_MOM_QUALITY_CUT = 0.25; // fractional difference
+
+// Mass values from GENIE v3.0.6
+constexpr double TARGET_MASS = 37.215526; // 40Ar, GeV
+constexpr double NEUTRON_MASS = 0.93956541; // GeV
+constexpr double PROTON_MASS = 0.93827208; // GeV
+constexpr double MUON_MASS = 0.10565837; // GeV
+constexpr double PI_PLUS_MASS = 0.13957000; // GeV
+
+// Various cuts and thresholds in total energy as well (in GeV)
+const float LEAD_P_MIN_E_CUT = sqrt(LEAD_P_MIN_MOM_CUT*LEAD_P_MIN_MOM_CUT + PROTON_MASS*PROTON_MASS);
+const float LEAD_P_MAX_E_CUT = sqrt(LEAD_P_MAX_MOM_CUT*LEAD_P_MAX_MOM_CUT + PROTON_MASS*PROTON_MASS);
+const float MUON_P_MIN_E_CUT = sqrt(MUON_P_MIN_MOM_CUT*MUON_P_MIN_MOM_CUT + MUON_MASS*MUON_MASS); 
+const float MUON_P_MAX_E_CUT = sqrt(MUON_P_MAX_MOM_CUT*MUON_P_MAX_MOM_CUT + MUON_MASS*MUON_MASS);
+const float CHARGED_PI_E_CUT = sqrt(CHARGED_PI_MOM_CUT*CHARGED_PI_MOM_CUT + PI_PLUS_MASS*PI_PLUS_MASS);
 
 constexpr float TOPO_SCORE_CUT = 0.1;
 constexpr float COSMIC_IP_CUT = 10.; // cm
@@ -138,12 +155,6 @@ double PCV_Y_MAX =  106.5;
 double PCV_Z_MIN =   10.;
 double PCV_Z_MAX = 1026.8;
 
-// Mass values from GENIE v3.0.6
-constexpr double TARGET_MASS = 37.215526; // 40Ar, GeV
-constexpr double NEUTRON_MASS = 0.93956541; // GeV
-constexpr double PROTON_MASS = 0.93827208; // GeV
-constexpr double MUON_MASS = 0.10565837; // GeV
-constexpr double PI_PLUS_MASS = 0.13957000; // GeV
 
 // This binding energy value is used in GENIE v3.0.6
 //constexpr double BINDING_ENERGY = 0.0295; // 40Ar, GeV
@@ -252,7 +263,7 @@ class AnalysisEvent {
 
     MyPointer< std::vector<float> > track_range_mom_mu_;
     MyPointer< std::vector<float> > track_mcs_mom_mu_;
-    MyPointer< std::vector<float> > track_chi2_proton_;
+      MyPointer< std::vector<float> > track_chi2_proton_;
 
     // Log-likelihood ratio particle ID information
 
@@ -267,6 +278,10 @@ class AnalysisEvent {
     // Rescaled overall PID score (all three planes) that lies
     // on the interval [-1, 1]
     MyPointer< std::vector<float> > track_llr_pid_score_;
+
+    // CT: Building the neutrino energy estimtor
+    float track_energy_tot_;
+    float reco_nu_energy_;
 
     // True neutrino PDG code
     int mc_nu_pdg_ = BOGUS_INT;
@@ -291,7 +306,12 @@ class AnalysisEvent {
     MyPointer< std::vector<float> > mc_nu_daughter_px_;
     MyPointer< std::vector<float> > mc_nu_daughter_py_;
     MyPointer< std::vector<float> > mc_nu_daughter_pz_;
-
+ 
+    // TODO: Brute force way to remove 2+ proton events - num of protons above thresh
+    int n_prot_;
+    float missing_e_;
+    float visible_e_;
+   
     // General systematic weights
     MyPointer< std::map< std::string, std::vector<double> > > mc_weights_map_;
     // Map of pointers used to set output branch addresses for the elements
@@ -377,6 +397,7 @@ class AnalysisEvent {
     // 3-momenta
     MyPointer< TVector3 > p3_mu_;
     MyPointer< TVector3 > p3_lead_p_;
+    MyPointer< TVector3 > p3_all_p_;
 
     // Reconstructed 3-momenta for all proton candidates,
     // ordered from highest to lowest by magnitude
@@ -392,6 +413,19 @@ class AnalysisEvent {
     float delta_pTy_ = BOGUS;
     float theta_mu_p_ = BOGUS;
 
+    float all_p_delta_pT_ = BOGUS;
+    float all_p_delta_phiT_ = BOGUS;
+    float all_p_delta_alphaT_ = BOGUS;
+    float all_p_delta_pL_ = BOGUS;
+    //float pn_ = BOGUS;
+    float all_p_delta_pTx_ = BOGUS;
+    float all_p_delta_pTy_ = BOGUS;
+    float theta_mu_all_p_ = BOGUS;
+
+    // CT: Adding PeLEE definition of reco nu energy 
+    float trk_energy_tot_;
+    float reco_neutrino_energy_ = BOGUS;
+
     // ** MC truth observables **
     // These are loaded for signal events whenever we have MC information
     // to use
@@ -399,6 +433,7 @@ class AnalysisEvent {
     // 3-momenta
     MyPointer< TVector3 > mc_p3_mu_;
     MyPointer< TVector3 > mc_p3_lead_p_;
+    MyPointer< TVector3 > mc_p3_all_p_;
 
     // True 3-momenta for all true MC protons, ordered from highest to lowest
     // by magnitude
@@ -414,6 +449,16 @@ class AnalysisEvent {
     float mc_delta_pTy_ = BOGUS;
     float mc_theta_mu_p_ = BOGUS;
 
+    // using all protons in the FS, not just the lead one
+    float mc_all_p_delta_pT_ = BOGUS;
+    float mc_all_p_delta_phiT_ = BOGUS;
+    float mc_all_p_delta_alphaT_ = BOGUS;
+    float mc_all_p_delta_pL_ = BOGUS;
+    //float mc_all_p_pn_ = BOGUS;
+    float mc_all_p_delta_pTx_ = BOGUS;
+    float mc_all_p_delta_pTy_ = BOGUS;
+    float mc_theta_mu_all_p_ = BOGUS;
+
     bool reco_vertex_inside_FV() {
       return point_inside_FV( nu_vx_, nu_vy_, nu_vz_ );
     }
@@ -427,6 +472,25 @@ class AnalysisEvent {
       bool y_inside_PCV = ( PCV_Y_MIN < y ) && ( y < PCV_Y_MAX );
       bool z_inside_PCV = ( PCV_Z_MIN < z ) && ( z < PCV_Z_MAX );
       return ( x_inside_PCV && y_inside_PCV && z_inside_PCV );
+    }
+
+    bool is_visible( const int& pdg, const float& energy ) const {
+       if(abs(pdg) == MUON) return energy > MUON_P_MIN_E_CUT;
+       else if(pdg == PROTON) return energy > LEAD_P_MIN_E_CUT;
+       else if(pdg == NEUTRON) return false;
+       else if(abs(pdg) == PI_PLUS) return energy > CHARGED_PI_E_CUT; 
+       else if(pdg == PI_ZERO) return true;
+       return false; // assume anything else is invisible
+    }
+
+    float visible_energy( const MyPointer<std::vector<int>>& pdg_v, const MyPointer<std::vector<float>>& energy_v ) const {
+      float E = 0.0;
+      for(size_t i=0;i<pdg_v->size();i++){
+        if(!is_visible(pdg_v->at(i),energy_v->at(i))) continue;
+        if(abs(pdg_v->at(i)) == MUON || abs(pdg_v->at(i)) == PI_PLUS || pdg_v->at(i) == PI_ZERO) E += energy_v->at(i);
+        else if(pdg_v->at(i) == PROTON) E += energy_v->at(i) - PROTON_MASS + BINDING_ENERGY;
+      }
+        return E;
     }
 
 };
@@ -562,6 +626,7 @@ void set_event_branch_addresses(TTree& etree, AnalysisEvent& ev)
 
   set_object_input_branch_address( etree, "trk_llr_pid_score_v",
     ev.track_llr_pid_score_ );
+
 
   // MC truth information for the neutrino
   etree.SetBranchAddress( "nu_pdg", &ev.mc_nu_pdg_ );
@@ -738,24 +803,30 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "lead_p_candidate_idx",
     &ev.lead_p_candidate_idx_, create, "lead_p_candidate_idx/I" );
 
-  // Reco 3-momenta (muon, leading proton)
+  // Reco 3-momenta (muon, leading proton, all protons)
   set_object_output_branch_address< TVector3 >( out_tree,
     "p3_mu", ev.p3_mu_, create );
 
   set_object_output_branch_address< TVector3 >( out_tree,
     "p3_lead_p", ev.p3_lead_p_, create );
 
+  set_object_output_branch_address< TVector3 >( out_tree,
+    "p3_all_p", ev.p3_all_p_, create );
+
   // Reco 3-momenta (all proton candidates, ordered from highest to lowest
   // magnitude)
   set_object_output_branch_address< std::vector<TVector3> >( out_tree,
     "p3_p_vec", ev.p3_p_vec_, create );
 
-  // True 3-momenta (muon, leading proton)
+  // True 3-momenta (muon, leading proton, sum of protons)
   set_object_output_branch_address< TVector3 >( out_tree,
     "mc_p3_mu", ev.mc_p3_mu_, create );
 
   set_object_output_branch_address< TVector3 >( out_tree,
     "mc_p3_lead_p", ev.mc_p3_lead_p_, create );
+
+  set_object_output_branch_address< TVector3 >( out_tree,
+    "mc_p3_all_p", ev.mc_p3_all_p_, create );
 
   // True 3-momenta (all protons, ordered from highest to lowest magnitude)
   set_object_output_branch_address< std::vector<TVector3> >( out_tree,
@@ -786,6 +857,27 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_output_branch_address( out_tree, "theta_mu_p",
     &ev.theta_mu_p_, create, "theta_mu_p/F" );
 
+  set_output_branch_address( out_tree, "all_p_delta_pT",
+    &ev.all_p_delta_pT_, create, "all_p_delta_pT/F" );
+
+  set_output_branch_address( out_tree, "all_p_delta_phiT",
+    &ev.all_p_delta_phiT_, create, "all_p_delta_phiT/F" );
+
+  set_output_branch_address( out_tree, "all_p_delta_alphaT",
+    &ev.all_p_delta_alphaT_, create, "all_p_delta_alphaT/F" );
+
+  set_output_branch_address( out_tree, "all_p_delta_pL",
+    &ev.all_p_delta_pL_, create, "all_p_delta_pL/F" );
+
+  set_output_branch_address( out_tree, "all_p_delta_pTx",
+    &ev.all_p_delta_pTx_, create, "all_p_delta_pTx/F" );
+
+  set_output_branch_address( out_tree, "all_p_delta_pTy",
+    &ev.all_p_delta_pTy_, create, "all_p_delta_pTy/F" );
+
+  set_output_branch_address( out_tree, "theta_mu_all_p",
+    &ev.theta_mu_all_p_, create, "theta_mu_all_p/F" );
+
   // MC STVs (only filled for signal events)
   set_output_branch_address( out_tree, "mc_delta_pT",
     &ev.mc_delta_pT_, create, "mc_delta_pT/F" );
@@ -810,6 +902,30 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
 
   set_output_branch_address( out_tree, "mc_theta_mu_p",
     &ev.mc_theta_mu_p_, create, "mc_theta_mu_p/F" );
+
+  set_output_branch_address( out_tree, "mc_all_p_delta_pT",
+    &ev.mc_all_p_delta_pT_, create, "mc_all_p_delta_pT/F" );
+
+  set_output_branch_address( out_tree, "mc_all_p_delta_phiT",
+    &ev.mc_all_p_delta_phiT_, create, "mc_all_p_delta_phiT/F" );
+
+  set_output_branch_address( out_tree, "mc_all_p_delta_alphaT",
+    &ev.mc_all_p_delta_alphaT_, create, "mc_all_p_delta_alphaT/F" );
+
+  set_output_branch_address( out_tree, "mc_all_p_delta_pL",
+    &ev.mc_all_p_delta_pL_, create, "mc_all_p_delta_pL/F" );
+
+//  set_output_branch_address( out_tree, "mc_all_p_pn",
+//    &ev.mc_all_p_pn_, create, "mc_all_p_pn/F" );
+
+  set_output_branch_address( out_tree, "mc_all_p_delta_pTx",
+    &ev.mc_all_p_delta_pTx_, create, "mc_all_p_delta_pTx/F" );
+
+  set_output_branch_address( out_tree, "mc_all_p_delta_pTy",
+    &ev.mc_all_p_delta_pTy_, create, "mc_all_p_delta_pTy/F" );
+
+  set_output_branch_address( out_tree, "mc_theta_mu_all_p",
+    &ev.mc_theta_mu_all_p_, create, "mc_theta_mu_all_p/F" );
 
   // *** Branches copied directly from the input ***
 
@@ -999,6 +1115,18 @@ void set_event_output_branch_addresses(TTree& out_tree, AnalysisEvent& ev,
   set_object_output_branch_address< std::vector<float> >( out_tree, "mc_pz",
     ev.mc_nu_daughter_pz_, create );
 
+  //set_output_branch_address( out_tree, "delta_pT",
+  //  &ev.delta_pT_, create, "delta_pT/F" );
+
+  // CT: Adding missing energy truth variables
+  set_output_branch_address( out_tree, "n_prot", &ev.n_prot_, create, "n_prot/I"); 
+  set_output_branch_address( out_tree, "missing_e", &ev.missing_e_, create, "missing_e/F"); 
+  set_output_branch_address( out_tree, "visible_e", &ev.visible_e_, create, "visible_e/F"); 
+
+  // CT: Adding neutrino energy estimator
+  set_output_branch_address( out_tree, "track_energy_tot", &ev.track_energy_tot_, create, "track_energy_tot/F"); 
+  set_output_branch_address( out_tree, "reco_neutrino_energy", &ev.reco_neutrino_energy_, create, "reco_neutrino_energy/F"); 
+
 }
 
 void analyze(const std::vector<std::string>& in_file_names,
@@ -1045,11 +1173,17 @@ void analyze(const std::vector<std::string>& in_file_names,
   // slow. I get around this by using a while loop instead of a for loop.
   bool created_output_branches = false;
   long events_entry = 0;
+  //std::cout << events_ch.GetEntries() << std::endl;
   while ( true ) {
 
     if ( events_entry % 1000 == 0 ) {
       std::cout << "Processing event #" << events_entry << '\n';
     }
+
+   // CT: Stop after X events for testing
+    #ifdef TEST_MODE
+    if(events_entry > 5000) break;
+    #endif 
 
     // Create a new AnalysisEvent object. This will reset all analysis
     // variables for the current event.
@@ -1476,6 +1610,8 @@ void AnalysisEvent::find_lead_p_candidate() {
   else lead_p_candidate_idx_ = BOGUS_INDEX;
 }
 
+// TODO calculate this for all protons
+
 // Helper function for computing STVs (either reco or true)
 void compute_stvs( const TVector3& p3mu, const TVector3& p3p, float& delta_pT,
   float& delta_phiT, float& delta_alphaT, float& delta_pL, float& pn,
@@ -1643,6 +1779,16 @@ void AnalysisEvent::compute_observables() {
       const TVector3& b) -> bool { return a.Mag() > b.Mag(); } );
   }
 
+  // Calculate the total momenta of all protons above threshold
+  float px=0,py=0,pz=0;
+  for(size_t i_p=0;i_p<p3_p_vec_->size();i_p++){
+    px += p3_p_vec_->at(i_p).X(); 
+    py += p3_p_vec_->at(i_p).Y(); 
+    pz += p3_p_vec_->at(i_p).Z(); 
+  }
+  p3_all_p_->SetXYZ(px,py,pz); 
+
+
   // Compute reco STVs if we have both a muon candidate
   // and a leading proton candidate in the event
   if ( muon && lead_p ) {
@@ -1651,6 +1797,31 @@ void AnalysisEvent::compute_observables() {
 
     theta_mu_p_ = std::acos( p3mu.Dot(p3p) / p3mu.Mag() / p3p.Mag() );
   }
+
+  // Using all FS protons, not just the leading one
+  if ( muon && lead_p ) {
+    float dummy = 0;
+    compute_stvs( p3mu, *p3_all_p_, all_p_delta_pT_, all_p_delta_phiT_,
+      all_p_delta_alphaT_, all_p_delta_pL_, dummy, all_p_delta_pTx_, all_p_delta_pTy_ );
+    theta_mu_all_p_ = std::acos( p3mu.Dot(p3p) / p3mu.Mag() / p3_all_p_->Mag() );
+  }
+
+  // Reconstructed neutrino energy definition from the PeLEE analysis
+
+  track_energy_tot_ = 0.0;
+  for(size_t i_tr=0;i_tr<track_kinetic_energy_p_->size();i_tr++)
+    track_energy_tot_ += track_kinetic_energy_p_->at(i_tr);
+
+  reco_neutrino_energy_ = BOGUS;
+  std::vector<float> muon_energy_correction_v;
+
+  if(muon_candidate_idx_ != -1){
+    float muon_energy_correction = sqrt(track_range_mom_mu_->at(muon_candidate_idx_)*track_range_mom_mu_->at(muon_candidate_idx_)+MUON_MASS*MUON_MASS) - track_kinetic_energy_p_->at(muon_candidate_idx_); 
+    reco_neutrino_energy_ = track_energy_tot_ + muon_energy_correction;
+  }
+
+  if(std::isinf(reco_neutrino_energy_) || std::isnan(reco_neutrino_energy_)) reco_neutrino_energy_ = BOGUS;
+
 }
 
 void AnalysisEvent::compute_mc_truth_observables() {
@@ -1715,6 +1886,17 @@ void AnalysisEvent::compute_mc_truth_observables() {
   std::sort( mc_p3_p_vec_->begin(), mc_p3_p_vec_->end(), [](const TVector3& a,
     const TVector3& b) -> bool { return a.Mag() > b.Mag(); } );
 
+  // Calculate the total momenta of all protons above threshold
+  float px=0,py=0,pz=0;
+  for(size_t i_p=0;i_p<mc_p3_p_vec_->size();i_p++){
+    if(mc_p3_p_vec_->at(i_p).Mag() > LEAD_P_MIN_MOM_CUT){
+      px += mc_p3_p_vec_->at(i_p).X(); 
+      py += mc_p3_p_vec_->at(i_p).Y(); 
+      pz += mc_p3_p_vec_->at(i_p).Z(); 
+    }
+  }
+  mc_p3_all_p_->SetXYZ(px,py,pz); 
+
   // If the event contains a leading proton, then set the 3-momentum
   // accordingly
   bool true_lead_p = ( max_mom != LOW_FLOAT );
@@ -1733,6 +1915,23 @@ void AnalysisEvent::compute_mc_truth_observables() {
     mc_theta_mu_p_ = std::acos( mc_p3_mu_->Dot(*mc_p3_lead_p_)
       / mc_p3_mu_->Mag() / mc_p3_lead_p_->Mag() );
   }
+
+  if ( true_muon && true_lead_p ) {
+    float dummy_var = BOGUS; // np calculation assumes QE approximation - not valid for many p final states
+    compute_stvs( *mc_p3_mu_, *mc_p3_all_p_, mc_all_p_delta_pT_, mc_all_p_delta_phiT_,
+        mc_all_p_delta_alphaT_, mc_all_p_delta_pL_, dummy_var, mc_all_p_delta_pTx_, mc_all_p_delta_pTy_ );
+    mc_theta_mu_all_p_ = std::acos( mc_p3_mu_->Dot(*mc_p3_all_p_)
+      / mc_p3_mu_->Mag() / mc_p3_all_p_->Mag() );
+  }
+
+   visible_e_ = visible_energy(mc_nu_daughter_pdg_,mc_nu_daughter_energy_);
+   missing_e_ = mc_nu_energy_ - visible_e_;
+
+   n_prot_ = 0;
+   for(size_t i_mc=0;i_mc<mc_nu_daughter_pdg_->size();i_mc++)
+     if(mc_nu_daughter_pdg_->at(i_mc) == 2212 && is_visible(2212,mc_nu_daughter_energy_->at(i_mc)))
+       n_prot_++;
+   
 }
 
 void analyzer(const std::string& in_file_name,
