@@ -12,9 +12,10 @@
 struct UnfoldedMeasurement {
   UnfoldedMeasurement( TMatrixD* unfolded_signal, TMatrixD* cov_matrix,
     TMatrixD* unfolding_matrix, TMatrixD* err_prop_matrix,
-    TMatrixD* add_smear_matrix ) : unfolded_signal_( unfolded_signal ),
-    cov_matrix_( cov_matrix ), unfolding_matrix_( unfolding_matrix ),
-    err_prop_matrix_( err_prop_matrix ), add_smear_matrix_( add_smear_matrix )
+    TMatrixD* add_smear_matrix, TMatrixD* smearcept )
+    : unfolded_signal_( unfolded_signal ), cov_matrix_( cov_matrix ),
+    unfolding_matrix_( unfolding_matrix ), err_prop_matrix_( err_prop_matrix ),
+    add_smear_matrix_( add_smear_matrix ), response_matrix_( smearcept )
     {}
 
   std::unique_ptr< TMatrixD > unfolded_signal_;
@@ -22,6 +23,7 @@ struct UnfoldedMeasurement {
   std::unique_ptr< TMatrixD > unfolding_matrix_;
   std::unique_ptr< TMatrixD > err_prop_matrix_;
   std::unique_ptr< TMatrixD > add_smear_matrix_;
+  std::unique_ptr< TMatrixD > response_matrix_;
 };
 
 // Container for mapping block indices to bin indices in
@@ -197,6 +199,11 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
   auto* add_smear = new TMatrixD( num_true_signal_bins, num_true_signal_bins );
   add_smear->Zero();
 
+  // Create a TMatrixD to hold the detector response ("smearceptance") matrix
+  // used to build the unfolding matrix
+  auto* resp_mat = new TMatrixD( num_ordinary_reco_bins, num_true_signal_bins );
+  resp_mat->Zero();
+
   // Loop over the blocks. For each block, populate the input matrices and
   // unfold.
   for ( const auto& block_pair : block_map ) {
@@ -288,6 +295,11 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
         // Copy the unfolding matrix element from the current block
         unfold_mat->operator()( tb, rb ) = block_result.unfolding_matrix_
           ->operator()( block_tb, block_rb );
+
+        // Copy the response ("smearceptance") matrix element from the
+        // current block
+        resp_mat->operator()( rb, tb ) = block_result.response_matrix_
+          ->operator()( block_rb, block_tb );
       }
 
       for ( int block_tb2 = 0; block_tb2 < num_block_true_bins; ++block_tb2 ) {
@@ -317,6 +329,6 @@ UnfoldedMeasurement Unfolder::blockwise_unfold( const TMatrixD& data_signal,
     TMatrixD::EMatrixCreatorsOp2::kMult, temp_mat );
 
   UnfoldedMeasurement result( unfolded_signal, unfolded_signal_covmat,
-    unfold_mat, err_prop, add_smear );
+    unfold_mat, err_prop, add_smear, resp_mat );
   return result;
 }
