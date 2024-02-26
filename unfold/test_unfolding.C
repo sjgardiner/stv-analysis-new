@@ -351,6 +351,11 @@ void dump_overall_results( const UnfoldedMeasurement& result,
   dump_text_matrix( "dump/mat_table_err_prop.txt", *result.err_prop_matrix_ );
   dump_text_matrix( "dump/mat_table_add_smear.txt", *result.add_smear_matrix_ );
 
+  // Also dump the block-diagonal version of the response matrix for the
+  // full measurement. It is also dimensionless.
+  dump_text_matrix( "dump/mat_table_detector_response.txt",
+    *result.response_matrix_ );
+
   // Convert units on the covariance matrices one-by-one and dump them
   for ( const auto& cov_pair : unf_cov_matrix_map ) {
     const auto& name = cov_pair.first;
