@@ -129,3 +129,99 @@ void dump_text_column_vector( const std::string& output_file_name,
 
   } // loop over rows (x bins)
 }
+
+// Load a TMatrixD object saved in a text file by a previous call to
+// dump_text_matrix() or dump_text_column_vector()
+TMatrixD load_matrix( const std::string& input_file_name ) {
+
+  // Get the table of matrix element values
+  std::ifstream matrix_table_file( input_file_name );
+
+  // Peek at the file contents to decide whether we're working with
+  // a matrix or a column vector
+  std::string dummy;
+  matrix_table_file >> dummy >> dummy >> dummy;
+  bool is_matrix = ( dummy == "numYbins" );
+
+  // Return to the beginning of the file for parsing
+  matrix_table_file.seekg( 0 );
+
+  // Get the matrix or vector dimensions from the header line(s)
+  int num_x_bins, num_y_bins;
+
+  matrix_table_file >> dummy >> num_x_bins;
+  if ( is_matrix ) {
+    matrix_table_file >> dummy >> num_y_bins;
+
+    // Skip the next header line which contains the data column names
+    std::getline( matrix_table_file, dummy );
+  }
+  else {
+    num_y_bins = 1;
+  }
+
+  // Create a TMatrixD with the correct dimensions
+  TMatrixD matrix( num_x_bins, num_y_bins );
+
+  // Parse its contents from the remaining lines
+  std::string line;
+  while ( std::getline(matrix_table_file, line) ) {
+    int bin1, bin2;
+    double element;
+
+    std::stringstream temp_ss( line );
+    temp_ss >> bin1;
+    if ( is_matrix ) {
+      temp_ss >> bin2;
+    }
+    else {
+      bin2 = 0;
+    }
+    temp_ss >> element;
+
+    if ( bin1 < num_x_bins && bin2 < num_y_bins ) {
+      matrix( bin1, bin2 ) = element;
+    }
+  }
+
+  return matrix;
+}
+
+// Compute the direct sum of a vector of input TMatrixD objects
+TMatrixD direct_sum( const std::vector< const TMatrixD* >& matrices ) {
+  // Determine the dimensions of the direct sum of the input matrices
+  int num_rows = 0;
+  int num_cols = 0;
+  for ( const auto& mat : matrices ) {
+    num_rows += mat->GetNrows();
+    num_cols += mat->GetNcols();
+  }
+
+  // Create storage for the direct sum matrix, filling with zeros to start
+  TMatrixD dir_sum( num_rows, num_cols );
+  dir_sum.Zero();
+
+  // Fill it with the appropriate elements of the input matrices
+  int start_row = 0;
+  int start_col = 0;
+  for ( const auto& mat : matrices ) {
+    int mat_rows = mat->GetNrows();
+    int mat_cols = mat->GetNcols();
+    for ( int r = 0; r < mat_rows; ++r ) {
+      for ( int c = 0; c < mat_cols; ++c ) {
+        dir_sum( start_row + r, start_col + c ) = mat->operator()( r, c );
+      }
+    }
+
+    start_row += mat_rows;
+    start_col += mat_cols;
+  }
+
+  return dir_sum;
+}
+
+// Overloaded version for a pair of input matrices
+TMatrixD direct_sum( const TMatrixD& m1, const TMatrixD& m2 ) {
+  std::vector< const TMatrixD* > matrices = { &m1, &m2 };
+  return direct_sum( matrices );
+}
