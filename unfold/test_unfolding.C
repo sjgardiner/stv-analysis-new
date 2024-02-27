@@ -133,21 +133,21 @@ struct TruthFileInfo {
 // predictions in each true bin
 std::map< std::string, TruthFileInfo > truth_file_map = {
   { "GENIE 2.12.10",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv2.root", kBlue, 1 } },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv2.root", kBlue, 1 } },
   { "GENIE 3.0.6",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3.root", kBlack, 2} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3.root", kBlack, 2} },
   { "GENIE 3.2.0 G18_02a",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g1802a.root", kBlack, 2} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g1802a.root", kBlack, 2} },
   { "GENIE 3.2.0 G21_11a",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111a.root", kBlack, 2} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111a.root", kBlack, 2} },
   { "GENIE 3.2.0 G21_11b",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111b.root", kBlack, 2} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-gv3-g2111b.root", kBlack, 2} },
   { "NEUT 5.6.0",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-neut.root", kRed, 9} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-neut.root", kRed, 9} },
   { "NuWro 19.02.2",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-nuwro.root", kViolet, 7} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/comp-all/comp-nuwro.root", kViolet, 7} },
  { "GiBUU 2021.1",
-    {"/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/mygibuu3.root", kGreen, 10} },
+    {"/exp/uboone/app/users/gardiner/temp-gen/BuildEventGenerators/ubmc/mygibuu3.root", kGreen, 10} },
 };
 
 std::map< std::string, std::string > samples_to_hist_names {
@@ -192,13 +192,13 @@ std::map< std::string, SampleInfo > sample_info_map = {
 
   // 2D muon measurement
   { "MicroBooNE_CC1MuNp_XSec_2D_PmuCosmu_nu_MC", { "/uboone/data/users"
-    "/gardiner/respmat-test-new-Muon2D.root", "/uboone/app/users/gardiner"
+    "/gardiner/respmat-test-new-Muon2D.root", "/exp/uboone/app/users/gardiner"
     "/stv/mc/nuisance/data/MicroBooNE/mybins2Dmuon.txt",
     "mybins_mcc9_2D_muon.txt" } },
 
   // 2D proton measurement
   { "MicroBooNE_CC1MuNp_XSec_2D_PpCosp_nu_MC", { "/uboone/data/users"
-    "/gardiner/respmat-test-new-Proton2D.root", "/uboone/app/users/gardiner"
+    "/gardiner/respmat-test-new-Proton2D.root", "/exp/uboone/app/users/gardiner"
     "/stv/mc/nuisance/data/MicroBooNE/mybins2Dproton.txt",
     "mybins_mcc9_2D_proton.txt" } },
 
