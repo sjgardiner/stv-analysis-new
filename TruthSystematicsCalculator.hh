@@ -50,15 +50,12 @@ double TruthSystematicsCalculator::evaluate_observable( const Universe& univ,
 double TruthSystematicsCalculator::evaluate_mc_stat_covariance(
   const Universe& univ, int true_bin_a, int true_bin_b ) const
 {
-  // TODO: revisit to get off-diagonal MC stat covariances
-  if ( true_bin_a != true_bin_b ) return 0.;
-
   // ROOT histograms use one-based bin indices, so I correct for that here.
   // Note that using the bin error (rather than the bin contents) enables a
   // correct treatment for weighted events provided TH1::Sumw2() was called
   // before filling the histogram.
-  double err = univ.hist_true_->GetBinError( true_bin_a + 1 );
-  double err2 = err * err;
+  double err = univ.hist_true2d_->GetBinError( true_bin_a + 1, true_bin_b + 1 );
+  double err2 = err*err;
   return err2;
 }
 
