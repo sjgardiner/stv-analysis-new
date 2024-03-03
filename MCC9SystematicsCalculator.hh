@@ -196,8 +196,8 @@ double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ,
   return reco_bin_events;
 }
 
-double MCC9SystematicsCalculator::evaluate_mc_stat_covariance( const Universe& univ,
-  int reco_bin_a, int reco_bin_b ) const
+double MCC9SystematicsCalculator::evaluate_mc_stat_covariance(
+  const Universe& univ, int reco_bin_a, int reco_bin_b ) const
 {
   // ROOT histograms use one-based bin indices, so I correct for that here.
   // Note that using the bin error (rather than the bin contents) enables a
