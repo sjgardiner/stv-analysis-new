@@ -48,6 +48,9 @@ class WienerSVDUnfolder : public Unfolder {
     // matrix
     bool use_filter_ = true;
 
+    // parameter to set the Norm_type used to make C
+    double Norm_type = 0;
+
     // Enum that determines the form to use for the regularization matrix C
     RegularizationMatrixType reg_type_ = kIdentity;
 };
@@ -109,6 +112,16 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   TMatrixD C( num_true_signal_bins, num_true_signal_bins );
   this->set_reg_matrix( C );
 
+  // Normalize C according to the Norm_type parameter 
+  TMatrixD normsig(n, n);
+  for(int i=0; i<n; i++){
+        for(int j=0; j<n; j++){
+            normsig(i, j) = 0;
+            if(i==j) normsig(i, j) = 1./TMath::Power(prior_true_signal(i), Norm_type);
+        }
+  }
+  C = C*normsig;
+  
   // Invert the regularization matrix to obtain C^(-1)
   auto Cinv = invert_matrix( C );
 
