@@ -114,9 +114,9 @@ UnfoldedMeasurement WienerSVDUnfolder::unfold( const TMatrixD& data_signal,
   this->set_reg_matrix( C );
 
   // Normalize C according to the Norm_type parameter 
-  TMatrixD normsig(n, n);
-  for(int i=0; i<n; i++){
-        for(int j=0; j<n; j++){
+  TMatrixD normsig(num_true_signal_bins, num_true_signal_bins);
+  for(int i=0; i<num_true_signal_bins; i++){
+        for(int j=0; j<num_true_signal_bins; j++){
             normsig(i, j) = 0;
             if(i==j) normsig(i, j) = 1./TMath::Power(prior_true_signal(i), Norm_type);
         }
