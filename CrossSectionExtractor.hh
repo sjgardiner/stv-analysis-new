@@ -269,7 +269,8 @@ CrossSectionExtractor::CrossSectionExtractor(
       }
       else if ( unf_type == "WienerSVD" ) {
         bool use_filter;
-        iss >> use_filter;
+        double Norm_type = 0;
+        iss >> use_filter >> Norm_type;
 
         // Default to regularizing using the second derivative. The choice
         // actually doesn't matter unless the Wiener filter is used.
@@ -296,7 +297,7 @@ CrossSectionExtractor::CrossSectionExtractor(
           }
         }
 
-        temp_unfolder = new WienerSVDUnfolder( use_filter, reg_type );
+        temp_unfolder = new WienerSVDUnfolder( use_filter, reg_type , Norm_type);
       }
       else {
         throw std::runtime_error( "Unrecognized unfolder type \""
