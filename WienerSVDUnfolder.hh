@@ -18,7 +18,8 @@ class WienerSVDUnfolder : public Unfolder {
     enum RegularizationMatrixType { kIdentity, kFirstDeriv, kSecondDeriv };
 
     WienerSVDUnfolder( bool use_wiener_filter = true,
-      RegularizationMatrixType type = kIdentity ) : Unfolder(),
+      RegularizationMatrixType type = kIdentity ,
+      double Norm_type = 0) : Unfolder(),
       use_filter_( use_wiener_filter ), reg_type_( type ) {}
 
     // Trick taken from https://stackoverflow.com/a/18100999
