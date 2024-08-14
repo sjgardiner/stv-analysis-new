@@ -353,20 +353,23 @@ class UniverseMaker {
     // Access the owned TChain
     inline auto& input_chain() { return input_chain_; }
 
-    // Does the actual calculation of response matrix elements across the
-    // various systematic universes. The optional argument points to a vector
-    // of branch names that will be used to retrieve systematic universe
-    // weights. If it is omitted, all available ones will be auto-detected and
-    // used.
+    // Does the actual calculation of histograms across the various systematic
+    // universes. The first optional argument points to a vector of branch
+    // names that will be used to retrieve systematic universe weights. If it
+    // is omitted, all available ones will be auto-detected and used. The
+    // second optional argument enables/disables dumping a TTree containing
+    // a ntuple of filled bin indices for each event processed.
     void build_universes(
-      const std::vector<std::string>* universe_branch_names = nullptr );
+      const std::vector<std::string>* universe_branch_names = nullptr,
+      bool dump_filled_bin_indices = true );
 
     // Overloaded version of the function that takes a reference the
     // vector of universe branch names (for convenience). The behavior
     // is the same as the original, but in this case the explicit vector of
     // branch names definitely exists.
     void build_universes(
-      const std::vector<std::string>& universe_branch_names );
+      const std::vector<std::string>& universe_branch_names,
+      bool dump_filled_bin_indices = true );
 
     // Writes the response matrix histograms to an output ROOT file
     void save_histograms( const std::string& output_file_name,
@@ -430,6 +433,10 @@ class UniverseMaker {
     // Root TDirectoryFile name to use when writing the response matrices to an
     // output ROOT file
     std::string output_directory_name_;
+
+    // Helper TTree object used when dumping a ntuple of filled bin indices
+    // to the output
+    std::unique_ptr< TTree > filled_bin_tree_ = nullptr;
 };
 
 UniverseMaker::UniverseMaker( const std::string& config_file_name )
@@ -557,13 +564,16 @@ void UniverseMaker::prepare_formulas() {
 }
 
 void UniverseMaker::build_universes(
-  const std::vector<std::string>& universe_branch_names )
+  const std::vector<std::string>& universe_branch_names,
+  bool dump_filled_bin_indices )
 {
-  return this->build_universes( &universe_branch_names );
+  return this->build_universes( &universe_branch_names,
+    dump_filled_bin_indices );
 }
 
 void UniverseMaker::build_universes(
-  const std::vector<std::string>* universe_branch_names )
+  const std::vector<std::string>* universe_branch_names,
+  bool dump_filled_bin_indices )
 {
   int num_input_files = input_chain_.GetListOfFiles()->GetEntries();
   if ( num_input_files < 1 ) {
@@ -595,10 +605,36 @@ void UniverseMaker::build_universes(
   // Now prepare the vectors of Universe objects with the correct sizes
   this->prepare_universes( wh );
 
+  // Set up the filled bin index TTree output if it is enabled
+  MyPointer< std::vector<size_t> > true_bins_filled;
+  MyPointer< std::vector<size_t> > reco_bins_filled;
+  double cv_weight;
+
+  if ( dump_filled_bin_indices ) {
+
+    filled_bin_tree_ = std::make_unique< TTree >( "bin_tree",
+      "Filled bin indices" );
+    filled_bin_tree_->SetDirectory( nullptr );
+
+    filled_bin_tree_->Branch( "is_mc", &is_mc, "is_mc/O" );
+
+    set_object_output_branch_address( *filled_bin_tree_, "true_bins_filled",
+      true_bins_filled, true );
+
+    set_object_output_branch_address( *filled_bin_tree_, "reco_bins_filled",
+      reco_bins_filled, true );
+
+    filled_bin_tree_->Branch( "cv_weight", &cv_weight, "cv_weight/D" );
+  }
+
   int treenumber = 0;
   for ( long long entry = 0; entry < input_chain_.GetEntries(); ++entry ) {
     // Load the TTree for the current TChain entry
     input_chain_.LoadTree( entry );
+
+    // Default to a central-value weight of one (won't be changed below for
+    // data events)
+    cv_weight = 1.0;
 
     // If the current entry is in a new TTree, then have all of the
     // TTreeFormula objects make the necessary updates
@@ -659,6 +695,9 @@ void UniverseMaker::build_universes(
       if ( wm.size() > 0u ) {
         spline_weight = wm.at( SPLINE_WEIGHT_NAME )->front();
         tune_weight = wm.at( TUNE_WEIGHT_NAME )->front();
+
+        // Update the central-value weight since we're working with MC
+        cv_weight = spline_weight * tune_weight;
       }
     } // MC event
 
@@ -733,6 +772,10 @@ void UniverseMaker::build_universes(
           tb.weight_ * other_tb.weight_ );
       } // true bins
 
+      if ( dump_filled_bin_indices ) {
+        true_bins_filled->push_back( tb.bin_index_ );
+      }
+
     } // true bins
 
     for ( const auto& rb : matched_reco_bins ) {
@@ -749,7 +792,17 @@ void UniverseMaker::build_universes(
           rb.weight_ * other_rb.weight_ );
       }
 
+      if ( dump_filled_bin_indices ) {
+        reco_bins_filled->push_back( rb.bin_index_ );
+      }
+
     } // reco bins
+
+    if ( dump_filled_bin_indices ) {
+      filled_bin_tree_->Fill();
+      true_bins_filled->clear();
+      reco_bins_filled->clear();
+    }
 
   } // TChain entries
 
@@ -897,4 +950,10 @@ void UniverseMaker::save_histograms(
       }
     } // universes
   } // weight names
+
+  // Also save the TTree of filled bin indices if it exists
+  if ( filled_bin_tree_ ) {
+    sub_tdir->WriteObject( filled_bin_tree_.get(),
+      filled_bin_tree_->GetName() );
+  }
 }

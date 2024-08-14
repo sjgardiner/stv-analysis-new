@@ -16,6 +16,7 @@
 
 // STV analysis includes
 #include "FilePropertiesManager.hh"
+#include "TreeUtils.hh"
 #include "UniverseMaker.hh"
 
 // Helper function template that retrieves an object from a TDirectoryFile
@@ -30,6 +31,10 @@ template< typename T > std::unique_ptr< T > get_object_unique_ptr(
   // avoid extra deletion attempts
   TH1* temp_hist_ptr = dynamic_cast< TH1* >( temp_ptr );
   if ( temp_hist_ptr ) temp_hist_ptr->SetDirectory( nullptr );
+
+  // Do the same for TTree objects
+  TTree* temp_tree_ptr = dynamic_cast< TTree* >( temp_ptr );
+  if ( temp_tree_ptr ) temp_tree_ptr->SetDirectory( nullptr );
 
   return std::unique_ptr< T >( temp_ptr );
 }
@@ -356,6 +361,9 @@ class SystematicsCalculator {
 
     // Number of entries in the true_bins_ vector that are "signal" bins
     size_t num_signal_true_bins_ = 0u;
+
+    // Map used to collect per-file scaling factors for the total sample
+    std::map< std::string, double > scaling_map_;
 };
 
 SystematicsCalculator::SystematicsCalculator(
@@ -690,6 +698,11 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
     total_bnb_data_pot_ += pair.second;
   }
 
+  // Prepare an output TTree to store the per-file scaling factors for the
+  // total sample
+  double cv_scale_factor;
+  std::string ntuple_file_name;
+
   // Loop through the ntuple files for the various run / ntuple file type
   // pairs considered in the analysis. We will react differently in a run-
   // and type-dependent way.
@@ -745,6 +758,13 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
         if ( !subdir ) throw std::runtime_error(
           "Missing TDirectoryFile " + subdir_name );
 
+        // Set the scaling factor for the current ntuple file to unity. We'll
+        // revisit this depending on the type of input ntuple file below
+        cv_scale_factor = 1.;
+
+        // Also store the name of the current ntuple file
+        ntuple_file_name = file_name;
+
         // For data, just add the reco-space event counts to the total,
         // scaling to the beam-on triggers in the case of EXT data
         if ( !is_mc ) {
@@ -761,8 +781,10 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
             double bnb_trigs = run_to_bnb_trigs_map.at( run );
             double ext_trigs = run_to_ext_trigs_map.at( run );
 
-            reco_hist->Scale( bnb_trigs / ext_trigs );
-            reco_hist2d->Scale( bnb_trigs / ext_trigs );
+            cv_scale_factor = bnb_trigs / ext_trigs;
+
+            reco_hist->Scale( cv_scale_factor );
+            reco_hist2d->Scale( cv_scale_factor );
           }
 
           // If we don't have a histogram in the map for this data type
@@ -799,7 +821,10 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
 
           // For EXT data files (always assumed to be real data), no further
           // processing is needed, so just move to the next file
-          if ( type == NFT::kExtBNB ) continue;
+          if ( type == NFT::kExtBNB ) {
+            scaling_map_[ ntuple_file_name ] = cv_scale_factor;
+            continue;
+          }
 
           // For real BNB data, we're also done. However, if we're working with
           // fake data, then we also want to store the truth information for
@@ -830,7 +855,10 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           // If we are working with real BNB data, then we don't need to do the
           // other MC-ntuple-specific stuff below, so just move on to the next
           // file
-          if ( !is_fake_data ) continue;
+          if ( !is_fake_data ) {
+            scaling_map_[ ntuple_file_name ] = cv_scale_factor;
+            continue;
+          }
 
         } // data ntuple files
 
@@ -986,6 +1014,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           hist_reco2d->Scale( temp_scale_factor );
           hist_true2d->Scale( temp_scale_factor );
 
+          cv_scale_factor = temp_scale_factor;
+
           // Add the scaled contents of these histograms to the
           // corresponding histograms in the new Universe object
           temp_univ_ptr->hist_reco_->Add( hist_reco.get() );
@@ -1072,6 +1102,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           double run_bnb_pot = run_to_bnb_pot_map.at( run );
           double rw_scale_factor = run_bnb_pot / file_pot;
 
+          cv_scale_factor = rw_scale_factor;
+
           // Iterate over the reweighting universes, retrieve the
           // histograms for each, and add their POT-scaled contributions
           // from the current ntuple file to the total
@@ -1137,6 +1169,9 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           } // universe types
 
         } // reweightable MC samples
+
+        // Store scaling information about the current ntuple file
+        scaling_map_[ ntuple_file_name ] = cv_scale_factor;
 
       } // ntuple file
 
@@ -1273,6 +1308,28 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
 
   temp_pot.Write();
 
+  //// Save the map containing file scale factor information
+  //TTree* out_scaling_tree = new TTree( "scaling_tree", "ntuple file scale"
+  //  " factors" );
+  //MyPointer< std::string > ntuple_file_name;
+  //double scale_factor;
+  //out_scaling_tree->Branch( "cv_scale_factor", &scale_factor,
+  //  "cv_scale_factor/D" );
+  //set_object_output_branch_address( *out_scaling_tree, "file_name",
+  //  ntuple_file_name, true );
+
+  std::cout << std::scientific << std::setprecision(
+    std::numeric_limits<double>::max_digits10 );
+  for ( const auto& pair : scaling_map_ ) {
+    std::string ntuple_file_name = pair.first;
+    double scale_factor = pair.second;
+    std::cout << "Added ntuple file \"" << ntuple_file_name << "\" with"
+      << " scaling factor " << scale_factor << '\n';
+
+    //out_scaling_tree->Fill();
+  }
+
+  //out_scaling_tree->Write();
 }
 
 CovMatrix SystematicsCalculator::make_covariance_matrix(
