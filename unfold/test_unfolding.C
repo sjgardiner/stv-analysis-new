@@ -402,7 +402,7 @@ void test_unfolding() {
   //const auto& respmat_file_name = sample_info.respmat_file_;
 
   const std::string respmat_file_name(
-    "/uboone/data/users/gardiner/23-sept10-all-universes.root" );
+    "/exp/uboone/data/users/gardiner/all-combined-universes-with-true2d.root" );
 
   // Do the systematics calculations in preparation for unfolding
   //auto* syst_ptr = new MCC9SystematicsCalculator( respmat_file_name, "../systcalc_unfold_fd.conf" );
