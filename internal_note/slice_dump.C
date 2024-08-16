@@ -68,7 +68,7 @@ void slice_dump() {
       *reco_ext_hist, slice, &matrix_map.at("EXTstats") );
 
     SliceHistogram* slice_mc_plus_ext = SliceHistogram::make_slice_histogram(
-      *reco_mc_plus_ext_hist, slice, &matrix_map.at("total") );
+      *reco_mc_plus_ext_hist, slice, &matrix_map.at("PredTotal") );
 
     // Prepare to dump to a couple of input files suitable for use with the
     // PGFPlots LaTeX package
