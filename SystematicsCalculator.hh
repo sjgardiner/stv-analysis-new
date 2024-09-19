@@ -530,7 +530,8 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     total_subdir.GetObject( (key + "_true2d").c_str(), hist_true2d );
 
     if ( !hist_true || !hist_reco || !hist_2d || !hist_categ
-      || !hist_reco2d || !hist_true2d || !hist_bkgd2d || !hist_signal2d )
+      || !hist_reco2d || !hist_true2d || !hist_reco_bkgd2d
+      || !hist_reco_signal2d )
     {
       throw std::runtime_error( "Failed to retrieve histograms for the "
         + key + " universe" );
@@ -539,7 +540,7 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     // Reconstruct the Universe object from the retrieved histograms
     auto temp_univ = std::make_unique< Universe >( univ_name, univ_index,
       hist_true, hist_reco, hist_2d, hist_categ, hist_reco2d, hist_true2d,
-      hist_bkgd2d, hist_signal2d );
+      hist_reco_bkgd2d, hist_reco_signal2d );
 
     // Determine whether the current universe represents a detector
     // variation or a reweightable variation. We'll use this information to

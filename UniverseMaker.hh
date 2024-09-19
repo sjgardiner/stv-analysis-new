@@ -713,12 +713,13 @@ void UniverseMaker::build_universes(
               tb.weight_ * rb.weight_ * safe_wgt );
 
             for ( const auto& other_rb : matched_reco_bins ) {
-              if ( tb.type_ == kSignalTrueBin ) {
+              const auto& true_bin_ref = true_bins_.at( tb.bin_index_ );
+              if ( true_bin_ref.type_ == kSignalTrueBin ) {
                 universe.hist_reco_signal2d_->Fill( rb.bin_index_,
                   other_rb.bin_index_, tb.weight_ * rb.weight_
                   * other_rb.weight_ * safe_wgt );
               }
-              else if ( tb.type_ == kBackgroundTrueBin ) {
+              else if ( true_bin_ref.type_ == kBackgroundTrueBin ) {
                 universe.hist_reco_bkgd2d_->Fill( rb.bin_index_,
                   other_rb.bin_index_, tb.weight_ * rb.weight_
                   * other_rb.weight_ * safe_wgt );
@@ -762,13 +763,14 @@ void UniverseMaker::build_universes(
           tb.weight_ * rb.weight_ );
 
         for ( const auto& other_rb : matched_reco_bins ) {
-          if ( tb.type_ == kSignalTrueBin ) {
-            universe.hist_reco_signal2d_->Fill( rb.bin_index_,
-              other_rb.bin_index_, tb.weight_ * rb.weight_ * other_rb.weight_ );
+          const auto& true_bin_ref = true_bins_.at( tb.bin_index_ );
+          if ( true_bin_ref.type_ == kSignalTrueBin ) {
+            univ.hist_reco_signal2d_->Fill( rb.bin_index_, other_rb.bin_index_,
+              tb.weight_ * rb.weight_ * other_rb.weight_ );
           }
-          else if ( tb.type_ == kBackgroundTrueBin ) {
-            universe.hist_reco_bkgd2d_->Fill( rb.bin_index_,
-              other_rb.bin_index_, tb.weight_ * rb.weight_ * other_rb.weight_ );
+          else if ( true_bin_ref.type_ == kBackgroundTrueBin ) {
+            univ.hist_reco_bkgd2d_->Fill( rb.bin_index_, other_rb.bin_index_,
+              tb.weight_ * rb.weight_ * other_rb.weight_ );
           }
         }
 
