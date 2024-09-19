@@ -199,11 +199,16 @@ double MCC9SystematicsCalculator::evaluate_observable( const Universe& univ,
 double MCC9SystematicsCalculator::evaluate_mc_stat_covariance(
   const Universe& univ, int reco_bin_a, int reco_bin_b ) const
 {
+  auto* eu_ptr = dynamic_cast< ExtendedUniverse* >( &univ );
+  if ( !eu_ptr ) throw std::runtime_error( "Regular universe passed to"
+    " MCC9SystematicsCalculator::evaluate_mc_stat_covariance()" );
+
   // ROOT histograms use one-based bin indices, so I correct for that here.
   // Note that using the bin error (rather than the bin contents) enables a
   // correct treatment for weighted events provided TH1::Sumw2() was called
   // before filling the histogram.
-  double err = univ.hist_reco2d_->GetBinError( reco_bin_a + 1, reco_bin_b + 1 );
+  double err = eu_ptr->hist_reco2d_->GetBinError( reco_bin_a + 1,
+    reco_bin_b + 1 );
   double err2 = err * err;
   return err2;
 }

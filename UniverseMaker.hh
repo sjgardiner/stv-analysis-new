@@ -36,6 +36,9 @@ R__LOAD_LIBRARY(libTreePlayer.so)
 const std::string TRUE_BIN_SPEC_NAME = "true_bin_spec";
 const std::string RECO_BIN_SPEC_NAME = "reco_bin_spec";
 
+// Central value universe name
+const std::string CV_UNIV_NAME = "weight_TunedCentralValue_UBGenie";
+
 // Converts the name of an analysis ntuple file (typically with the full path)
 // into a TDirectoryFile name to use as a subfolder of the main output
 // TDirectoryFile used for saving response matrices. Since the forward slash
@@ -260,8 +263,72 @@ class Universe {
         "; true bin number; reco bin number; counts", num_true_bins, 0.,
         num_true_bins, num_reco_bins, 0., num_reco_bins );
 
+      // Store summed squares of event weights (for calculations of the MC
+      // statistical uncertainty on bin contents)
+      hist_true_->Sumw2();
+      hist_reco_->Sumw2();
+      hist_2d_->Sumw2();
+    }
+
+    // Note: the new Universe object takes ownership of the histogram
+    // pointers passed to this constructor
+    Universe( const std::string& universe_name,
+      size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d )
+      : universe_name_( universe_name ), index_( universe_index ),
+      hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d )
+    {
+      hist_true_->SetDirectory( nullptr );
+      hist_reco_->SetDirectory( nullptr );
+      hist_2d_->SetDirectory( nullptr );
+    }
+
+    virtual std::unique_ptr< Universe > clone() const {
+      int num_true_bins = hist_2d_->GetXaxis()->GetNbins();
+      int num_reco_bins = hist_2d_->GetYaxis()->GetNbins();
+      auto result = std::make_unique< Universe >( universe_name_,
+        index_, num_true_bins, num_reco_bins );
+
+      result->hist_true_->Add( this->hist_true_.get() );
+      result->hist_reco_->Add( this->hist_reco_.get() );
+      result->hist_2d_->Add( this->hist_2d_.get() );
+
+      return result;
+    }
+
+    std::string universe_name_;
+    size_t index_;
+    std::unique_ptr< TH1D > hist_true_;
+    std::unique_ptr< TH1D > hist_reco_;
+    std::unique_ptr< TH2D > hist_2d_;
+};
+
+// Provides extra histograms needed only for special purposes (typically
+// statistical uncertainties). These are not typically useful for universes
+// other than the central-value universe, so we resort to polymorphism to
+// add them in as a special case.
+class ExtendedUniverse : public Universe {
+
+  public:
+
+    ExtendedUniverse( const std::string& universe_name,
+      size_t universe_index, int num_true_bins, int num_reco_bins )
+      : Universe( universe_name, universe_index, num_true_bins, num_reco_bins )
+    {
+      std::string hist_name_prefix = universe_name + '_'
+        + std::to_string( universe_index );
+
       hist_reco2d_ = std::make_unique< TH2D >(
         (hist_name_prefix + "_reco2d").c_str(),
+        "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
+        num_reco_bins, num_reco_bins, 0., num_reco_bins );
+
+      hist_reco_signal2d_ = std::make_unique< TH2D >(
+        (hist_name_prefix + "_reco_signal2d").c_str(),
+        "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
+        num_reco_bins, num_reco_bins, 0., num_reco_bins );
+
+      hist_reco_bkgd2d_ = std::make_unique< TH2D >(
+        (hist_name_prefix + "_reco_bkgd2d").c_str(),
         "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
         num_reco_bins, num_reco_bins, 0., num_reco_bins );
 
@@ -283,56 +350,55 @@ class Universe {
 
       // Store summed squares of event weights (for calculations of the MC
       // statistical uncertainty on bin contents)
-      hist_true_->Sumw2();
-      hist_reco_->Sumw2();
-      hist_2d_->Sumw2();
-      hist_categ_->Sumw2();
       hist_reco2d_->Sumw2();
+      hist_reco_signal2d_->Sumw2();
+      hist_reco_bkgd2d_->Sumw2();
       hist_true2d_->Sumw2();
+      hist_categ_->Sumw2();
     }
 
-    // Note: the new Universe object takes ownership of the histogram
+    // Note: the new ExtendedUniverse object takes ownership of the histogram
     // pointers passed to this constructor
-    Universe( const std::string& universe_name,
+    ExtendedUniverse( const std::string& universe_name,
       size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d,
-      TH2D* hist_categ, TH2D* hist_reco2d, TH2D* hist_true2d )
-      : universe_name_( universe_name ), index_( universe_index ),
-      hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d ),
-      hist_categ_( hist_categ ), hist_reco2d_( hist_reco2d ),
-      hist_true2d_( hist_true2d )
+      TH2D* hist_reco2d, TH2D* hist_reco_bkgd2d, TH2D* hist_reco_signal2d,
+      TH2D* hist_true2d, TH2D* hist_categ ) : Universe( universe_name,
+      universe_index, hist_true, hist_reco, hist_2d ),
+      hist_reco2d_( hist_reco2d ), hist_reco_bkgd2d_( hist_reco_bkgd2d ),
+      hist_reco_signal2d_( hist_reco_signal2d ), hist_true2d_( hist_true2d ),
+      hist_categ_( hist_categ )
     {
-      hist_true_->SetDirectory( nullptr );
-      hist_reco_->SetDirectory( nullptr );
-      hist_2d_->SetDirectory( nullptr );
-      hist_categ_->SetDirectory( nullptr );
       hist_reco2d_->SetDirectory( nullptr );
+      hist_reco_bkgd2d_->SetDirectory( nullptr );
+      hist_reco_signal2d_->SetDirectory( nullptr );
       hist_true2d_->SetDirectory( nullptr );
+      hist_categ_->SetDirectory( nullptr );
     }
 
-    std::unique_ptr< Universe > clone() const {
+    virtual std::unique_ptr< Universe > clone() const override {
       int num_true_bins = hist_2d_->GetXaxis()->GetNbins();
       int num_reco_bins = hist_2d_->GetYaxis()->GetNbins();
-      auto result = std::make_unique< Universe >( universe_name_,
-        index_, num_true_bins, num_reco_bins );
+      auto* eu = new ExtendedUniverse( universe_name_, index_,
+        num_true_bins, num_reco_bins );
 
-      result->hist_true_->Add( this->hist_true_.get() );
-      result->hist_reco_->Add( this->hist_reco_.get() );
-      result->hist_2d_->Add( this->hist_2d_.get() );
-      result->hist_categ_->Add( this->hist_categ_.get() );
-      result->hist_reco2d_->Add( this->hist_reco2d_.get() );
-      result->hist_true2d_->Add( this->hist_true2d_.get() );
+      eu->hist_true_->Add( this->hist_true_.get() );
+      eu->hist_reco_->Add( this->hist_reco_.get() );
+      eu->hist_2d_->Add( this->hist_2d_.get() );
+      eu->hist_reco2d_->Add( this->hist_reco2d_.get() );
+      eu->hist_reco_bkgd2d_->Add( this->hist_reco_bkgd2d_.get() );
+      eu->hist_reco_signal2d_->Add( this->hist_reco_signal2d_.get() );
+      eu->hist_true2d_->Add( this->hist_true2d_.get() );
+      eu->hist_categ_->Add( this->hist_categ_.get() );
 
+      std::unique_ptr< Universe > result( eu );
       return result;
     }
 
-    std::string universe_name_;
-    size_t index_;
-    std::unique_ptr< TH1D > hist_true_;
-    std::unique_ptr< TH1D > hist_reco_;
-    std::unique_ptr< TH2D > hist_2d_;
-    std::unique_ptr< TH2D > hist_categ_;
     std::unique_ptr< TH2D > hist_reco2d_;
+    std::unique_ptr< TH2D > hist_reco_bkgd2d_;
+    std::unique_ptr< TH2D > hist_reco_signal2d_;
     std::unique_ptr< TH2D > hist_true2d_;
+    std::unique_ptr< TH2D > hist_categ_;
 };
 
 class UniverseMaker {
@@ -425,7 +491,8 @@ class UniverseMaker {
     std::vector< std::unique_ptr<TTreeFormula> > category_formulas_;
 
     // Stores Universe objects used to accumulate event weights
-    std::map< std::string, std::vector<Universe> > universes_;
+    std::map< std::string, std::vector< std::shared_ptr<Universe> > >
+      universes_;
 
     // Root TDirectoryFile name to use when writing the response matrices to an
     // output ROOT file
@@ -684,33 +751,54 @@ void UniverseMaker::build_universes(
         // event weight
         auto& universe = u_vec.at( u );
 
+        // Check if it is an extended universe with extra histograms to fill
+        auto* eu_ptr = dynamic_cast< ExtendedUniverse* >( universe.get() );
+
         for ( const auto& tb : matched_true_bins ) {
           // TODO: consider including the TTreeFormula weight(s) in the check
           // applied via safe_weight() above
-          universe.hist_true_->Fill( tb.bin_index_, tb.weight_ * safe_wgt );
-          for ( const auto& rb : matched_reco_bins ) {
-            universe.hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
-              tb.weight_ * rb.weight_ * safe_wgt );
-          } // reco bins
+          universe->hist_true_->Fill( tb.bin_index_, tb.weight_ * safe_wgt );
+          if ( eu_ptr ) {
+            for ( const auto& rb : matched_reco_bins ) {
+              eu_ptr->hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
+                tb.weight_ * rb.weight_ * safe_wgt );
 
-          for ( const auto& other_tb : matched_true_bins ) {
-            universe.hist_true2d_->Fill( tb.bin_index_, other_tb.bin_index_,
-              tb.weight_ * other_tb.weight_ * safe_wgt );
-          } // true bins
+              for ( const auto& other_rb : matched_reco_bins ) {
+                TH2D* hist_to_fill = nullptr;
+                if ( tb.type_ == kSignalTrueBin ) {
+                  hist_to_fill = eu_ptr->hist_reco_signal2d_.get();
+                }
+                else if ( tb.type_ == kBackgroundTrueBin ) {
+                  hist_to_fill = eu_ptr->hist_reco_bkgd2d_.get();
+                }
 
+                if ( hist_to_fill ) {
+                  hist_to_fill->Fill( rb.bin_index_, other_rb.bin_index_,
+                    tb.weight_ * rb.weight_ * other_rb.weight_ * safe_wgt );
+                }
+
+              } // other reco bins
+            } // reco bins
+            for ( const auto& other_tb : matched_true_bins ) {
+              eu_ptr->hist_true2d_->Fill( tb.bin_index_, other_tb.bin_index_,
+                tb.weight_ * other_tb.weight_ * safe_wgt );
+            } // true bins
+          }
         } // true bins
 
         for ( const auto& rb : matched_reco_bins ) {
-          universe.hist_reco_->Fill( rb.bin_index_, rb.weight_ * safe_wgt );
+          universe->hist_reco_->Fill( rb.bin_index_, rb.weight_ * safe_wgt );
 
-          for ( const auto& c : matched_category_indices ) {
-            universe.hist_categ_->Fill( c.bin_index_, rb.bin_index_,
-              c.weight_ * rb.weight_ * safe_wgt );
-          }
+          if ( eu_ptr ) {
+            for ( const auto& c : matched_category_indices ) {
+              eu_ptr->hist_categ_->Fill( c.bin_index_, rb.bin_index_,
+                c.weight_ * rb.weight_ * safe_wgt );
+            }
 
-          for ( const auto& other_rb : matched_reco_bins ) {
-            universe.hist_reco2d_->Fill( rb.bin_index_, other_rb.bin_index_,
-              rb.weight_ * other_rb.weight_ * safe_wgt );
+            for ( const auto& other_rb : matched_reco_bins ) {
+              eu_ptr->hist_reco2d_->Fill( rb.bin_index_, other_rb.bin_index_,
+                rb.weight_ * other_rb.weight_ * safe_wgt );
+            }
           }
         } // reco bins
       } // universes
@@ -721,32 +809,37 @@ void UniverseMaker::build_universes(
     // the universe event weights, but that any implicit weights from
     // the TTreeFormula evaluations will still be applied.
     auto& univ = universes_.at( UNWEIGHTED_NAME ).front();
+    auto* eu_unw_ptr = dynamic_cast< ExtendedUniverse* >( univ.get() );
+
     for ( const auto& tb : matched_true_bins ) {
-      univ.hist_true_->Fill( tb.bin_index_, tb.weight_ );
+      univ->hist_true_->Fill( tb.bin_index_, tb.weight_ );
       for ( const auto& rb : matched_reco_bins ) {
-        univ.hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
+        univ->hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
           tb.weight_ * rb.weight_ );
       } // reco bins
 
-      for ( const auto& other_tb : matched_true_bins ) {
-        univ.hist_true2d_->Fill( tb.bin_index_, other_tb.bin_index_,
-          tb.weight_ * other_tb.weight_ );
-      } // true bins
-
+      if ( eu_unw_ptr ) {
+        for ( const auto& other_tb : matched_true_bins ) {
+          eu_unw_ptr->hist_true2d_->Fill( tb.bin_index_, other_tb.bin_index_,
+            tb.weight_ * other_tb.weight_ );
+        } // true bins
+      }
     } // true bins
 
     for ( const auto& rb : matched_reco_bins ) {
 
-      univ.hist_reco_->Fill( rb.bin_index_, rb.weight_ );
+      univ->hist_reco_->Fill( rb.bin_index_, rb.weight_ );
 
-      for ( const auto& c : matched_category_indices ) {
-        univ.hist_categ_->Fill( c.bin_index_, rb.bin_index_,
-          c.weight_ * rb.weight_ );
-      }
+      if ( eu_unw_ptr ) {
+        for ( const auto& c : matched_category_indices ) {
+          eu_unw_ptr->hist_categ_->Fill( c.bin_index_, rb.bin_index_,
+            c.weight_ * rb.weight_ );
+        }
 
-      for ( const auto& other_rb : matched_reco_bins ) {
-        univ.hist_reco2d_->Fill( rb.bin_index_, other_rb.bin_index_,
-          rb.weight_ * other_rb.weight_ );
+        for ( const auto& other_rb : matched_reco_bins ) {
+          eu_unw_ptr->hist_reco2d_->Fill( rb.bin_index_, other_rb.bin_index_,
+            rb.weight_ * other_rb.weight_ );
+        }
       }
 
     } // reco bins
@@ -765,18 +858,28 @@ void UniverseMaker::prepare_universes( const WeightHandler& wh ) {
     const std::string& weight_name = pair.first;
     size_t num_universes = pair.second->size();
 
-    std::vector< Universe > u_vec;
+    std::vector< std::shared_ptr<Universe> > u_vec;
 
     for ( size_t u = 0u; u < num_universes; ++u ) {
-      u_vec.emplace_back( weight_name, u, num_true_bins, num_reco_bins );
+      Universe* temp_u = nullptr;
+      if ( weight_name == CV_UNIV_NAME ) {
+        temp_u = new ExtendedUniverse( weight_name, u, num_true_bins,
+          num_reco_bins );
+      }
+      else {
+        temp_u = new Universe ( weight_name, u, num_true_bins, num_reco_bins );
+      }
+      u_vec.emplace_back( temp_u );
     }
 
     universes_[ weight_name ] = std::move( u_vec );
   }
 
   // Add the special "unweighted" universe unconditionally
-  std::vector< Universe > temp_uvec;
-  temp_uvec.emplace_back( UNWEIGHTED_NAME, 0, num_true_bins, num_reco_bins );
+  std::vector< std::shared_ptr< Universe > > temp_uvec;
+  auto* temp_u = new ExtendedUniverse( UNWEIGHTED_NAME, 0, num_true_bins,
+    num_reco_bins );
+  temp_uvec.emplace_back( temp_u );
   universes_[ UNWEIGHTED_NAME ] = std::move( temp_uvec );
 
 }
@@ -807,7 +910,7 @@ void UniverseMaker::save_histograms(
     // TODO: add error handling for a forward slash in the root TDirectoryFile
     // name
     root_tdir = new TDirectoryFile( output_directory_name_.c_str(),
-      "response matrices", "", &out_file );
+      "universes", "", &out_file );
   }
 
   // Save the configuration settings for this class to the main
@@ -883,17 +986,27 @@ void UniverseMaker::save_histograms(
   for ( auto& pair : universes_ ) {
     auto& u_vec = pair.second;
     for ( auto& univ : u_vec ) {
-      // Always save the reco histograms
-      univ.hist_reco_->Write();
-      univ.hist_reco2d_->Write();
+      // Always save the reco histogram
+      univ->hist_reco_->Write();
+
+      // Always save the reco2d histogram if it is present
+      auto* eu_ptr = dynamic_cast< ExtendedUniverse* >( univ.get() );
+      if ( eu_ptr ) {
+        eu_ptr->hist_reco2d_->Write();
+      }
 
       // Save the others if the true histogram was filled at least once
       // (used to infer that we have MC truth information)
-      if ( univ.hist_true_->GetEntries() > 0. ) {
-        univ.hist_true_->Write();
-        univ.hist_2d_->Write();
-        univ.hist_categ_->Write();
-        univ.hist_true2d_->Write();
+      if ( univ->hist_true_->GetEntries() > 0. ) {
+        univ->hist_true_->Write();
+        univ->hist_2d_->Write();
+
+        if ( eu_ptr ) {
+          eu_ptr->hist_reco_bkgd2d_->Write();
+          eu_ptr->hist_reco_signal2d_->Write();
+          eu_ptr->hist_true2d_->Write();
+          eu_ptr->hist_categ_->Write();
+        }
       }
     } // universes
   } // weight names
