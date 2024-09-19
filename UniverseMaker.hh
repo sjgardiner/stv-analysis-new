@@ -265,6 +265,16 @@ class Universe {
         "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
         num_reco_bins, num_reco_bins, 0., num_reco_bins );
 
+      hist_reco_bkgd2d_ = std::make_unique< TH2D >(
+        (hist_name_prefix + "_reco_bkgd2d").c_str(),
+        "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
+        num_reco_bins, num_reco_bins, 0., num_reco_bins );
+
+      hist_reco_signal2d_ = std::make_unique< TH2D >(
+        (hist_name_prefix + "_reco_signal2d").c_str(),
+        "; reco bin number; reco bin number; counts", num_reco_bins, 0.,
+        num_reco_bins, num_reco_bins, 0., num_reco_bins );
+
       hist_true2d_ = std::make_unique< TH2D >(
         (hist_name_prefix + "_true2d").c_str(),
         "; true bin number; true bin number; counts", num_true_bins, 0.,
@@ -288,6 +298,8 @@ class Universe {
       hist_2d_->Sumw2();
       hist_categ_->Sumw2();
       hist_reco2d_->Sumw2();
+      hist_reco_bkgd2d_->Sumw2();
+      hist_reco_signal2d_->Sumw2();
       hist_true2d_->Sumw2();
     }
 
@@ -295,11 +307,13 @@ class Universe {
     // pointers passed to this constructor
     Universe( const std::string& universe_name,
       size_t universe_index, TH1D* hist_true, TH1D* hist_reco, TH2D* hist_2d,
-      TH2D* hist_categ, TH2D* hist_reco2d, TH2D* hist_true2d )
+      TH2D* hist_categ, TH2D* hist_reco2d, TH2D* hist_true2d,
+      TH2D* hist_reco_bkgd2d, TH2D* hist_reco_signal2d )
       : universe_name_( universe_name ), index_( universe_index ),
       hist_true_( hist_true ), hist_reco_( hist_reco ), hist_2d_( hist_2d ),
       hist_categ_( hist_categ ), hist_reco2d_( hist_reco2d ),
-      hist_true2d_( hist_true2d )
+      hist_true2d_( hist_true2d ), hist_reco_bkgd2d_( hist_reco_bkgd2d ),
+      hist_reco_signal2d_( hist_reco_signal2d )
     {
       hist_true_->SetDirectory( nullptr );
       hist_reco_->SetDirectory( nullptr );
@@ -307,6 +321,8 @@ class Universe {
       hist_categ_->SetDirectory( nullptr );
       hist_reco2d_->SetDirectory( nullptr );
       hist_true2d_->SetDirectory( nullptr );
+      hist_reco_bkgd2d_->SetDirectory( nullptr );
+      hist_reco_signal2d_->SetDirectory( nullptr );
     }
 
     std::unique_ptr< Universe > clone() const {
@@ -321,6 +337,8 @@ class Universe {
       result->hist_categ_->Add( this->hist_categ_.get() );
       result->hist_reco2d_->Add( this->hist_reco2d_.get() );
       result->hist_true2d_->Add( this->hist_true2d_.get() );
+      result->hist_reco_bkgd2d_->Add( this->hist_reco_bkgd2d_.get() );
+      result->hist_reco_signal2d_->Add( this->hist_reco_signal2d_.get() );
 
       return result;
     }
@@ -333,6 +351,8 @@ class Universe {
     std::unique_ptr< TH2D > hist_categ_;
     std::unique_ptr< TH2D > hist_reco2d_;
     std::unique_ptr< TH2D > hist_true2d_;
+    std::unique_ptr< TH2D > hist_reco_bkgd2d_;
+    std::unique_ptr< TH2D > hist_reco_signal2d_;
 };
 
 class UniverseMaker {
@@ -691,6 +711,20 @@ void UniverseMaker::build_universes(
           for ( const auto& rb : matched_reco_bins ) {
             universe.hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
               tb.weight_ * rb.weight_ * safe_wgt );
+
+            for ( const auto& other_rb : matched_reco_bins ) {
+              if ( tb.type_ == kSignalTrueBin ) {
+                universe.hist_reco_signal2d_->Fill( rb.bin_index_,
+                  other_rb.bin_index_, tb.weight_ * rb.weight_
+                  * other_rb.weight_ * safe_wgt );
+              }
+              else if ( tb.type_ == kBackgroundTrueBin ) {
+                universe.hist_reco_bkgd2d_->Fill( rb.bin_index_,
+                  other_rb.bin_index_, tb.weight_ * rb.weight_
+                  * other_rb.weight_ * safe_wgt );
+              }
+            }
+
           } // reco bins
 
           for ( const auto& other_tb : matched_true_bins ) {
@@ -726,6 +760,18 @@ void UniverseMaker::build_universes(
       for ( const auto& rb : matched_reco_bins ) {
         univ.hist_2d_->Fill( tb.bin_index_, rb.bin_index_,
           tb.weight_ * rb.weight_ );
+
+        for ( const auto& other_rb : matched_reco_bins ) {
+          if ( tb.type_ == kSignalTrueBin ) {
+            universe.hist_reco_signal2d_->Fill( rb.bin_index_,
+              other_rb.bin_index_, tb.weight_ * rb.weight_ * other_rb.weight_ );
+          }
+          else if ( tb.type_ == kBackgroundTrueBin ) {
+            universe.hist_reco_bkgd2d_->Fill( rb.bin_index_,
+              other_rb.bin_index_, tb.weight_ * rb.weight_ * other_rb.weight_ );
+          }
+        }
+
       } // reco bins
 
       for ( const auto& other_tb : matched_true_bins ) {
@@ -894,6 +940,8 @@ void UniverseMaker::save_histograms(
         univ.hist_2d_->Write();
         univ.hist_categ_->Write();
         univ.hist_true2d_->Write();
+        univ.hist_reco_bkgd2d_->Write();
+        univ.hist_reco_signal2d_->Write();
       }
     } // universes
   } // weight names

@@ -54,6 +54,12 @@ void set_stats_and_dir( Universe& univ ) {
   univ.hist_reco2d_->SetStats( false );
   univ.hist_reco2d_->SetDirectory( nullptr );
 
+  univ.hist_reco_bkgd2d_->SetStats( false );
+  univ.hist_reco_bkgd2d_->SetDirectory( nullptr );
+
+  univ.hist_reco_signal2d_->SetStats( false );
+  univ.hist_reco_signal2d_->SetDirectory( nullptr );
+
   univ.hist_true2d_->SetStats( false );
   univ.hist_true2d_->SetDirectory( nullptr );
 }
@@ -509,6 +515,8 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     TH2D* hist_2d = nullptr;
     TH2D* hist_categ = nullptr;
     TH2D* hist_reco2d = nullptr;
+    TH2D* hist_reco_bkgd2d = nullptr;
+    TH2D* hist_reco_signal2d = nullptr;
     TH2D* hist_true2d = nullptr;
 
     total_subdir.GetObject( (key + "_true").c_str(), hist_true );
@@ -516,10 +524,13 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
     total_subdir.GetObject( (key + "_2d").c_str(), hist_2d );
     total_subdir.GetObject( (key + "_categ").c_str(), hist_categ );
     total_subdir.GetObject( (key + "_reco2d").c_str(), hist_reco2d );
+    total_subdir.GetObject( (key + "_reco_bkgd2d").c_str(), hist_reco_bkgd2d );
+    total_subdir.GetObject( (key + "_reco_signal2d").c_str(),
+      hist_reco_signal2d );
     total_subdir.GetObject( (key + "_true2d").c_str(), hist_true2d );
 
     if ( !hist_true || !hist_reco || !hist_2d || !hist_categ
-      || !hist_reco2d || !hist_true2d )
+      || !hist_reco2d || !hist_true2d || !hist_bkgd2d || !hist_signal2d )
     {
       throw std::runtime_error( "Failed to retrieve histograms for the "
         + key + " universe" );
@@ -527,7 +538,8 @@ void SystematicsCalculator::load_universes( TDirectoryFile& total_subdir ) {
 
     // Reconstruct the Universe object from the retrieved histograms
     auto temp_univ = std::make_unique< Universe >( univ_name, univ_index,
-      hist_true, hist_reco, hist_2d, hist_categ, hist_reco2d, hist_true2d );
+      hist_true, hist_reco, hist_2d, hist_categ, hist_reco2d, hist_true2d,
+      hist_bkgd2d, hist_signal2d );
 
     // Determine whether the current universe represents a detector
     // variation or a reweightable variation. We'll use this information to
@@ -890,6 +902,12 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           auto h_reco2d = get_object_unique_ptr< TH2D >(
             (hist_name_prefix + "_reco2d"), *subdir );
 
+          auto h_reco_bkgd2d = get_object_unique_ptr< TH2D >(
+            (hist_name_prefix + "_reco_bkgd2d"), *subdir );
+
+          auto h_reco_signal2d = get_object_unique_ptr< TH2D >(
+            (hist_name_prefix + "_reco_signal2d"), *subdir );
+
           auto h_true2d = get_object_unique_ptr< TH2D >(
             (hist_name_prefix + "_true2d"), *subdir );
 
@@ -900,6 +918,9 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           fake_data_universe_->hist_2d_->Add( h_2d.get() );
           fake_data_universe_->hist_categ_->Add( h_categ.get() );
           fake_data_universe_->hist_reco2d_->Add( h_reco2d.get() );
+          fake_data_universe_->hist_reco_bkgd2d_->Add( h_reco_bkgd2d.get() );
+          fake_data_universe_->hist_reco_signal2d_->Add(
+            h_reco_signal2d.get() );
           fake_data_universe_->hist_true2d_->Add( h_true2d.get() );
 
         } // fake data sample
@@ -958,6 +979,12 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           auto hist_reco2d = get_object_unique_ptr< TH2D >(
             "unweighted_0_reco2d", *subdir );
 
+          auto hist_reco_bkgd2d = get_object_unique_ptr< TH2D >(
+            "unweighted_0_reco_bkgd2d", *subdir );
+
+          auto hist_reco_signal2d = get_object_unique_ptr< TH2D >(
+            "unweighted_0_reco_signal2d", *subdir );
+
           auto hist_true2d = get_object_unique_ptr< TH2D >(
             "unweighted_0_true2d", *subdir );
 
@@ -984,6 +1011,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           hist_2d->Scale( temp_scale_factor );
           hist_categ->Scale( temp_scale_factor );
           hist_reco2d->Scale( temp_scale_factor );
+          hist_reco_bkgd2d->Scale( temp_scale_factor );
+          hist_reco_signal2d->Scale( temp_scale_factor );
           hist_true2d->Scale( temp_scale_factor );
 
           // Add the scaled contents of these histograms to the
@@ -993,6 +1022,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
           temp_univ_ptr->hist_2d_->Add( hist_2d.get() );
           temp_univ_ptr->hist_categ_->Add( hist_categ.get() );
           temp_univ_ptr->hist_reco2d_->Add( hist_reco2d.get() );
+          temp_univ_ptr->hist_reco_bkgd2d_->Add( hist_reco_bkgd2d.get() );
+          temp_univ_ptr->hist_reco_signal2d_->Add( hist_reco_signal2d.get() );
           temp_univ_ptr->hist_true2d_->Add( hist_true2d.get() );
 
           // Adjust the owned histograms to avoid auto-deletion problems
@@ -1111,6 +1142,12 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               auto h_reco2d = get_object_unique_ptr< TH2D >(
                 (hist_name_prefix + "_reco2d"), *subdir );
 
+              auto h_reco_bkgd2d = get_object_unique_ptr< TH2D >(
+                (hist_name_prefix + "_reco_bkgd2d"), *subdir );
+
+              auto h_reco_signal2d = get_object_unique_ptr< TH2D >(
+                (hist_name_prefix + "_reco_signal2d"), *subdir );
+
               auto h_true2d = get_object_unique_ptr< TH2D >(
                 (hist_name_prefix + "_true2d"), *subdir );
 
@@ -1121,6 +1158,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               h_2d->Scale( rw_scale_factor );
               h_categ->Scale( rw_scale_factor );
               h_reco2d->Scale( rw_scale_factor );
+              h_reco_bkgd2d->Scale( rw_scale_factor );
+              h_reco_signal2d->Scale( rw_scale_factor );
               h_true2d->Scale( rw_scale_factor );
 
               // Add their contributions to the owned histograms for the
@@ -1130,6 +1169,8 @@ void SystematicsCalculator::build_universes( TDirectoryFile& root_tdir ) {
               universe.hist_2d_->Add( h_2d.get() );
               universe.hist_categ_->Add( h_categ.get() );
               universe.hist_reco2d_->Add( h_reco2d.get() );
+              universe.hist_reco_bkgd2d_->Add( h_reco_bkgd2d.get() );
+              universe.hist_reco_signal2d_->Add( h_reco_signal2d.get() );
               universe.hist_true2d_->Add( h_true2d.get() );
 
             } // universes indices
@@ -1226,6 +1267,8 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     universe->hist_2d_->Write();
     universe->hist_categ_->Write();
     universe->hist_reco2d_->Write();
+    universe->hist_reco_bkgd2d_->Write();
+    universe->hist_reco_signal2d_->Write();
     universe->hist_true2d_->Write();
   }
 
@@ -1239,6 +1282,8 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     universe->hist_2d_->Write();
     universe->hist_categ_->Write();
     universe->hist_reco2d_->Write();
+    universe->hist_reco_bkgd2d_->Write();
+    universe->hist_reco_signal2d_->Write();
     universe->hist_true2d_->Write();
   }
 
@@ -1252,6 +1297,8 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
       universe->hist_2d_->Write();
       universe->hist_categ_->Write();
       universe->hist_reco2d_->Write();
+      universe->hist_reco_bkgd2d_->Write();
+      universe->hist_reco_signal2d_->Write();
       universe->hist_true2d_->Write();
     }
 
@@ -1264,6 +1311,8 @@ void SystematicsCalculator::save_universes( TDirectoryFile& out_tdf ) {
     fake_data_universe_->hist_2d_->Write();
     fake_data_universe_->hist_categ_->Write();
     fake_data_universe_->hist_reco2d_->Write();
+    fake_data_universe_->hist_reco_bkgd2d_->Write();
+    fake_data_universe_->hist_reco_signal2d_->Write();
     fake_data_universe_->hist_true2d_->Write();
   }
 
